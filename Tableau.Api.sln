@@ -1,0 +1,36 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.27703.2047
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tableau.Api", "Tableau.Api\Tableau.Api.csproj", "{DA2C83BD-2F69-4832-A1B9-848C12BAEE8E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tableau.Api.Tests", "Tableau.Api.Tests\Tableau.Api.Tests.csproj", "{A68B0D21-920F-4A4B-928C-8DD2182DDEBB}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{A5F55ED9-6404-4342-B128-7D6F15D3F232}"
+	ProjectSection(SolutionItems) = preProject
+		test.runsettings = test.runsettings
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{DA2C83BD-2F69-4832-A1B9-848C12BAEE8E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DA2C83BD-2F69-4832-A1B9-848C12BAEE8E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DA2C83BD-2F69-4832-A1B9-848C12BAEE8E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DA2C83BD-2F69-4832-A1B9-848C12BAEE8E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A68B0D21-920F-4A4B-928C-8DD2182DDEBB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A68B0D21-920F-4A4B-928C-8DD2182DDEBB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A68B0D21-920F-4A4B-928C-8DD2182DDEBB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A68B0D21-920F-4A4B-928C-8DD2182DDEBB}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {CC7EA2BA-AF10-4BF4-92C0-216563BF7B6E}
+	EndGlobalSection
+EndGlobal
