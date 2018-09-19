@@ -9,6 +9,11 @@
     <RepositoryUrl>https://starschema.visualstudio.com/_git/Tableau.Api</RepositoryUrl>
     <RepositoryType>Git</RepositoryType>
     <PackageTags>Tableau, Tableau API, Tableau C#</PackageTags>
+    <AssemblyVersion>1.1.0.0</AssemblyVersion>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <DocumentationFile>bin\Debug\netstandard2.0\Tableau.Api.xml</DocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>
