@@ -10,6 +10,7 @@ namespace Tableau.Api.Attributes
         {
             MinVersion = minVersion;
         }
+        public ApiVersionAttribute(int major, int minor):this(new Version(major, minor)) { }
 
         public Version MinVersion { get; }
     }

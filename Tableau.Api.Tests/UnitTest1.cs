@@ -21,6 +21,7 @@ namespace Tableau.Api.Tests
         {
             var session = await client.SignIn((string) context.Properties["User"], (string) context.Properties["Password"],
                 (string) context.Properties["Site"], (string) context.Properties["ImpersonateUserId"]);
+            var projects = await client.QueryProjects(session);
         }
     }
 }

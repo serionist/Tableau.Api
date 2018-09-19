@@ -22,7 +22,7 @@ namespace Tableau.Api
 {
     public partial class TableauApiClient
     {
-        private static readonly TimeSpan _defaultTimeout = new TimeSpan(2, 0, 0);
+        private static readonly TimeSpan _defaultTimeout = new TimeSpan(0, 2, 0);
         private static readonly Version _minVersion = new Version(2, 0);
         private static readonly Version _maxVersion = new Version(3, 1);
         private static ReadOnlyDictionary<string, Version> _minVersionForEndpoints { get; }
@@ -44,20 +44,36 @@ namespace Tableau.Api
         public Version ApiVersion { get; }
         private ILogger Log { get; }
 
-        
+        /// <summary>
+        /// The timeout of each request. Default: 2 minutes
+        /// </summary>
         public TimeSpan Timeout { get; set; } = _defaultTimeout;
         public bool IgnoreSSLErrors { get; set; } = false;
+        /// <summary>
+        /// Initializes an instance of the Tableau Api client
+        /// </summary>
+        /// <param name="tableauBaseUri">The base URL of the Tableau Server, eg: https://my-tableau-server.com</param>
+        /// <param name="logger">The logger object</param>
+        /// <param name="apiVersion">The Tableau API Version to use</param>
         public TableauApiClient(Uri tableauBaseUri, ILogger logger, string apiVersion = "2.0")
         {
             BaseUrl = tableauBaseUri;
             if (Version.TryParse(apiVersion, out var v))
-                ApiVersion = v < _minVersion ? _minVersion : v;
-            else throw new ArgumentException($"'apiVersion' parameter cannot be converted to Version object");
+                if (v < _minVersion || v > _maxVersion)
+                    throw new ArgumentOutOfRangeException(nameof(apiVersion),
+                        $"Tableau API version must be between {_minVersion.ToString(2)} and {_maxVersion.ToString(2)}");
+                else ApiVersion = v;
+            else throw new ArgumentException($"'apiVersion' parameter cannot be converted to Version object", nameof(apiVersion));
             Log = logger;
 
             Log?.Log(LogLevel.Debug, $"Created TableauApiClient for tableau base url: '{tableauBaseUri}', api version: {apiVersion}");
         }
-
+        /// <inheritdoc />
+        /// <summary>
+        /// Initializes an instance of the Tableau Api client
+        /// </summary>
+        /// <param name="tableauBaseUri">The base URL of the Tableau Server, eg: https://my-tableau-server.com</param>
+        /// <param name="apiVersion">The Tableau API Version to use</param>
         public TableauApiClient(Uri tableauBaseUri, string apiVersion = "2.0") : this(tableauBaseUri, null, apiVersion) { }
 
         private void checkNullParameters(params (string, object)[] arguments)
@@ -65,6 +81,19 @@ namespace Tableau.Api
             foreach (var a in arguments)
                 if (a.Item2 == null || (a.Item2 is string && string.IsNullOrEmpty((string)a.Item2)))
                     throw new ArgumentNullException(a.Item1, $"Argument {a.Item1} cannot be null");
+        }
+
+        private void checkEmptyArrays(params (string, Array)[] arguments)
+        {
+            foreach (var a in arguments)
+                if (a.Item2.Length  == 0)
+                    throw new ArgumentOutOfRangeException(a.Item1, $"Argument array '{a.Item1}' cannot be empty");
+        }
+        private void checkParametersBetween(params (string name, int value, int min, int max)[] arguments)
+        {
+            foreach (var a in arguments)
+                if (a.value < a.min || a.value > a.max)
+                    throw new ArgumentOutOfRangeException(a.name, $"Argument '{a.name}' must be between {a.min} and {a.max}");
         }
         private void checkEndpointAvailability([CallerMemberName]string methodName = null)
         {
@@ -111,7 +140,7 @@ namespace Tableau.Api
         }
 
         private async Task<HttpContent> apiRequest(Uri fullUri, HttpMethod method, int expectedStatusCode,
-            CancellationToken cancelToken, TableauSession session = null, HttpContent body = null)
+            CancellationToken? cancelToken, TableauSession session = null, HttpContent body = null)
         {
 
             var state = new object();
@@ -125,7 +154,7 @@ namespace Tableau.Api
                         if (body != null)
                             msg.Content = body;
 
-                        var resp = await c.SendAsync(msg, cancelToken);
+                        var resp = await c.SendAsync(msg, cancelToken ?? CancellationToken.None);
                         if ((int)resp.StatusCode != expectedStatusCode)
                             throw await buildException(resp);
                         Log?.Log(LogLevel.Information, "Request successful");
@@ -148,44 +177,47 @@ namespace Tableau.Api
                     throw;
                 }
         }
-        private async Task<HttpContent> apiRequest<T>(Uri fullUri, HttpMethod method, int expectedStatusCode, CancellationToken cancelToken, TableauSession session, T body)
-        {
-           
-            var Content = new StringContent(getObjectAsRequestXml(body));
-            Content.Headers.ContentType =
-                new System.Net.Http.Headers.MediaTypeHeaderValue("application/xml");
-            return await apiRequest(fullUri, method, expectedStatusCode, cancelToken, session, Content);
-        }
+      
         private async Task<T> getResponseAsObject<T>(HttpContent content) where T:class
         {
-            var xdoc = XElement.Parse(await content.ReadAsStringAsync());
-            var serializer = new XmlSerializer(typeof(tsResponse<T>));
-            using (var reader = xdoc.CreateReader())
-                return ((tsResponse<T>) serializer.Deserialize(reader)).Item1;
+            using (var reader = XmlReader.Create(new StringReader(await content.ReadAsStringAsync())))
+                return ((tsResponse) new XmlSerializer(typeof(tsResponse)).Deserialize(reader)).Items.FirstOrDefault(
+                    e => e is T) as T;
+
+        }
+        private async Task<(T, T2)> getResponseAsObject<T, T2>(HttpContent content) where T : class where T2:class
+        {
+            using (var reader = XmlReader.Create(new StringReader(await content.ReadAsStringAsync())))
+            {
+                var resp = ((tsResponse) new XmlSerializer(typeof(tsResponse)).Deserialize(reader));
+                return (resp.Items.FirstOrDefault(e=>e is T) as T, resp.Items.FirstOrDefault(e=>e is T2) as T2);
+            }
+
         }
 
-        private string getObjectAsRequestXml(object o)
+        private StringContent getObjectAsRequestContent(object o)
         {
             var ser = new XmlSerializer(typeof(tsRequest));
             using (var textWriter = new StringWriter())
                 using (var xmlWriter = XmlWriter.Create(textWriter))
             {
                 ser.Serialize(xmlWriter, new tsRequest(){Item = o});
-                return textWriter.ToString();
+                var content = new StringContent(textWriter.ToString());
+                content.Headers.ContentType =
+                    new System.Net.Http.Headers.MediaTypeHeaderValue("application/xml");
+                return content;
             }
         }
 
-        private MultipartContent prepareFileUploadContent(XElement xmlContent, string fileDisposition, string fileName,
-            Stream strm)
+        private MultipartContent prepareFileUploadContent(StringContent xmlContent, Stream strm)
         {
             var ret = new MultipartContent();
-            var xmlContentPart = new StringContent(xmlContent?.ToString() ?? "", Encoding.UTF8, "text/xml");
-            xmlContentPart.Headers.TryAddWithoutValidation("Content-Disposition", "name=\"request_payload\"");
-            ret.Add(xmlContentPart);
+            xmlContent.Headers.TryAddWithoutValidation("Content-Disposition", "name=\"request_payload\"");
+            ret.Add(xmlContent);
             if (strm != null)
             {
                 var fileContentPart = new StreamContent(strm);
-                fileContentPart.Headers.TryAddWithoutValidation("Content-Disposition", $"name=\"{fileDisposition}\"; filename=\"{fileName}\"");
+                fileContentPart.Headers.TryAddWithoutValidation("Content-Disposition", $"name=\"tableau_file\"; filename=\"FILE-NAME\"");
                 fileContentPart.Headers.Remove("Content-Type");
                 fileContentPart.Headers.TryAddWithoutValidation("Content-Type", "application/octet-stream");
                 ret.Add(fileContentPart);
