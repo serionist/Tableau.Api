@@ -52,8 +52,8 @@ namespace Tableau.Api
             checkEndpointAvailability();
             checkNullParameters((nameof(session), session), (nameof(fileUploadId), fileUploadId), (nameof(sourceStream), sourceStream));
             checkParametersBetween((nameof(maxBytesToRead), maxBytesToRead, 1, 67108864));
-            return await getResponseAsObject<fileUploadType>(await apiRequest(buildUri($"sites/{session.SiteId}/fileUploads"),
-                HttpMethod.Post, 201, cancelToken, session, prepareFileUploadContent(new StringContent("", Encoding.UTF8, "text/xml"),  new PartialStream(sourceStream, maxBytesToRead))));
+            return await getResponseAsObject<fileUploadType>(await apiRequest(buildUri($"sites/{session.SiteId}/fileUploads/{fileUploadId}"),
+                HttpMethod.Put, 200, cancelToken, session, prepareFileUploadContent(new StringContent("", Encoding.UTF8, "text/xml"),  new PartialStream(sourceStream, maxBytesToRead))));
 
         }
         /// <summary>
