@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <IncludeSource>True</IncludeSource>
+    <IncludeSymbols>True</IncludeSymbols>
     <TargetFramework>netstandard2.0</TargetFramework>
     <Authors>Soma Osvay</Authors>
     <Company>Starschema Ltd</Company>
