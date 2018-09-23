@@ -57,31 +57,16 @@ namespace Tableau.Api
         public TableauApiClient(Uri tableauBaseUri, ILogger logger, string apiVersion = "2.0")
         {
             BaseUrl = tableauBaseUri;
+            Log = logger;
             if (tableauBaseUri == null)
                 throw new ArgumentException("Tableau base Uri is required (eg. http://mytableauserver.com)", nameof(tableauBaseUri));
-            var version = apiVersion;
-            if (string.IsNullOrEmpty(version))
-            {
-                ApiVersion = new Version(2,4);
-                try
-                {
-                    version = ServerInfo().Result.restApiVersion;
-                    Log.LogDebug($"Tableau API version autodetected. Version: {version}");
-                    ApiVersion = Version.Parse(version);
-                }
-                catch (AggregateException e)
-                {
-                    Log?.LogWarning(e.InnerExceptions.First(), $"Failed to retrieve Tableau API version. This might be because the server is version 2.4 or lower. Assuming 2.0 server version");
-                    ApiVersion = new Version(2,0);
-                }
-            }
-            else if (Version.TryParse(apiVersion, out var v))
+            if (Version.TryParse(apiVersion, out var v))
                 if (v < _minVersion)
                     throw new ArgumentOutOfRangeException(nameof(apiVersion),
                         $"Tableau API version must be greater than {_minVersion.ToString(2)}");
                 else ApiVersion = v;
             else throw new ArgumentException($"'apiVersion' parameter cannot be converted to Version object", nameof(apiVersion));
-            Log = logger;
+          
 
             Log?.Log(LogLevel.Debug, $"Created TableauApiClient for tableau base url: '{tableauBaseUri}', api version: {apiVersion}");
         }
@@ -92,19 +77,7 @@ namespace Tableau.Api
         /// <param name="tableauBaseUri">The base URL of the Tableau Server, eg: https://my-tableau-server.com</param>
         /// <param name="apiVersion">The Tableau API Version to use</param>
         public TableauApiClient(Uri tableauBaseUri, string apiVersion = "2.0") : this(tableauBaseUri, null, apiVersion) { }
-        /// <inheritdoc />
-        /// <summary>
-        /// Initializes an instance of the Tableau Api client and attempt to automatically discover its version. 
-        /// </summary>
-        /// <param name="tableauBaseUri">The base URL of the Tableau Server, eg: https://my-tableau-server.com</param>
-        /// <param name="logger">The logger object</param>
-        public TableauApiClient(Uri tableauBaseUri, ILogger logger):this(tableauBaseUri, logger, null) { }
-        /// <inheritdoc />
-        /// <summary>
-        /// Initializes an instance of the Tableau Api client and attempt to automatically discover its version. 
-        /// </summary>
-        /// <param name="tableauBaseUri">The base URL of the Tableau Server, eg: https://my-tableau-server.com</param>
-        public TableauApiClient(Uri tableauBaseUri) : this(tableauBaseUri, null, null) { }
+     
         private void checkNullParameters(params (string, object)[] arguments)
         {
             foreach (var a in arguments)
