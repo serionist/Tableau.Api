@@ -200,6 +200,7 @@ namespace Tableau.Api
         /// Returns the thumbnail image for the specified view as data stream. Available in all versions
         /// </summary>
         /// <param name="session"></param>
+        /// <param name="workbookId">The ID of the workbook that the view belongs to</param>
         /// <param name="viewId">The ID of the view to return an image for.</param>
         /// <param name="cancelToken"></param>
         /// <returns></returns>
@@ -207,13 +208,13 @@ namespace Tableau.Api
         /// <exception cref="TableauApiVersionException"></exception>
         /// <exception cref="TableauOnlineNotSupportedException"></exception>
         [ApiVersion(1, 0)]
-        public async Task<Stream> QueryViewPreviewImage(TableauSession session, string viewId,
+        public async Task<Stream> QueryViewPreviewImage(TableauSession session, string workbookId, string viewId,
             CancellationToken? cancelToken = null)
         {
             checkEndpointAvailability();
             checkNullParameters((nameof(session), session), (nameof(viewId), viewId));
             return await (await apiRequest(
-                    buildUri($"sites/{session.SiteId}/views/{viewId}/previewImage"), HttpMethod.Get, 200, cancelToken, session))
+                    buildUri($"sites/{session.SiteId}/workbooks/{workbookId}/views/{viewId}/previewImage"), HttpMethod.Get, 200, cancelToken, session))
                 .ReadAsStreamAsync();
         }
         /// <summary>
