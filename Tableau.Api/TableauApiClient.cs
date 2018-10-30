@@ -36,7 +36,7 @@ namespace Tableau.Api
                 .ToDictionary(e => e.Item1, e => e.Item2.MinVersion));
             _onPremiseOnlyEndpoints = typeof(TableauApiClient).GetProperties()
                 .Where(e => e.GetCustomAttribute<OnPremiseOnlyAttribute>() != null).Select(e => e.Name).ToArray();
-
+            
         }
 
         public Uri BaseUrl { get; }

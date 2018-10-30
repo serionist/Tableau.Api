@@ -79,7 +79,7 @@ namespace Tableau.Api
             checkNullParameters((nameof(session), session));
             var ret = await getResponseAsObject<tableauCredentialsType>(await apiRequest(buildUri("auth/switchsite"),
                 HttpMethod.Post, 200, cancelToken, session,
-                getObjectAsRequestContent(new siteType() {id = newSiteContentUrl})));
+                getObjectAsRequestContent(new siteType() {contentUrl = newSiteContentUrl})));
             ret.user.name = session.UserName;
             return new TableauSession(ret);
 
