@@ -179,20 +179,24 @@ namespace Tableau.Api
                     throw;
                 }
         }
-      
-        private async Task<T> getResponseAsObject<T>(HttpContent content) where T:class
+
+        private async Task<string> _readResponseString(HttpContent content)
         {
             var contentString = await content.ReadAsStringAsync();
             //replace old schema to new schema in response to allow deserialize on older APIs
-            contentString = contentString.Replace("http://tableausoftware.com/api", "http://tableau.com/api");
-            using (var reader = XmlReader.Create(new StringReader(contentString)))
+            return contentString.Replace("http://tableausoftware.com/api", "http://tableau.com/api");
+        }
+        private async Task<T> getResponseAsObject<T>(HttpContent content) where T:class
+        {
+           
+            using (var reader = XmlReader.Create(new StringReader(await _readResponseString(content))))
                 return ((tsResponse) new XmlSerializer(typeof(tsResponse)).Deserialize(reader)).Items.FirstOrDefault(
                     e => e is T) as T;
 
         }
         private async Task<(T, T2)> getResponseAsObject<T, T2>(HttpContent content) where T : class where T2:class
         {
-            using (var reader = XmlReader.Create(new StringReader(await content.ReadAsStringAsync())))
+            using (var reader = XmlReader.Create(new StringReader(await _readResponseString(content))))
             {
                 var resp = ((tsResponse) new XmlSerializer(typeof(tsResponse)).Deserialize(reader));
                 return (resp.Items.FirstOrDefault(e=>e is T) as T, resp.Items.FirstOrDefault(e=>e is T2) as T2);
