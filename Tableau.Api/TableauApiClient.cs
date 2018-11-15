@@ -182,7 +182,10 @@ namespace Tableau.Api
       
         private async Task<T> getResponseAsObject<T>(HttpContent content) where T:class
         {
-            using (var reader = XmlReader.Create(new StringReader(await content.ReadAsStringAsync())))
+            var contentString = await content.ReadAsStringAsync();
+            //replace old schema to new schema in response to allow deserialize on older APIs
+            contentString = contentString.Replace("http://tableausoftware.com/api", "http://tableau.com/api");
+            using (var reader = XmlReader.Create(new StringReader(contentString)))
                 return ((tsResponse) new XmlSerializer(typeof(tsResponse)).Deserialize(reader)).Items.FirstOrDefault(
                     e => e is T) as T;
 
@@ -204,7 +207,10 @@ namespace Tableau.Api
                 using (var xmlWriter = XmlWriter.Create(textWriter))
             {
                 ser.Serialize(xmlWriter, new tsRequest(){Item = o});
-                var content = new StringContent(textWriter.ToString());
+                var xml = textWriter.ToString();
+                //remove first (XML schema) tag for compatibility with old versions of API
+                xml = xml.Substring(xml.IndexOf("?>") +2);
+                var content = new StringContent(xml);
                 content.Headers.ContentType =
                     new System.Net.Http.Headers.MediaTypeHeaderValue("application/xml");
                 return content;
