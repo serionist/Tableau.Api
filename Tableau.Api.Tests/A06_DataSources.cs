@@ -20,9 +20,10 @@ namespace Tableau.Api.Tests
         }
 
         [TestMethod]
-        [PreRequisites(nameof(A02_Authentication.A02_3_LoginAdminUser), nameof(A04_Projects.A04_1_CreateProject))]
+        [PreRequisites(nameof(A02_Authentication.A02_3_LoginAdminUser))]//, nameof(A04_Projects.A04_1_CreateProject))]
         public async Task A06_1_PublishTde()
         {
+            var project = await Context.Client.QueryProjects(Context.AdminSession);
             Context._a06_publishedDatasourceName = Guid.NewGuid().ToString().Replace("-", "");
             var uploadSession = await Context.Client.InitiateFileUpload(Context.AdminSession);
             using (var resourceStrm = this.GetResource("sample.tde"))
@@ -32,7 +33,7 @@ namespace Tableau.Api.Tests
                         uploadSession.uploadSessionId, resourceStrm);
             }
             var publishTde = await Context.Client.PublishDatasource(Context.AdminSession, uploadSession.uploadSessionId,
-                Context._a06_publishedDatasourceName, DatasourceFileType.tde, Context.CreatedProjectId);
+                Context._a06_publishedDatasourceName, DatasourceFileType.tde, project.projects[0].id);
             Context._a06_publishedDatasourceId = publishTde.id;
 
             Assert.IsNotNull(publishTde.id, "Published tde has no ID");

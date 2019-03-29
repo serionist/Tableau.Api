@@ -250,7 +250,7 @@ namespace Tableau.Api
             checkNullParameters((nameof(session), session), (nameof(groupId), groupId));
             checkParametersBetween((nameof(pageSize), pageSize, 1, 1000), (nameof(pageNumber), pageNumber, 1, int.MaxValue));
             var ret = await getResponseAsObject<paginationType, userListType>(await apiRequest(
-                buildUri($"site/{session.SiteId}/groups/{groupId}/users", ("pageSize", pageSize.ToString()),
+                buildUri($"sites/{session.SiteId}/groups/{groupId}/users", ("pageSize", pageSize.ToString()),
                     ("pageNumber", pageNumber.ToString())), HttpMethod.Get, 200, cancelToken,
                 session));
             return (ret.Item1, ret.Item2.user);
@@ -370,7 +370,7 @@ namespace Tableau.Api
             checkEndpointAvailability();
             checkNullParameters((nameof(session), session), (nameof(userId), userId));
             return await getResponseAsObject<userType>(await apiRequest(
-                buildUri($"site/{session.SiteId}/users/{userId}"), HttpMethod.Put, 200,
+                buildUri($"sites/{session.SiteId}/users/{userId}"), HttpMethod.Put, 200,
                 cancelToken, session,
                 getObjectAsRequestContent(new userType()
                 {

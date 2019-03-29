@@ -85,7 +85,7 @@ namespace Tableau.Api
             checkEndpointAvailability();
             checkNullParameters((nameof(session), session), (nameof(datasourceId), datasourceId));
             return await (await apiRequest(
-                buildUri($"site/{session.SiteId}/datasources/{datasourceId}/revisions/{revisionNumber}/content",
+                buildUri($"sites/{session.SiteId}/datasources/{datasourceId}/revisions/{revisionNumber}/content",
                     ("includeExtract", includeExtract.ToString())), HttpMethod.Get, 200,
                 cancelToken, session)).ReadAsStreamAsync();
         }
@@ -109,7 +109,7 @@ namespace Tableau.Api
             checkEndpointAvailability();
             checkNullParameters((nameof(session), session), (nameof(workbookId), workbookId));
             return await (await apiRequest(
-                buildUri($"site/{session.SiteId}/workbooks/{workbookId}/revisions/{revisionNumber}/content",
+                buildUri($"sites/{session.SiteId}/workbooks/{workbookId}/revisions/{revisionNumber}/content",
                     ("includeExtract", includeExtract.ToString())), HttpMethod.Get, 200,
                 cancelToken, session)).ReadAsStreamAsync();
         }
@@ -130,7 +130,7 @@ namespace Tableau.Api
         {
             checkEndpointAvailability();
             checkNullParameters((nameof(session), session), (nameof(datasourceId), datasourceId));
-            await apiRequest(buildUri($"site/{session.SiteId}/datasources/{datasourceId}/revisions/{revisionNumber}"),
+            await apiRequest(buildUri($"sites/{session.SiteId}/datasources/{datasourceId}/revisions/{revisionNumber}"),
                 HttpMethod.Delete, 204, cancelToken, session);
         }
 
@@ -151,7 +151,7 @@ namespace Tableau.Api
         {
             checkEndpointAvailability();
             checkNullParameters((nameof(session), session), (nameof(workbookId), workbookId));
-            await apiRequest(buildUri($"site/{session.SiteId}/workbooks/{workbookId}/revisions/{revisionNumber}"),
+            await apiRequest(buildUri($"sites/{session.SiteId}/workbooks/{workbookId}/revisions/{revisionNumber}"),
                 HttpMethod.Delete, 204, cancelToken, session);
         }
     }
