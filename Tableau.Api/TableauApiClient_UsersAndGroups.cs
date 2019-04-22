@@ -357,6 +357,7 @@ namespace Tableau.Api
         /// <param name="newPassword">(Optional) The new password for the user. Tableau Server only. Not available in Tableau Online.</param>
         /// <param name="newSiteRole">(Optional) The new site role. Valid role names are ServerAdministratorExplorer, ExplorerCanPublish, SiteAdministrator, and Unlicensed.</param>
         /// <param name="newAuthSetting">(Optional) The new authentication type for the user. You can assign the following values for this attribute: SAML (the user signs in using SAML) or ServerDefault (the user signs in using the authentication method that's set for the server). These values appear on the Authentication tab on the Settings page in Tableau Online the SAML attribute value corresponds to Single sign-on, and the ServerDefault value corresponds to TableauID.</param>
+        /// <param name="newDisplayName">(Optional, EXPERIMENTAL) The new display name of the user. This is an UNTESTED EXPERIMENTAL feature</param>
         /// <param name="cancelToken"></param>
         /// <returns></returns>
         /// <exception cref="TableauRequestException"></exception>
@@ -365,7 +366,7 @@ namespace Tableau.Api
         [ApiVersion(2, 0)]
         public async Task<userType> UpdateUser(TableauSession session, string userId, string newFullName = null,
             string newEmail = null, string newPassword = null, siteRoleType? newSiteRole = null,
-            siteUserAuthSettingType? newAuthSetting = null, CancellationToken? cancelToken = null)
+            siteUserAuthSettingType? newAuthSetting = null, string newDisplayName = null, CancellationToken? cancelToken = null)
         {
             checkEndpointAvailability();
             checkNullParameters((nameof(session), session), (nameof(userId), userId));
@@ -374,6 +375,7 @@ namespace Tableau.Api
                 cancelToken, session,
                 getObjectAsRequestContent(new userType()
                 {
+                    name = newDisplayName,
                     fullName = newFullName,
                     email = newEmail,
                     password = newPassword,
