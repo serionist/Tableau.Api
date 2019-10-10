@@ -187,8 +187,8 @@ namespace Tableau.Api
                 checkNullParameters((nameof(filter.filterName), filter.filterName), (nameof(filter.filterValue), filter.filterValue));
             var args = new List<(string, string)>();
                args.AddRange(filters.Select(e =>
-                (e.filterName.StartsWith("vf_", StringComparison.CurrentCultureIgnoreCase)
-                    ? e.filterName.Substring(3)
+                (!e.filterName.StartsWith("vf_", StringComparison.CurrentCultureIgnoreCase)
+                    ? $"vf_{e.filterName}"
                     : e.filterName, e.filterValue)));
 
             return await (await apiRequest(

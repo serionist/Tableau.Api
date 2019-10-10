@@ -384,7 +384,6 @@ namespace Tableau.Api
                     authSetting = newAuthSetting ?? siteUserAuthSettingType.ServerDefault,
                     authSettingSpecified = newAuthSetting.HasValue
                 })));
-
         }
         /// <summary>
         /// Removes a user from a group. Available in all versions
