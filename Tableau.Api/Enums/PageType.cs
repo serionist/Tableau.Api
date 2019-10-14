@@ -1,0 +1,22 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Text;
+
+namespace Tableau.Api.Enums
+{
+    public enum PageType
+    {
+        A3,
+        A4,
+        A5,
+        B5,
+        Executive,
+        Folio,
+        Ledger,
+        Legal,
+        Letter,
+        Note,
+        Quarto,
+        Tabloid
+    }
+}

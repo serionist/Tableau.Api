@@ -179,14 +179,17 @@ namespace Tableau.Api
         /// <exception cref="TableauOnlineNotSupportedException"></exception>
         [ApiVersion(2, 8)]
         public async Task<Stream> QueryViewPDF(TableauSession session, string viewId, 
-            CancellationToken? cancelToken = null, params (string filterName, string filterValue)[] filters)
+            CancellationToken? cancelToken = null, PageType pageType = PageType.Legal, Orientation orientation = Orientation.Portrait,
+            (string filterName, string filterValue)[] filters = null)
         {
             checkEndpointAvailability();
             checkNullParameters((nameof(session), session), (nameof(viewId), viewId));
-            foreach (var filter in filters)
+            foreach (var filter in filters ?? new (string filterName, string filterValue)[0])
                 checkNullParameters((nameof(filter.filterName), filter.filterName), (nameof(filter.filterValue), filter.filterValue));
             var args = new List<(string, string)>();
-               args.AddRange(filters.Select(e =>
+            args.Add(("type", Enum.GetName(typeof(PageType), pageType)));
+            args.Add(("orientation", Enum.GetName(typeof(Orientation), orientation)));
+            args.AddRange(filters.Select(e =>
                 (!e.filterName.StartsWith("vf_", StringComparison.CurrentCultureIgnoreCase)
                     ? $"vf_{e.filterName}"
                     : e.filterName, e.filterValue)));
