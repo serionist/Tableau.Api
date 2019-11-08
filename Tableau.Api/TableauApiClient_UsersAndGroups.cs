@@ -101,6 +101,7 @@ namespace Tableau.Api
         /// Creates a group in Tableau Server. Available in all versions
         /// </summary>
         /// <param name="session"></param>
+        /// <param name="groupId">The id of the group</param>
         /// <param name="newGroupName">The new name for the group.</param>
         /// <param name="cancelToken"></param>
         /// <returns></returns>
@@ -108,12 +109,12 @@ namespace Tableau.Api
         /// <exception cref="TableauApiVersionException"></exception>
         /// <exception cref="TableauOnlineNotSupportedException"></exception>
         [ApiVersion(2, 0)]
-        public async Task<groupType> UpdateGroup(TableauSession session, string newGroupName,
+        public async Task<groupType> UpdateGroup(TableauSession session, string groupId, string newGroupName,
             CancellationToken? cancelToken = null)
         {
             checkEndpointAvailability();
             checkNullParameters((nameof(session), session), (nameof(newGroupName), newGroupName));
-            return await getResponseAsObject<groupType>(await apiRequest(buildUri($"sites/{session.SiteId}/groups"),
+            return await getResponseAsObject<groupType>(await apiRequest(buildUri($"sites/{session.SiteId}/groups/{groupId}"),
                 HttpMethod.Put, 200, cancelToken, session,
                 getObjectAsRequestContent(new groupType() { name = newGroupName })));
         }
