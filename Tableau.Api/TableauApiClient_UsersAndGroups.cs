@@ -370,7 +370,7 @@ namespace Tableau.Api
             checkEndpointAvailability();
             checkNullParameters((nameof(session), session), (nameof(userId), userId));
             return await getResponseAsObject<userType>(await apiRequest(
-                buildUri($"site/{session.SiteId}/users/{userId}"), HttpMethod.Put, 200,
+                buildUri($"sites/{session.SiteId}/users/{userId}"), HttpMethod.Put, 200,
                 cancelToken, session,
                 getObjectAsRequestContent(new userType()
                 {

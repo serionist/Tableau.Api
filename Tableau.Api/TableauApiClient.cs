@@ -59,9 +59,9 @@ namespace Tableau.Api
         {
             BaseUrl = tableauBaseUri;
             if (Version.TryParse(apiVersion, out var v))
-                if (v < _minVersion || v > _maxVersion)
+                if (v < _minVersion)
                     throw new ArgumentOutOfRangeException(nameof(apiVersion),
-                        $"Tableau API version must be between {_minVersion.ToString(2)} and {_maxVersion.ToString(2)}");
+                        $"Tableau API version must be larger then {_minVersion.ToString(2)}");
                 else ApiVersion = v;
             else throw new ArgumentException($"'apiVersion' parameter cannot be converted to Version object", nameof(apiVersion));
             Log = logger;
