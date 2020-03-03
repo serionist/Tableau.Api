@@ -4,6 +4,7 @@ using System.Text;
 
 namespace Tableau.Api.Models
 {
+  
     public partial class granteeCapabilitiesType
     {
         public string UserId
@@ -18,4 +19,34 @@ namespace Tableau.Api.Models
             set => Item = new groupType() { id = value };
         }
     }
+
+   
+    public partial class tableauCredentialsType
+    {
+
+
+        private string personalAccessTokenNameField;
+
+        private string personalAccessTokenSecretField;
+
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public string personalAccessTokenName
+        {
+            get { return this.personalAccessTokenNameField; }
+            set { this.personalAccessTokenNameField = value; }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public string personalAccessTokenSecret
+        {
+            get { return this.personalAccessTokenSecretField; }
+            set { this.personalAccessTokenSecretField = value; }
+        }
+
+    }
+
+
 }

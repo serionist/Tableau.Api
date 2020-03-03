@@ -63,8 +63,8 @@ namespace Tableau.Api
                 HttpMethod.Post, 200, cancelToken, null, getObjectAsRequestContent(
                     new tableauCredentialsType()
                     {
-                        name = tokenName,
-                        token = token,
+                        personalAccessTokenName  = tokenName,
+                        personalAccessTokenSecret = token,
                         site = new siteType() { contentUrl = siteContentUrl },
                     })));
             ret.user.name = tokenName;
