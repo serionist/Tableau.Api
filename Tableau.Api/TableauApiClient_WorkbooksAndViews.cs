@@ -376,15 +376,19 @@ namespace Tableau.Api
         /// <exception cref="TableauApiVersionException"></exception>
         /// <exception cref="TableauOnlineNotSupportedException"></exception>
         [ApiVersion(2, 0)]
-        public async Task<Stream> DownloadWorkbook(TableauSession session, string workbookId,
+        public async Task<(Stream stream, WorkbookFileType type)> DownloadWorkbook(TableauSession session, string workbookId,
             bool includeExtract = true, CancellationToken? cancelToken = null)
         {
             checkEndpointAvailability();
             checkNullParameters((nameof(session), session), (nameof(workbookId), workbookId));
-            return await (await apiRequest(
-                    buildUri($"sites/{session.SiteId}/workbooks/{workbookId}/content",
-                        ("includeExtract", includeExtract.ToString())), HttpMethod.Get, 200, cancelToken, session))
-                .ReadAsStreamAsync();
+            var resp = (await apiRequest(
+                buildUri($"sites/{session.SiteId}/workbooks/{workbookId}/content",
+                    ("includeExtract", includeExtract.ToString())), HttpMethod.Get, 200, cancelToken, session));
+
+            return (await resp.ReadAsStreamAsync(),
+                resp.Headers.ContentType.MediaType.Equals("application/xml", StringComparison.CurrentCultureIgnoreCase)
+                    ? WorkbookFileType.twb
+                    : WorkbookFileType.twbx);
         }
         /// <summary>
         /// Modifies an existing workbook, allowing you to change the owner or project that the workbook belongs to and whether the workbook shows views in tabs. Available in all versions
