@@ -275,6 +275,31 @@ namespace Tableau.Api
         }
 
         /// <summary>
+        /// Returns the PDF for the specified workbook as data stream. Available 3.4+
+        /// </summary>
+        /// <param name="session"></param>
+        /// <param name="workbookId">The ID of the workbook to return an image for.</param>
+        /// <param name="cancelToken"></param>
+        /// <returns></returns>
+        /// <exception cref="TableauRequestException"></exception>
+        /// <exception cref="TableauApiVersionException"></exception>
+        /// <exception cref="TableauOnlineNotSupportedException"></exception>
+        [ApiVersion(3, 4)]
+        public async Task<Stream> QueryWorkbookPDF(TableauSession session, string workbookId, PageOrientation orientation = PageOrientation.Portrait,
+            PageType pageType = PageType.Legal,
+            CancellationToken? cancelToken = null)
+        {
+            checkEndpointAvailability();
+            checkNullParameters((nameof(session), session), (nameof(workbookId), workbookId));
+            return await (await apiRequest(
+                    buildUri($"sites/{session.SiteId}/workbooks/{workbookId}/pdf",
+                        ("type", Enum.GetName(typeof(PageType), pageType)),
+                        ("orientation", Enum.GetName(typeof(PageOrientation), orientation))), HttpMethod.Get, 200,
+                    cancelToken, session))
+                .ReadAsStreamAsync();
+        }
+
+        /// <summary>
         /// Queries workbooks for specified site. Versions 2.2+
         /// </summary>
         /// <param name="session"></param>
