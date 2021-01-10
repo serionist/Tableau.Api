@@ -14,6 +14,7 @@ namespace Tableau.Api.Enums
         Executive,
         Folio,
         Ledger,
+        Legal,
         Letter,
         Note,
         Quarto,

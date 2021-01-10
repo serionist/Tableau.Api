@@ -24,7 +24,6 @@ namespace Tableau.Api
     {
         private static readonly TimeSpan _defaultTimeout = new TimeSpan(0, 2, 0);
         private static readonly Version _minVersion = new Version(2, 0);
-        private static readonly Version _maxVersion = new Version(3, 1);
         private static ReadOnlyDictionary<string, Version> _minVersionForEndpoints { get; }
         private static string[] _onPremiseOnlyEndpoints { get; }
         /// <summary>
@@ -37,7 +36,7 @@ namespace Tableau.Api
                 .ToDictionary(e => e.Item1, e => e.Item2.MinVersion));
             _onPremiseOnlyEndpoints = typeof(TableauApiClient).GetProperties()
                 .Where(e => e.GetCustomAttribute<OnPremiseOnlyAttribute>() != null).Select(e => e.Name).ToArray();
-
+            
         }
 
         public Uri BaseUrl { get; }
@@ -58,13 +57,16 @@ namespace Tableau.Api
         public TableauApiClient(Uri tableauBaseUri, ILogger logger, string apiVersion = "2.0")
         {
             BaseUrl = tableauBaseUri;
+            Log = logger;
+            if (tableauBaseUri == null)
+                throw new ArgumentException("Tableau base Uri is required (eg. http://mytableauserver.com)", nameof(tableauBaseUri));
             if (Version.TryParse(apiVersion, out var v))
                 if (v < _minVersion)
                     throw new ArgumentOutOfRangeException(nameof(apiVersion),
-                        $"Tableau API version must be larger then {_minVersion.ToString(2)}");
+                        $"Tableau API version must be greater than {_minVersion.ToString(2)}");
                 else ApiVersion = v;
             else throw new ArgumentException($"'apiVersion' parameter cannot be converted to Version object", nameof(apiVersion));
-            Log = logger;
+          
 
             Log?.Log(LogLevel.Debug, $"Created TableauApiClient for tableau base url: '{tableauBaseUri}', api version: {apiVersion}");
         }
@@ -75,7 +77,7 @@ namespace Tableau.Api
         /// <param name="tableauBaseUri">The base URL of the Tableau Server, eg: https://my-tableau-server.com</param>
         /// <param name="apiVersion">The Tableau API Version to use</param>
         public TableauApiClient(Uri tableauBaseUri, string apiVersion = "2.0") : this(tableauBaseUri, null, apiVersion) { }
-
+     
         private void checkNullParameters(params (string, object)[] arguments)
         {
             foreach (var a in arguments)
@@ -177,17 +179,24 @@ namespace Tableau.Api
                     throw;
                 }
         }
-      
+
+        private async Task<string> _readResponseString(HttpContent content)
+        {
+            var contentString = await content.ReadAsStringAsync();
+            //replace old schema to new schema in response to allow deserialize on older APIs
+            return contentString.Replace("http://tableausoftware.com/api", "http://tableau.com/api");
+        }
         private async Task<T> getResponseAsObject<T>(HttpContent content) where T:class
         {
-            using (var reader = XmlReader.Create(new StringReader(await content.ReadAsStringAsync())))
+           
+            using (var reader = XmlReader.Create(new StringReader(await _readResponseString(content))))
                 return ((tsResponse) new XmlSerializer(typeof(tsResponse)).Deserialize(reader)).Items.FirstOrDefault(
                     e => e is T) as T;
 
         }
         private async Task<(T, T2)> getResponseAsObject<T, T2>(HttpContent content) where T : class where T2:class
         {
-            using (var reader = XmlReader.Create(new StringReader(await content.ReadAsStringAsync())))
+            using (var reader = XmlReader.Create(new StringReader(await _readResponseString(content))))
             {
                 var resp = ((tsResponse) new XmlSerializer(typeof(tsResponse)).Deserialize(reader));
                 return (resp.Items.FirstOrDefault(e=>e is T) as T, resp.Items.FirstOrDefault(e=>e is T2) as T2);
@@ -202,7 +211,10 @@ namespace Tableau.Api
                 using (var xmlWriter = XmlWriter.Create(textWriter))
             {
                 ser.Serialize(xmlWriter, new tsRequest(){Item = o});
-                var content = new StringContent(textWriter.ToString());
+                var xml = textWriter.ToString();
+                //remove first (XML schema) tag for compatibility with old versions of API
+                xml = xml.Substring(xml.IndexOf("?>") +2);
+                var content = new StringContent(xml);
                 content.Headers.ContentType =
                     new System.Net.Http.Headers.MediaTypeHeaderValue("application/xml");
                 return content;

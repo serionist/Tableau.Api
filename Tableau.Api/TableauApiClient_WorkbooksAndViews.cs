@@ -179,16 +179,19 @@ namespace Tableau.Api
         /// <exception cref="TableauOnlineNotSupportedException"></exception>
         [ApiVersion(2, 8)]
         public async Task<Stream> QueryViewPDF(TableauSession session, string viewId, 
-            CancellationToken? cancelToken = null, params (string filterName, string filterValue)[] filters)
+            CancellationToken? cancelToken = null, PageType pageType = PageType.Legal, Orientation orientation = Orientation.Portrait,
+            (string filterName, string filterValue)[] filters = null)
         {
             checkEndpointAvailability();
             checkNullParameters((nameof(session), session), (nameof(viewId), viewId));
-            foreach (var filter in filters)
+            foreach (var filter in filters ?? new (string filterName, string filterValue)[0])
                 checkNullParameters((nameof(filter.filterName), filter.filterName), (nameof(filter.filterValue), filter.filterValue));
             var args = new List<(string, string)>();
-               args.AddRange(filters.Select(e =>
-                (e.filterName.StartsWith("vf_", StringComparison.CurrentCultureIgnoreCase)
-                    ? e.filterName.Substring(3)
+            args.Add(("type", Enum.GetName(typeof(PageType), pageType)));
+            args.Add(("orientation", Enum.GetName(typeof(Orientation), orientation)));
+            args.AddRange(filters.Select(e =>
+                (!e.filterName.StartsWith("vf_", StringComparison.CurrentCultureIgnoreCase)
+                    ? $"vf_{e.filterName}"
                     : e.filterName, e.filterValue)));
 
             return await (await apiRequest(
@@ -200,6 +203,7 @@ namespace Tableau.Api
         /// Returns the thumbnail image for the specified view as data stream. Available in all versions
         /// </summary>
         /// <param name="session"></param>
+        /// <param name="workbookId">The ID of the workbook that the view belongs to</param>
         /// <param name="viewId">The ID of the view to return an image for.</param>
         /// <param name="cancelToken"></param>
         /// <returns></returns>
@@ -207,13 +211,13 @@ namespace Tableau.Api
         /// <exception cref="TableauApiVersionException"></exception>
         /// <exception cref="TableauOnlineNotSupportedException"></exception>
         [ApiVersion(1, 0)]
-        public async Task<Stream> QueryViewPreviewImage(TableauSession session, string viewId,
+        public async Task<Stream> QueryViewPreviewImage(TableauSession session, string workbookId, string viewId,
             CancellationToken? cancelToken = null)
         {
             checkEndpointAvailability();
             checkNullParameters((nameof(session), session), (nameof(viewId), viewId));
             return await (await apiRequest(
-                    buildUri($"sites/{session.SiteId}/views/{viewId}/previewImage"), HttpMethod.Get, 200, cancelToken, session))
+                    buildUri($"sites/{session.SiteId}/workbooks/{workbookId}/views/{viewId}/previewImage"), HttpMethod.Get, 200, cancelToken, session))
                 .ReadAsStreamAsync();
         }
         /// <summary>

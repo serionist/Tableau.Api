@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <IncludeSource>True</IncludeSource>
+    <IncludeSymbols>True</IncludeSymbols>
     <TargetFramework>netstandard2.0</TargetFramework>
     <Authors>Soma Osvay</Authors>
     <Company>Starschema Ltd</Company>
@@ -9,13 +11,17 @@
     <RepositoryUrl>https://starschema.visualstudio.com/_git/Tableau.Api</RepositoryUrl>
     <RepositoryType>Git</RepositoryType>
     <PackageTags>Tableau, Tableau API, Tableau C#</PackageTags>
-    <AssemblyVersion>1.0.1.0</AssemblyVersion>
-    <FileVersion>1.1.0.0</FileVersion>
-    <Version>1.0.1</Version>
+    <AssemblyVersion>1.0.2.0</AssemblyVersion>
+    <FileVersion>1.0.2.0</FileVersion>
+    <Version>1.0.14</Version>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
     <DocumentationFile>bin\Debug\netstandard2.0\Tableau.Api.xml</DocumentationFile>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <DocumentationFile>bin\Release\netstandard2.0\Tableau.Api.xml</DocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>

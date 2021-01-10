@@ -101,6 +101,7 @@ namespace Tableau.Api
         /// Creates a group in Tableau Server. Available in all versions
         /// </summary>
         /// <param name="session"></param>
+        /// <param name="groupId">The id of the group</param>
         /// <param name="newGroupName">The new name for the group.</param>
         /// <param name="cancelToken"></param>
         /// <returns></returns>
@@ -108,12 +109,12 @@ namespace Tableau.Api
         /// <exception cref="TableauApiVersionException"></exception>
         /// <exception cref="TableauOnlineNotSupportedException"></exception>
         [ApiVersion(2, 0)]
-        public async Task<groupType> UpdateGroup(TableauSession session, string newGroupName,
+        public async Task<groupType> UpdateGroup(TableauSession session, string groupId, string newGroupName,
             CancellationToken? cancelToken = null)
         {
             checkEndpointAvailability();
             checkNullParameters((nameof(session), session), (nameof(newGroupName), newGroupName));
-            return await getResponseAsObject<groupType>(await apiRequest(buildUri($"sites/{session.SiteId}/groups"),
+            return await getResponseAsObject<groupType>(await apiRequest(buildUri($"sites/{session.SiteId}/groups/{groupId}"),
                 HttpMethod.Put, 200, cancelToken, session,
                 getObjectAsRequestContent(new groupType() { name = newGroupName })));
         }
@@ -250,7 +251,7 @@ namespace Tableau.Api
             checkNullParameters((nameof(session), session), (nameof(groupId), groupId));
             checkParametersBetween((nameof(pageSize), pageSize, 1, 1000), (nameof(pageNumber), pageNumber, 1, int.MaxValue));
             var ret = await getResponseAsObject<paginationType, userListType>(await apiRequest(
-                buildUri($"site/{session.SiteId}/groups/{groupId}/users", ("pageSize", pageSize.ToString()),
+                buildUri($"sites/{session.SiteId}/groups/{groupId}/users", ("pageSize", pageSize.ToString()),
                     ("pageNumber", pageNumber.ToString())), HttpMethod.Get, 200, cancelToken,
                 session));
             return (ret.Item1, ret.Item2.user);
@@ -357,6 +358,7 @@ namespace Tableau.Api
         /// <param name="newPassword">(Optional) The new password for the user. Tableau Server only. Not available in Tableau Online.</param>
         /// <param name="newSiteRole">(Optional) The new site role. Valid role names are ServerAdministratorExplorer, ExplorerCanPublish, SiteAdministrator, and Unlicensed.</param>
         /// <param name="newAuthSetting">(Optional) The new authentication type for the user. You can assign the following values for this attribute: SAML (the user signs in using SAML) or ServerDefault (the user signs in using the authentication method that's set for the server). These values appear on the Authentication tab on the Settings page in Tableau Online the SAML attribute value corresponds to Single sign-on, and the ServerDefault value corresponds to TableauID.</param>
+        /// <param name="newDisplayName">(Optional, EXPERIMENTAL) The new display name of the user. This is an UNTESTED EXPERIMENTAL feature</param>
         /// <param name="cancelToken"></param>
         /// <returns></returns>
         /// <exception cref="TableauRequestException"></exception>
@@ -365,7 +367,7 @@ namespace Tableau.Api
         [ApiVersion(2, 0)]
         public async Task<userType> UpdateUser(TableauSession session, string userId, string newFullName = null,
             string newEmail = null, string newPassword = null, siteRoleType? newSiteRole = null,
-            siteUserAuthSettingType? newAuthSetting = null, CancellationToken? cancelToken = null)
+            siteUserAuthSettingType? newAuthSetting = null, string newDisplayName = null, CancellationToken? cancelToken = null)
         {
             checkEndpointAvailability();
             checkNullParameters((nameof(session), session), (nameof(userId), userId));
@@ -374,6 +376,7 @@ namespace Tableau.Api
                 cancelToken, session,
                 getObjectAsRequestContent(new userType()
                 {
+                    name = newDisplayName,
                     fullName = newFullName,
                     email = newEmail,
                     password = newPassword,
@@ -382,7 +385,6 @@ namespace Tableau.Api
                     authSetting = newAuthSetting ?? siteUserAuthSettingType.ServerDefault,
                     authSettingSpecified = newAuthSetting.HasValue
                 })));
-
         }
         /// <summary>
         /// Removes a user from a group. Available in all versions
