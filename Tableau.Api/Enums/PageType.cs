@@ -6,6 +6,7 @@ namespace Tableau.Api.Enums
 {
     public enum PageType
     {
+        Legal,
         A3,
         A4,
         A5,

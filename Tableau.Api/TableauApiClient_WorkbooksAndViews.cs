@@ -279,6 +279,31 @@ namespace Tableau.Api
         }
 
         /// <summary>
+        /// Returns the PDF for the specified workbook as data stream. Available 3.4+
+        /// </summary>
+        /// <param name="session"></param>
+        /// <param name="workbookId">The ID of the workbook to return an image for.</param>
+        /// <param name="cancelToken"></param>
+        /// <returns></returns>
+        /// <exception cref="TableauRequestException"></exception>
+        /// <exception cref="TableauApiVersionException"></exception>
+        /// <exception cref="TableauOnlineNotSupportedException"></exception>
+        [ApiVersion(3, 4)]
+        public async Task<Stream> QueryWorkbookPDF(TableauSession session, string workbookId, PageOrientation orientation = PageOrientation.Portrait,
+            PageType pageType = PageType.Legal,
+            CancellationToken? cancelToken = null)
+        {
+            checkEndpointAvailability();
+            checkNullParameters((nameof(session), session), (nameof(workbookId), workbookId));
+            return await (await apiRequest(
+                    buildUri($"sites/{session.SiteId}/workbooks/{workbookId}/pdf",
+                        ("type", Enum.GetName(typeof(PageType), pageType)),
+                        ("orientation", Enum.GetName(typeof(PageOrientation), orientation))), HttpMethod.Get, 200,
+                    cancelToken, session))
+                .ReadAsStreamAsync();
+        }
+
+        /// <summary>
         /// Queries workbooks for specified site. Versions 2.2+
         /// </summary>
         /// <param name="session"></param>
@@ -355,15 +380,19 @@ namespace Tableau.Api
         /// <exception cref="TableauApiVersionException"></exception>
         /// <exception cref="TableauOnlineNotSupportedException"></exception>
         [ApiVersion(2, 0)]
-        public async Task<Stream> DownloadWorkbook(TableauSession session, string workbookId,
+        public async Task<(Stream stream, WorkbookFileType type)> DownloadWorkbook(TableauSession session, string workbookId,
             bool includeExtract = true, CancellationToken? cancelToken = null)
         {
             checkEndpointAvailability();
             checkNullParameters((nameof(session), session), (nameof(workbookId), workbookId));
-            return await (await apiRequest(
-                    buildUri($"sites/{session.SiteId}/workbooks/{workbookId}/content",
-                        ("includeExtract", includeExtract.ToString())), HttpMethod.Get, 200, cancelToken, session))
-                .ReadAsStreamAsync();
+            var resp = (await apiRequest(
+                buildUri($"sites/{session.SiteId}/workbooks/{workbookId}/content",
+                    ("includeExtract", includeExtract.ToString())), HttpMethod.Get, 200, cancelToken, session));
+
+            return (await resp.ReadAsStreamAsync(),
+                resp.Headers.ContentType.MediaType.Equals("application/xml", StringComparison.CurrentCultureIgnoreCase)
+                    ? WorkbookFileType.twb
+                    : WorkbookFileType.twbx);
         }
         /// <summary>
         /// Modifies an existing workbook, allowing you to change the owner or project that the workbook belongs to and whether the workbook shows views in tabs. Available in all versions

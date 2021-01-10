@@ -82,13 +82,17 @@ namespace Tableau.Api
         /// <exception cref="TableauApiVersionException"></exception>
         /// <exception cref="TableauOnlineNotSupportedException"></exception>
         [ApiVersion(2, 6)]
-        public async Task<taskExtractRefreshType[]> GetExtractRefreshTasks(TableauSession session,
+        public async Task<(taskExtractRefreshType[], taskRunFlowType[], scheduleType[])> GetExtractRefreshTasks(TableauSession session,
             CancellationToken? cancelToken = null)
         {
             checkEndpointAvailability();
             checkNullParameters((nameof(session), session));
-            return (await getResponseAsObject<taskListType>(await apiRequest(buildUri($"sites/{session.SiteId}/tasks/extractRefreshes"),
-                HttpMethod.Get, 200, cancelToken, session))).task.Select(e=>e.Item).ToArray();
+            var resp = (await getResponseAsObject<taskListType>(await apiRequest(
+                buildUri($"sites/{session.SiteId}/tasks/extractRefreshes"),
+                HttpMethod.Get, 200, cancelToken, session)));
+            return (resp.task.Where(e => e.Item is taskExtractRefreshType).Cast<taskExtractRefreshType>().ToArray(),
+                resp.task.Where(e => e.Item is taskRunFlowType).Cast<taskRunFlowType>().ToArray(),
+                resp.task.Where(e => e.Item is scheduleType).Cast<scheduleType>().ToArray());
         }
 
         private async Task<scheduleType> _createSchedule(TableauSession session, string name, int priority,

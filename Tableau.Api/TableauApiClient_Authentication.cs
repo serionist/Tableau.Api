@@ -46,6 +46,32 @@ namespace Tableau.Api
         }
 
         /// <summary>
+        /// Signs into Tableau Server with a personal access token. Versions 3.7+
+        /// </summary>
+        /// <param name="tokenName">The name of the access token</param>
+        /// <param name="token">The token itself</param>
+        /// <param name="siteContentUrl">The ContentUrl of the site to log in to. Default: ''</param>
+        /// <param name="cancelToken"></param>
+        /// <returns></returns>
+        /// <exception cref="TableauRequestException"></exception>
+        [ApiVersion(3, 7)]
+        public async Task<TableauSession> SignInWithPAT(string tokenName, string token, string siteContentUrl = "", CancellationToken? cancelToken = null)
+        {
+            checkEndpointAvailability();
+            checkNullParameters((nameof(tokenName), tokenName), (nameof(token), token));
+            var ret = await getResponseAsObject<tableauCredentialsType>(await apiRequest(buildUri("auth/signin"),
+                HttpMethod.Post, 200, cancelToken, null, getObjectAsRequestContent(
+                    new tableauCredentialsType()
+                    {
+                        personalAccessTokenName  = tokenName,
+                        personalAccessTokenSecret = token,
+                        site = new siteType() { contentUrl = siteContentUrl },
+                    })));
+            ret.user.name = tokenName;
+            return new TableauSession(ret);
+        }
+
+        /// <summary>
         /// Signs out of Tableau Server. Available in all versions
         /// </summary>
         /// <param name="session"></param>
