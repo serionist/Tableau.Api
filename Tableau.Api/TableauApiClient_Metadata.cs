@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Tableau.Api.Attributes;
+using Tableau.Api.Enums;
 using Tableau.Api.Exceptions;
 using Tableau.Api.Models;
 
@@ -168,6 +169,44 @@ namespace Tableau.Api
             return (await getResponseAsObject<columnType>(await apiRequest(
                 buildUri($"sites/{session.SiteId}/tables/{tableId}/columns/{columnId}"), HttpMethod.Put, 200,
                 cancelToken, session, getObjectAsRequestContent(new columnType() {description = newDescription}))));
+        }
+
+
+        /// <summary>
+        /// Create and apply a data quality warning to a database, table, published data source, or flow. Only one data quality warning can be applied to the asset. Adding a data quality warning to the asset that already has one causes an error.
+
+        /// This method is available if your Tableau Online site or Tableau Server is licensed with the Data Management Add-on.
+        /// </summary>
+        /// <param name="session"></param>
+        /// <param name="contentType">The type of asset that the data quality warning is being attached to. </param>
+        /// <param name="luid">The unique ID of the asset (database, table, published data source, or flow). This is the same as the content ID.</param>
+        /// <param name="type">Type of data quality warning to apply to the asset</param>
+        /// <param name="message">(Optional) A custom message to accompany the data quality warning.</param>
+        /// <param name="severity">(Optional) Enables high visibility for the data quality warning when set to "true". Value can be "true" or "false".</param>
+        /// <param name="state">(Optional) Controls whether the data quality warning displays. Value can be "true" or "false". If the state is not specified, the data quality warning is set to "true" and is visible by default.</param>
+        /// <param name="cancelToken"></param>
+        /// <returns></returns>
+        /// <exception cref="TableauRequestException"></exception>
+        /// <exception cref="TableauApiVersionException"></exception>
+        /// <exception cref="TableauOnlineNotSupportedException"></exception>
+        [ApiVersion(3, 5)]
+        public async Task<dataQualityWarningType> AddDataQualityWarning(TableauSession session,
+            MetadataContentType contentType, string luid, DataQualityWarningType type, string message = null, bool? severity = null, bool? state = null, CancellationToken? cancelToken = null)
+        {
+            checkEndpointAvailability();
+            checkNullParameters((nameof(session), session), (nameof(luid), luid));
+            return (await getResponseAsObject<dataQualityWarningType>(await apiRequest(
+                buildUri(
+                    $"sites/{session.SiteId}/dataQualityWarnings/{Enum.GetName(typeof(MetadataContentType), contentType)}/{luid}"),
+                HttpMethod.Post, 201, cancelToken, session, getObjectAsRequestContent(new dataQualityWarningType()
+                {
+                    type = Enum.GetName(typeof(DataQualityWarningType), type),
+                    isActiveSpecified = state.HasValue,
+                    isActive = state ?? false,
+                    message = message,
+                    isSevereSpecified = severity.HasValue,
+                    isSevere = severity ?? false
+                }))));
         }
 
     }

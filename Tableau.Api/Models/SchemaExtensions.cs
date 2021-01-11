@@ -48,5 +48,42 @@ namespace Tableau.Api.Models
 
     }
 
+    public partial class dataQualityWarningType
+    {
+
+        private bool isSevereField;
+
+        private bool isSevereFieldSpecified;
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public bool isSevere
+        {
+            get
+            {
+                return this.isSevereField;
+            }
+            set
+            {
+                this.isSevereField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlIgnoreAttribute()]
+        public bool isSevereSpecified
+        {
+            get
+            {
+                return this.isSevereFieldSpecified;
+            }
+            set
+            {
+                this.isSevereFieldSpecified = value;
+            }
+        }
+
+    }
+
 
 }

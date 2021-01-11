@@ -13,7 +13,7 @@
     <PackageTags>Tableau, Tableau API, Tableau C#</PackageTags>
     <AssemblyVersion>1.0.2.1</AssemblyVersion>
     <FileVersion>1.0.2.0</FileVersion>
-    <Version>1.2.1</Version>
+    <Version>1.2.2</Version>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
