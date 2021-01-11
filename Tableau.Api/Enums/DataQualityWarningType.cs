@@ -7,7 +7,7 @@ namespace Tableau.Api.Enums
     public enum DataQualityWarningType
     {
         DEPRECATED,
-        Warning,
+        WARNING,
         STALE,
         SENSITIVE_DATA,
         MAINTENANCE
