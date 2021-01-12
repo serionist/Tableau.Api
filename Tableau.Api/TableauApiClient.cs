@@ -7,6 +7,7 @@ using System.Net.Http;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
@@ -214,6 +215,8 @@ namespace Tableau.Api
                 var xml = textWriter.ToString();
                 //remove first (XML schema) tag for compatibility with old versions of API
                 xml = xml.Substring(xml.IndexOf("?>") +2);
+                // remove XML definitions from tsRequest
+                xml = Regex.Replace(xml, @"(?<=<tsRequest )[^>]+", "");
                 var content = new StringContent(xml);
                 content.Headers.ContentType =
                     new System.Net.Http.Headers.MediaTypeHeaderValue("application/xml");
