@@ -232,6 +232,32 @@ namespace Tableau.Api
         }
 
         /// <summary>
+        /// Gets the groups of a user. Can only be called by site/server administrators. Available 3.7
+        /// </summary>
+        /// <param name="session"></param>
+        /// <param name="groupId">The ID of the group to get the users for.</param>
+        /// <param name="pageSize">(Optional) The number of items to return in one response. The minimum is 1. The maximum is 1000. The default is 100.</param>
+        /// <param name="pageNumber">(Optional) The offset for paging. The default is 1.</param>
+        /// <param name="cancelToken"></param>
+        /// <returns></returns>
+        /// <exception cref="TableauRequestException"></exception>
+        /// <exception cref="TableauApiVersionException"></exception>
+        /// <exception cref="TableauOnlineNotSupportedException"></exception>
+        [ApiVersion(3, 7)]
+        public async Task<(paginationType pagination, groupType[] groups)> GetGroupsOfUser(TableauSession session,
+            string userId, int pageSize = 100, int pageNumber = 1, CancellationToken? cancelToken = null)
+        {
+            checkEndpointAvailability();
+            checkNullParameters((nameof(session), session), (nameof(userId), userId));
+            checkParametersBetween((nameof(pageSize), pageSize, 1, 1000), (nameof(pageNumber), pageNumber, 1, int.MaxValue));
+            var ret = await getResponseAsObject<paginationType, groupListType>(await apiRequest(
+                buildUri($"sites/{session.SiteId}/users/{userId}/groups", ("pageSize", pageSize.ToString()),
+                    ("pageNumber", pageNumber.ToString())), HttpMethod.Get, 200, cancelToken,
+                session));
+            return (ret.Item1, ret.Item2.group);
+        }
+
+        /// <summary>
         /// Gets users in a group. Available in all versions
         /// </summary>
         /// <param name="session"></param>

@@ -6,16 +6,18 @@ namespace Tableau.Api.Models
 {
     public class TableauSession
     {
-        internal TableauSession(tableauCredentialsType credentials)
+        public TableauSession(tableauCredentialsType credentials)
         {
-            Credentials = credentials;
+            UserId = credentials.user.id;
+            UserName = credentials.name;
+            Token = credentials.token;
+            SiteId = credentials.site.id;
         }
+        public TableauSession() { }
 
-        internal tableauCredentialsType Credentials { get; }
-
-        public string UserId => Credentials.user.id;
-        public string UserName => Credentials.name;
-        public string Token => Credentials.token;
-        public string SiteId => Credentials.site.id;
+        public string UserId { get; set; }
+        public string UserName { get; set; }
+        public string Token { get; set; }
+        public string SiteId { get; set; }
     }
 }
