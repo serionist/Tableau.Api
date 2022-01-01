@@ -55,10 +55,13 @@ namespace Tableau.Api
         /// <returns></returns>
         /// <exception cref="TableauRequestException"></exception>
         [ApiVersion(3, 7)]
-        public async Task<TableauSession> SignInWithPAT(string tokenName, string token, string siteContentUrl = "", CancellationToken? cancelToken = null)
+        public async Task<TableauSession> SignInWithPAT(string tokenName, string token, string siteContentUrl = "", string userIdToImpersonate = null, CancellationToken ? cancelToken = null)
         {
             checkEndpointAvailability();
             checkNullParameters((nameof(tokenName), tokenName), (nameof(token), token));
+            var userModel = string.IsNullOrEmpty(userIdToImpersonate)
+                ? null
+                : new userType() { id = userIdToImpersonate };
             var ret = await getResponseAsObject<tableauCredentialsType>(await apiRequest(buildUri("auth/signin"),
                 HttpMethod.Post, 200, cancelToken, null, getObjectAsRequestContent(
                     new tableauCredentialsType()
@@ -66,6 +69,7 @@ namespace Tableau.Api
                         personalAccessTokenName  = tokenName,
                         personalAccessTokenSecret = token,
                         site = new siteType() { contentUrl = siteContentUrl },
+                        user = userModel
                     })));
             ret.user.name = tokenName;
             return new TableauSession(ret);
