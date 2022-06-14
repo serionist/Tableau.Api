@@ -237,6 +237,26 @@ namespace Tableau.Api
         }
 
         /// <summary>
+        /// Returns a list of permissions for a specific view.
+        /// </summary>
+        /// <param name="session"></param>
+        /// <param name="viewId">The ID of the view to get permissions for</param>
+        /// <param name="cancelToken"></param>
+        /// <returns></returns>
+        [ApiVersion(3, 2)]
+        public async Task<permissionsType> QueryViewPermissions(TableauSession session, string viewId,
+            CancellationToken? cancelToken = null)
+        {
+            checkEndpointAvailability();
+            checkNullParameters((nameof(session), session), (nameof(viewId), viewId));
+            return await getResponseAsObject<permissionsType>(await apiRequest(
+                buildUri($"sites/{session.SiteId}/views/{viewId}/permissions"), HttpMethod.Get, 200,
+                cancelToken, session));
+
+        }
+
+
+        /// <summary>
         /// Returns a list of permissions for a specific project. Available in all versions
         /// </summary>
         /// <param name="session"></param>
