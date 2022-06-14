@@ -34,7 +34,7 @@ namespace Tableau.Api
         {
             _minVersionForEndpoints = new ReadOnlyDictionary<string, Version>(typeof(TableauApiClient).GetProperties()
                 .Select(e => (e.Name, e.GetCustomAttribute<ApiVersionAttribute>())).Where(e => e.Item2 != null)
-                .ToDictionary(e => e.Item1, e => e.Item2.MinVersion));
+                .ToDictionary(e => e.Name, e => e.Item2.MinVersion));
             _onPremiseOnlyEndpoints = typeof(TableauApiClient).GetProperties()
                 .Where(e => e.GetCustomAttribute<OnPremiseOnlyAttribute>() != null).Select(e => e.Name).ToArray();
             
@@ -82,7 +82,7 @@ namespace Tableau.Api
         private void checkNullParameters(params (string, object)[] arguments)
         {
             foreach (var a in arguments)
-                if (a.Item2 == null || (a.Item2 is string && string.IsNullOrEmpty((string)a.Item2)))
+                if (a.Item2 == null || (a.Item2 is string item2 && string.IsNullOrEmpty(item2)))
                     throw new ArgumentNullException(a.Item1, $"Argument {a.Item1} cannot be null");
         }
 
@@ -94,9 +94,9 @@ namespace Tableau.Api
         }
         private void checkParametersBetween(params (string name, int value, int min, int max)[] arguments)
         {
-            foreach (var a in arguments)
-                if (a.value < a.min || a.value > a.max)
-                    throw new ArgumentOutOfRangeException(a.name, $"Argument '{a.name}' must be between {a.min} and {a.max}");
+            foreach (var (name, value, min, max) in arguments)
+                if (value < min || value > max)
+                    throw new ArgumentOutOfRangeException(name, $"Argument '{name}' must be between {min} and {max}");
         }
         private void checkEndpointAvailability([CallerMemberName]string methodName = null)
         {

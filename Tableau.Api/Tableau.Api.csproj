@@ -18,13 +18,13 @@
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
     <DocumentationFile>bin\Debug\netstandard2.0\Tableau.Api.xml</DocumentationFile>
-    <NoWarn>1701;1702;IDE1006;NU1701;CA2254;CA1016;CA1822;IDE0063;CA1845;IDE0057;</NoWarn>
+    <NoWarn>1701;1702;IDE1006;NU1701;CA2254;CA1016;CA1822;IDE0063;CA1845;IDE0057;CS1591;</NoWarn>
     <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
     <DocumentationFile>bin\Release\netstandard2.0\Tableau.Api.xml</DocumentationFile>
-    <NoWarn>1701;1702;IDE1006;NU1701;CA2254;CA1016;CA1822;IDE0063;CA1845;IDE0057;</NoWarn>
+    <NoWarn>1701;1702;IDE1006;NU1701;CA2254;CA1016;CA1822;IDE0063;CA1845;IDE0057;CS1591;</NoWarn>
     <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
   </PropertyGroup>
 
