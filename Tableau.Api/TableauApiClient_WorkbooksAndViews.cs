@@ -124,8 +124,8 @@ namespace Tableau.Api
         {
             checkEndpointAvailability();
             checkNullParameters((nameof(session), session), (nameof(viewId), viewId));
-            foreach (var filter in filters)
-                checkNullParameters((nameof(filter.filterName), filter.filterName), (nameof(filter.filterValue), filter.filterValue));
+            foreach (var (filterName, filterValue) in filters)
+                checkNullParameters((nameof(filterName), filterName), (nameof(filterValue), filterValue));
             return await (await apiRequest(
                     buildUri($"sites/{session.SiteId}/views/{viewId}/data",
                         filters.Select(e =>
@@ -152,8 +152,8 @@ namespace Tableau.Api
         {
             checkEndpointAvailability();
             checkNullParameters((nameof(session), session), (nameof(viewId), viewId));
-            foreach (var filter in filters)
-                checkNullParameters((nameof(filter.filterName), filter.filterName), (nameof(filter.filterValue), filter.filterValue));
+            foreach (var (filterName, filterValue) in filters)
+                checkNullParameters((nameof(filterName), filterName), (nameof(filterValue), filterValue));
             var args = new List<(string,string)>();
             if (imageWidth == TableauImageWidth.High_1568)
                 args.Add(("resolution", "high"));
@@ -166,13 +166,16 @@ namespace Tableau.Api
                     buildUri($"sites/{session.SiteId}/views/{viewId}/image", args.ToArray()), HttpMethod.Get, 200, cancelToken, session))
                 .ReadAsStreamAsync();
         }
+
         /// <summary>
         /// Returns a specified view rendered as a .pdf file as data stream. Versions 2.8+
         /// </summary>
         /// <param name="session"></param>
         /// <param name="viewId">The ID of the view to render as a .pdf file.</param>
         /// <param name="cancelToken"></param>
+        /// <param name="orientation"></param>
         /// <param name="filters">When provided, the filters will be set to the specified values on the view before downloading data.</param>
+        /// <param name="pageType"></param>
         /// <returns></returns>
         /// <exception cref="TableauRequestException"></exception>
         /// <exception cref="TableauApiVersionException"></exception>
@@ -184,15 +187,18 @@ namespace Tableau.Api
         {
             checkEndpointAvailability();
             checkNullParameters((nameof(session), session), (nameof(viewId), viewId));
-            foreach (var filter in filters ?? new (string filterName, string filterValue)[0])
-                checkNullParameters((nameof(filter.filterName), filter.filterName), (nameof(filter.filterValue), filter.filterValue));
-            var args = new List<(string, string)>();
-            args.Add(("type", Enum.GetName(typeof(PageType), pageType)));
-            args.Add(("orientation", Enum.GetName(typeof(Orientation), orientation)));
-            args.AddRange(filters.Select(e =>
-                (!e.filterName.StartsWith("vf_", StringComparison.CurrentCultureIgnoreCase)
-                    ? $"vf_{e.filterName}"
-                    : e.filterName, e.filterValue)));
+            foreach (var (filterName, filterValue) in filters ?? new (string filterName, string filterValue)[0])
+                checkNullParameters((nameof(filterName), filterName), (nameof(filterValue), filterValue));
+            var args = new List<(string, string)>
+            {
+                ("type", Enum.GetName(typeof(PageType), pageType)),
+                ("orientation", Enum.GetName(typeof(Orientation), orientation))
+            };
+            if (filters != null)
+                args.AddRange(filters.Select(e =>
+                    (!e.filterName.StartsWith("vf_", StringComparison.CurrentCultureIgnoreCase)
+                        ? $"vf_{e.filterName}"
+                        : e.filterName, e.filterValue)));
 
             return await (await apiRequest(
                     buildUri($"sites/{session.SiteId}/views/{viewId}/pdf", args.ToArray()), HttpMethod.Get, 200, cancelToken, session))
@@ -283,7 +289,9 @@ namespace Tableau.Api
         /// </summary>
         /// <param name="session"></param>
         /// <param name="workbookId">The ID of the workbook to return an image for.</param>
+        /// <param name="pageType"></param>
         /// <param name="cancelToken"></param>
+        /// <param name="orientation"></param>
         /// <returns></returns>
         /// <exception cref="TableauRequestException"></exception>
         /// <exception cref="TableauApiVersionException"></exception>

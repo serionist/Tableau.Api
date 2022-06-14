@@ -51,6 +51,7 @@ namespace Tableau.Api
         /// <param name="tokenName">The name of the access token</param>
         /// <param name="token">The token itself</param>
         /// <param name="siteContentUrl">The ContentUrl of the site to log in to. Default: ''</param>
+        /// <param name="userIdToImpersonate">The LUID of the Tableau User to impersonate. Leave null to skip impersonation</param>
         /// <param name="cancelToken"></param>
         /// <returns></returns>
         /// <exception cref="TableauRequestException"></exception>

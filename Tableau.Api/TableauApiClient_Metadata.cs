@@ -91,11 +91,11 @@ namespace Tableau.Api
 
         /// <summary>
         /// Update the table description, certify a table, or a assign a user contact to the table asset.
-        ///
+        /// 
         /// This method is available if your Tableau Online site or Tableau Server is licensed with the Data Management Add-on
         /// </summary>
         /// <param name="session"></param>
-        /// <param name="databaseId"></param>
+        /// <param name="tableId"></param>
         /// <param name="newDescription"></param>
         /// <param name="newContactId"></param>
         /// <param name="isCertified"></param>
@@ -130,7 +130,6 @@ namespace Tableau.Api
         /// </summary>
         /// <param name="session"></param>
         /// <param name="tableId"></param>
-        /// <param name=""></param>
         /// <param name="cancelToken"></param>
         /// <returns></returns>
         /// <exception cref="TableauRequestException"></exception>
@@ -147,14 +146,16 @@ namespace Tableau.Api
                     session)))
                 .column;
         }
+
         /// <summary>
         /// Update the description of the column.
-        ///
+        /// 
         /// This method is available if your Tableau Online site or Tableau Server is licensed with the Data Management Add-on.
         /// </summary>
         /// <param name="session"></param>
         /// <param name="tableId"></param>
         /// <param name="columnId"></param>
+        /// <param name="newDescription"></param>
         /// <param name="cancelToken"></param>
         /// <returns></returns>
         /// <exception cref="TableauRequestException"></exception>
@@ -170,12 +171,14 @@ namespace Tableau.Api
                 buildUri($"sites/{session.SiteId}/tables/{tableId}/columns/{columnId}"), HttpMethod.Put, 200,
                 cancelToken, session, getObjectAsRequestContent(new columnType() {description = newDescription}))));
         }
+
         /// <summary>
         /// Get information about the data quality warning for the database, table, published data source, or flow.
         /// </summary>
         /// <param name="session"></param>
         /// <param name="contentType">The type of asset that the data quality warning is being attached to</param>
         /// <param name="luid">The unique ID of the content type (database, table, published data source, or flow). This is the same as the content ID.</param>
+        /// <param name="cancelToken"></param>
         /// <returns></returns>
         /// <exception cref="TableauRequestException"></exception>
         /// <exception cref="TableauApiVersionException"></exception>
@@ -195,7 +198,6 @@ namespace Tableau.Api
 
         /// <summary>
         /// Create and apply a data quality warning to a database, table, published data source, or flow. Only one data quality warning can be applied to the asset. Adding a data quality warning to the asset that already has one causes an error.
-
         /// This method is available if your Tableau Online site or Tableau Server is licensed with the Data Management Add-on.
         /// </summary>
         /// <param name="session"></param>
@@ -232,7 +234,6 @@ namespace Tableau.Api
 
         /// <summary>
         /// Update the warning type, status, and message of a data quality warning.
-
         /// This method is available if your Tableau Online site or Tableau Server is licensed with the Data Management Add-on
         /// </summary>
         /// <param name="session"></param>

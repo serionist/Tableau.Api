@@ -207,7 +207,9 @@ namespace Tableau.Api
         /// </summary>
         /// <param name="session"></param>
         /// <param name="userName">The name of the user. If the server uses local authentication, this can be any name. If you are using Active Directory authentication, or if you are using Tableau Online, there are specific requirements for the name.</param>
+        /// <param name="authSetting"></param>
         /// <param name="cancelToken"></param>
+        /// <param name="siteRole"></param>
         /// <returns></returns>
         /// <exception cref="TableauRequestException"></exception>
         /// <exception cref="TableauApiVersionException"></exception>
@@ -235,7 +237,7 @@ namespace Tableau.Api
         /// Gets the groups of a user. Can only be called by site/server administrators. Available 3.7
         /// </summary>
         /// <param name="session"></param>
-        /// <param name="groupId">The ID of the group to get the users for.</param>
+        /// <param name="userId">The ID of the user to get the groups for.</param>
         /// <param name="pageSize">(Optional) The number of items to return in one response. The minimum is 1. The maximum is 1000. The default is 100.</param>
         /// <param name="pageNumber">(Optional) The offset for paging. The default is 1.</param>
         /// <param name="cancelToken"></param>

@@ -95,7 +95,7 @@ namespace Tableau.Api
                 resp.task.Where(e => e.Item is scheduleType).Cast<scheduleType>().ToArray());
         }
 
-        private async Task<scheduleType> _createSchedule(TableauSession session, string name, int priority,
+        private async Task<scheduleType> createSchedule(TableauSession session, string name, int priority,
             scheduleTypeFrequency frequency, scheduleTypeType type, scheduleTypeExecutionOrder executionOrder,
             TimeSpan startTime, TimeSpan? endTime, intervalType[] intervals, CancellationToken? cancelToken)
         {
@@ -120,7 +120,7 @@ namespace Tableau.Api
                         end = endTime.HasValue
                             ? new DateTime(2000, 1, 1, endTime.Value.Hours, endTime.Value.Minutes,
                                 endTime.Value.Seconds)
-                            : default(DateTime),
+                            : default,
                         endSpecified = endTime.HasValue,
                         intervals = intervals
                     }
@@ -152,7 +152,7 @@ namespace Tableau.Api
             CancellationToken? cancelToken = null)
         {
             var i = new[] {new intervalType() {minutes = minutesBetweenJobs, minutesSpecified = true},};
-            return await _createSchedule(session, name, priority, scheduleTypeFrequency.Hourly, type, executionOrder,
+            return await createSchedule(session, name, priority, scheduleTypeFrequency.Hourly, type, executionOrder,
                 startTime, endTime, i, cancelToken);
 
         }
@@ -180,7 +180,7 @@ namespace Tableau.Api
             TimeSpan startTime, TimeSpan endTime, intervalTypeHours hoursBetweenJobs, CancellationToken? cancelToken = null)
         {
             var i = new[] { new intervalType() { hours = hoursBetweenJobs, hoursSpecified = true }, };
-            return await _createSchedule(session, name, priority, scheduleTypeFrequency.Hourly, type, executionOrder,
+            return await createSchedule(session, name, priority, scheduleTypeFrequency.Hourly, type, executionOrder,
                 startTime, endTime, i, cancelToken);
 
         }
@@ -206,10 +206,11 @@ namespace Tableau.Api
             TimeSpan startTime,  CancellationToken? cancelToken = null)
         {
           
-            return await _createSchedule(session, name, priority, scheduleTypeFrequency.Daily, type, executionOrder,
+            return await createSchedule(session, name, priority, scheduleTypeFrequency.Daily, type, executionOrder,
                 startTime, null, new intervalType[0], cancelToken);
 
         }
+
         /// <summary>
         /// Creates a new schedule on Tableau Server. Versions 2.3+
         /// </summary>
@@ -218,6 +219,7 @@ namespace Tableau.Api
         /// <param name="priority">An integer value between 1 and 100 that determines the default priority of the schedule if multiple tasks are pending in the queue. Higher numbers have higher priority.</param>
         /// <param name="type">Extract to create an extract refresh schedule, or Subscription to create a subscription schedule.</param>
         /// <param name="executionOrder">Parallel to allow jobs associated with this schedule to run at the same time, or Serial to require the jobs to run one after the other.</param>
+        /// <param name="startTime"></param>
         /// <param name="dayToRun">The day of week to run on</param>
         /// <param name="cancelToken"></param>
         /// <returns></returns>
@@ -231,10 +233,11 @@ namespace Tableau.Api
             TimeSpan startTime, intervalTypeWeekDay dayToRun, CancellationToken? cancelToken = null)
         {
 
-            return await _createSchedule(session, name, priority, scheduleTypeFrequency.Weekly, type, executionOrder,
+            return await createSchedule(session, name, priority, scheduleTypeFrequency.Weekly, type, executionOrder,
                 startTime, null, new []{new intervalType(){weekDay = dayToRun, weekDaySpecified = true}, }, cancelToken);
 
         }
+
         /// <summary>
         /// Creates a new schedule on Tableau Server. Versions 2.3+
         /// </summary>
@@ -243,7 +246,7 @@ namespace Tableau.Api
         /// <param name="priority">An integer value between 1 and 100 that determines the default priority of the schedule if multiple tasks are pending in the queue. Higher numbers have higher priority.</param>
         /// <param name="type">Extract to create an extract refresh schedule, or Subscription to create a subscription schedule.</param>
         /// <param name="executionOrder">Parallel to allow jobs associated with this schedule to run at the same time, or Serial to require the jobs to run one after the other.</param>
-        /// <param name="dayToRun">Either the day of the month (1, 2, etc.) or LastDay.</param>
+        /// <param name="startTime"></param>
         /// <param name="cancelToken"></param>
         /// <returns></returns>
         ///  <exception cref="TableauRequestException"></exception>
@@ -253,10 +256,10 @@ namespace Tableau.Api
         [OnPremiseOnly]
         public async Task<scheduleType> CreateMonthlySchedule(TableauSession session, string name, int priority,
             scheduleTypeType type, scheduleTypeExecutionOrder executionOrder,
-            TimeSpan startTime, string dayToRun, CancellationToken? cancelToken = null)
+            TimeSpan startTime, CancellationToken? cancelToken = null)
         {
 
-            return await _createSchedule(session, name, priority, scheduleTypeFrequency.Monthly, type, executionOrder,
+            return await createSchedule(session, name, priority, scheduleTypeFrequency.Monthly, type, executionOrder,
                 startTime, null, new intervalType[0], cancelToken);
 
         }
@@ -336,7 +339,7 @@ namespace Tableau.Api
         }
 
 
-        private async Task<scheduleType> _updateSchedule(TableauSession session, string newName, int newPriority,
+        private async Task<scheduleType> updateSchedule(TableauSession session, string newName, int newPriority,
             scheduleTypeFrequency frequency, scheduleTypeType type, scheduleTypeExecutionOrder executionOrder,
             TimeSpan startTime, TimeSpan? endTime, intervalType[] intervals, CancellationToken? cancelToken)
         {
@@ -361,7 +364,7 @@ namespace Tableau.Api
                         end = endTime.HasValue
                             ? new DateTime(2000, 1, 1, endTime.Value.Hours, endTime.Value.Minutes,
                                 endTime.Value.Seconds)
-                            : default(DateTime),
+                            : default,
                         endSpecified = endTime.HasValue,
                         intervals = intervals
                     }
@@ -394,7 +397,7 @@ namespace Tableau.Api
             CancellationToken? cancelToken = null)
         {
             var i = new[] { new intervalType() { minutes = newMinutesBetweenJobs, minutesSpecified = true }, };
-            return await _updateSchedule(session, newName, newPriority, scheduleTypeFrequency.Hourly, newType, newExecutionOrder,
+            return await updateSchedule(session, newName, newPriority, scheduleTypeFrequency.Hourly, newType, newExecutionOrder,
                 newStartTime, newEndTime, i, cancelToken);
 
         }
@@ -422,7 +425,7 @@ namespace Tableau.Api
             TimeSpan startTime, TimeSpan endTime, intervalTypeHours hoursBetweenJobs, CancellationToken? cancelToken = null)
         {
             var i = new[] { new intervalType() { hours = hoursBetweenJobs, hoursSpecified = true }, };
-            return await _updateSchedule(session, newName, priority, scheduleTypeFrequency.Hourly, type, executionOrder,
+            return await updateSchedule(session, newName, priority, scheduleTypeFrequency.Hourly, type, executionOrder,
                 startTime, endTime, i, cancelToken);
 
         }
@@ -448,10 +451,11 @@ namespace Tableau.Api
             TimeSpan startTime, CancellationToken? cancelToken = null)
         {
 
-            return await _updateSchedule(session, newName, newPriority, scheduleTypeFrequency.Daily, type, executionOrder,
+            return await updateSchedule(session, newName, newPriority, scheduleTypeFrequency.Daily, type, executionOrder,
                 startTime, null, new intervalType[0], cancelToken);
 
         }
+
         /// <summary>
         /// Updates a schedule on Tableau Server. Versions 2.3+
         /// </summary>
@@ -460,6 +464,7 @@ namespace Tableau.Api
         /// <param name="newPriority">An integer value between 1 and 100 that determines the default priority of the schedule if multiple tasks are pending in the queue. Higher numbers have higher priority.</param>
         /// <param name="type">Extract to create an extract refresh schedule, or Subscription to create a subscription schedule.</param>
         /// <param name="executionOrder">Parallel to allow jobs associated with this schedule to run at the same time, or Serial to require the jobs to run one after the other.</param>
+        /// <param name="startTime"></param>
         /// <param name="dayToRun">The day of week to run on</param>
         /// <param name="cancelToken"></param>
         /// <returns></returns>
@@ -473,10 +478,11 @@ namespace Tableau.Api
             TimeSpan startTime, intervalTypeWeekDay dayToRun, CancellationToken? cancelToken = null)
         {
 
-            return await _updateSchedule(session, newName, newPriority, scheduleTypeFrequency.Weekly, type, executionOrder,
+            return await updateSchedule(session, newName, newPriority, scheduleTypeFrequency.Weekly, type, executionOrder,
                 startTime, null, new[] { new intervalType() { weekDay = dayToRun, weekDaySpecified = true }, }, cancelToken);
 
         }
+
         /// <summary>
         /// Updates a schedule on Tableau Server. Versions 2.3+
         /// </summary>
@@ -485,7 +491,7 @@ namespace Tableau.Api
         /// <param name="newPriority">An integer value between 1 and 100 that determines the default priority of the schedule if multiple tasks are pending in the queue. Higher numbers have higher priority.</param>
         /// <param name="type">Extract to create an extract refresh schedule, or Subscription to create a subscription schedule.</param>
         /// <param name="executionOrder">Parallel to allow jobs associated with this schedule to run at the same time, or Serial to require the jobs to run one after the other.</param>
-        /// <param name="dayToRun">Either the day of the month (1, 2, etc.) or LastDay.</param>
+        /// <param name="startTime"></param>
         /// <param name="cancelToken"></param>
         /// <returns></returns>
         ///  <exception cref="TableauRequestException"></exception>
@@ -495,10 +501,10 @@ namespace Tableau.Api
         [OnPremiseOnly]
         public async Task<scheduleType> UpdateToMonthlySchedule(TableauSession session, string newName, int newPriority,
             scheduleTypeType type, scheduleTypeExecutionOrder executionOrder,
-            TimeSpan startTime, string dayToRun, CancellationToken? cancelToken = null)
+            TimeSpan startTime,  CancellationToken? cancelToken = null)
         {
 
-            return await _updateSchedule(session, newName, newPriority, scheduleTypeFrequency.Monthly, type, executionOrder,
+            return await updateSchedule(session, newName, newPriority, scheduleTypeFrequency.Monthly, type, executionOrder,
                 startTime, null, new intervalType[0], cancelToken);
 
         }
