@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Tableau.Api.Attributes;
+using Tableau.Api.Enums;
 using Tableau.Api.Exceptions;
 using Tableau.Api.Models;
 
@@ -157,15 +158,19 @@ namespace Tableau.Api
         /// <exception cref="TableauApiVersionException"></exception>
         /// <exception cref="TableauOnlineNotSupportedException"></exception>
         [ApiVersion(2, 0)]
-        public async Task<Stream> DownloadDataSource(TableauSession session, string datasourceId,
+        public async Task<(Stream stream, DatasourceFileType type)> DownloadDataSource(TableauSession session, string datasourceId,
             bool includeExtract = true, CancellationToken? cancelToken = null)
         {
             checkEndpointAvailability();
             checkNullParameters((nameof(session), session), (nameof(datasourceId), datasourceId));
-            return await (await apiRequest(
-                    buildUri($"sites/{session.SiteId}/datasources/{datasourceId}/content",
-                        ("includeExtract", includeExtract.ToString())), HttpMethod.Get, 200, cancelToken, session))
-                .ReadAsStreamAsync();
+            var resp = await apiRequest(
+                buildUri($"sites/{session.SiteId}/datasources/{datasourceId}/content",
+                    ("includeExtract", includeExtract.ToString())), HttpMethod.Get, 200, cancelToken, session);
+
+            return (await resp.ReadAsStreamAsync(),
+                resp.Headers.ContentType.MediaType.Equals("application/xml", StringComparison.CurrentCultureIgnoreCase)
+                    ? DatasourceFileType.tds
+                    : DatasourceFileType.tdsx);
         }
         /// <summary>
         /// Updates the owner, project or certification status of the specified data source. Available in all versions
