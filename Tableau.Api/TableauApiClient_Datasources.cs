@@ -177,6 +177,7 @@ namespace Tableau.Api
         /// </summary>
         /// <param name="session"></param>
         /// <param name="datasourceId">The ID of the data source to update.</param>
+        /// <param name="newName">(Optional) The new name to give to the datasource.</param>
         /// <param name="newProjectId">(Optional) The ID of a project to add the data source to.</param>
         /// <param name="newOwnerId">(Optional) The ID of a user to assign the data source to as owner.</param>
         /// <param name="newCertificationStatus">(Optional) A Boolean value that indicates whether the data source is certified.</param>
@@ -187,9 +188,9 @@ namespace Tableau.Api
         /// <exception cref="TableauApiVersionException"></exception>
         /// <exception cref="TableauOnlineNotSupportedException"></exception>
         [ApiVersion(2, 0)]
-        public async Task<dataSourceType> UpdateDataSource(TableauSession session, string datasourceId,
+        public async Task<dataSourceType> UpdateDataSource(TableauSession session, string datasourceId, 
             string newProjectId = null, string newOwnerId = null, bool? newCertificationStatus = null,
-            string newCertificationNote = null, CancellationToken? cancelToken = null)
+            string newCertificationNote = null, string newName = null, CancellationToken? cancelToken = null)
         {
 
             checkEndpointAvailability();
@@ -202,7 +203,8 @@ namespace Tableau.Api
                     isCertifiedSpecified = newCertificationStatus.HasValue,
                     certificationNote = newCertificationNote,
                     project = new projectType() {id = newProjectId},
-                    owner = new userType() {id = newOwnerId}
+                    owner = new userType() {id = newOwnerId},
+                    name = newName
                 })));
         }
         /// <summary>

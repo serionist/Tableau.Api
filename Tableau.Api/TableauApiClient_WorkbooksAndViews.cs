@@ -407,6 +407,7 @@ namespace Tableau.Api
         /// </summary>
         /// <param name="session"></param>
         /// <param name="workbookId">The ID of the workbook to update.</param>
+        /// <param name="newName">(Optional) New name for the workbook being updated.</param>
         /// <param name="newShowTabs">(Optional) Specify true to have the published workbook show views in tabs; otherwise, false. The default is false.</param>
         /// <param name="newProjectId">(Optional) The ID of a project to assign the workbook to.</param>
         /// <param name="newOwnerId">(Optional) The ID of a user to assign the workbook to as owner.</param>
@@ -416,8 +417,8 @@ namespace Tableau.Api
         /// <exception cref="TableauApiVersionException"></exception>
         /// <exception cref="TableauOnlineNotSupportedException"></exception>
         [ApiVersion(2, 0)]
-        public async Task<workbookType> UpdateWorkbook(TableauSession session, string workbookId,
-            bool? newShowTabs = null, string newProjectId = null, string newOwnerId = null,
+        public async Task<workbookType> UpdateWorkbook(TableauSession session, string workbookId, 
+            bool? newShowTabs = null, string newProjectId = null, string newOwnerId = null, string newName = null,
             CancellationToken? cancelToken = null)
         {
             checkEndpointAvailability();
@@ -426,6 +427,7 @@ namespace Tableau.Api
                 buildUri($"sites/{session.SiteId}/workbooks/{workbookId}"), HttpMethod.Put, 200, cancelToken, session,
                 getObjectAsRequestContent(new workbookType()
                 {
+                    name = newName,
                     showTabs = newShowTabs ?? false,
                     showTabsSpecified = newShowTabs.HasValue,
                     project = new projectType() {id = newProjectId},
