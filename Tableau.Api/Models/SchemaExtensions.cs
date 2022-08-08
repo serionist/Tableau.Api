@@ -85,5 +85,70 @@ namespace Tableau.Api.Models
 
     }
 
+    public enum capabilityTypeName
+    {
 
+        /// <remarks/>
+        AddComment,
+
+        /// <remarks/>
+        ChangeHierarchy,
+
+        /// <remarks/>
+        ChangePermissions,
+
+        /// <remarks/>
+        Connect,
+
+        /// <remarks/>
+        CreateRefreshMetrics,
+
+        /// <remarks/>
+        Delete,
+
+        /// <remarks/>
+        RunExplainData,
+
+        /// <remarks/>
+        Execute,
+
+        /// <remarks/>
+        ExportData,
+
+        /// <remarks/>
+        ExportImage,
+
+        /// <remarks/>
+        ExportXml,
+
+        /// <remarks/>
+        Filter,
+
+        /// <remarks/>
+        ProjectLeader,
+
+        /// <remarks/>
+        Read,
+
+        /// <remarks/>
+        ShareView,
+
+        /// <remarks/>
+        ViewComments,
+
+        /// <remarks/>
+        ViewUnderlyingData,
+
+        /// <remarks/>
+        WebAuthoring,
+
+        /// <remarks/>
+        WebAuthoringForFlows,
+
+        /// <remarks/>
+        Write,
+
+        /// <remarks/>
+        SaveAs,
+    }
 }

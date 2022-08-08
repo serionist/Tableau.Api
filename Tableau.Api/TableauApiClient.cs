@@ -25,6 +25,7 @@ namespace Tableau.Api
     {
         private static readonly TimeSpan _defaultTimeout = new TimeSpan(0, 2, 0);
         private static readonly Version _minVersion = new Version(2, 0);
+        private static readonly Version _maxVersion = new Version(3, 14);
         private static ReadOnlyDictionary<string, Version> _minVersionForEndpoints { get; }
         private static string[] _onPremiseOnlyEndpoints { get; }
         /// <summary>
@@ -65,7 +66,16 @@ namespace Tableau.Api
                 if (v < _minVersion)
                     throw new ArgumentOutOfRangeException(nameof(apiVersion),
                         $"Tableau API version must be greater than {_minVersion.ToString(2)}");
-                else ApiVersion = v;
+                else
+                {
+                    if (v.Major <= _maxVersion.Major && v.Minor <= _maxVersion.Minor)
+                        ApiVersion = v;
+                    else
+                    {
+                        Log?.LogWarning($"Initialized Tableau Client of version: {_maxVersion} instead of version {v} due to library implementation limit");
+                        ApiVersion = _maxVersion;
+                    }
+                }
             else throw new ArgumentException($"'apiVersion' parameter cannot be converted to Version object", nameof(apiVersion));
           
 

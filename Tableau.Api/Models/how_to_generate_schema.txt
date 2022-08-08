@@ -1,0 +1,5 @@
+﻿This document goes through the steps to generate the XmlSchema.cs, the schema for the Tableau API
+
+1. Download the REST API schema from Tableau, from: https://help.tableau.com/current/api/rest_api/en-us/REST/rest_api_concepts_schema.htm
+2. Open Developer Command Prompt and run 'xsd .\ts-api_3_16.xsd /classes /n:Tableau.Api.Models'
+3. Copy the output file into XmlSchema.cs

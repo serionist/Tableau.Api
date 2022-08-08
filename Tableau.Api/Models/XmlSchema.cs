@@ -10177,61 +10177,7 @@ namespace Tableau.Api.Models
         }
     }
 
-    /// <remarks/>
-    [System.CodeDom.Compiler.GeneratedCodeAttribute("xsd", "4.8.3928.0")]
-    [System.SerializableAttribute()]
-    [System.Xml.Serialization.XmlTypeAttribute(AnonymousType = true, Namespace = "http://tableau.com/api")]
-    public enum capabilityTypeName
-    {
-
-        /// <remarks/>
-        AddComment,
-
-        /// <remarks/>
-        ChangeHierarchy,
-
-        /// <remarks/>
-        ChangePermissions,
-
-        /// <remarks/>
-        Connect,
-
-        /// <remarks/>
-        Delete,
-
-        /// <remarks/>
-        ExportData,
-
-        /// <remarks/>
-        ExportImage,
-
-        /// <remarks/>
-        ExportXml,
-
-        /// <remarks/>
-        Filter,
-
-        /// <remarks/>
-        ProjectLeader,
-
-        /// <remarks/>
-        Read,
-
-        /// <remarks/>
-        ShareView,
-
-        /// <remarks/>
-        ViewComments,
-
-        /// <remarks/>
-        ViewUnderlyingData,
-
-        /// <remarks/>
-        WebAuthoring,
-
-        /// <remarks/>
-        Write,
-    }
+   
 
     /// <remarks/>
     [System.CodeDom.Compiler.GeneratedCodeAttribute("xsd", "4.8.3928.0")]
