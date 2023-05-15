@@ -23,4 +23,10 @@ namespace Tableau.Api.VizPortal.Models
         public string Type { get; set; }
     }
 
+    public class ChangeExtractRefreshTaskSchedule
+    {
+        public string[] Ids { get; set; }
+        public string ScheduleId { get; set; }
+    }
+
 }

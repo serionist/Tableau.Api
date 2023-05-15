@@ -61,5 +61,16 @@ namespace Tableau.Api.VizPortal
             };
             return PaginateRequest(session, "getExtractTasks", q, (ExtractRefreshQueryResponse p) => p.Tasks);
         }
+
+        public async Task ChangeExtractRefreshScheduleFrequency(TableauSession session, int extractRefreshId, int scheduleId)
+        {
+            var req = await Request<ChangeExtractRefreshTaskSchedule, Empty>(session, "setExtractTasksSchedule",
+                new ChangeExtractRefreshTaskSchedule()
+                {
+                    ScheduleId = scheduleId.ToString(),
+                    Ids = new[] {extractRefreshId.ToString()}
+                });
+
+        }
     }
 }

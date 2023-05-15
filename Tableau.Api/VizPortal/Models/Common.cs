@@ -42,5 +42,10 @@ namespace Tableau.Api.VizPortal.Models
         public long TotalCount { get; set; }
     }
 
+    public class Empty
+    {
+
+    }
+
    
 }
