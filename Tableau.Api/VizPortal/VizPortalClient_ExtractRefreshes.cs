@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Newtonsoft.Json.Linq;
 using Tableau.Api.Exceptions;
 using Tableau.Api.Models;
 using Tableau.Api.VizPortal.Models;
@@ -29,9 +30,25 @@ namespace Tableau.Api.VizPortal
         /// <param name="datasourceId">The datasource ID</param>
         /// <returns></returns>
         /// <exception cref="TableauRequestException"></exception>
-        public IAsyncEnumerable<ExtractRefreshTask> QueryExtractRefreshesForDatasource(
-            TableauSession session, string datasourceId) => queryExtractRefreshes(session, "datasourceId", datasourceId);
+        public async IAsyncEnumerable<ExtractRefreshTask> QueryExtractRefreshesForDatasource(
+            TableauSession session, string datasourceId)
+        {
+            // get datasource info
+            var dsInfo = await Request(session, "getDatasource", new JObject(new JProperty("id", datasourceId)));
+            if (!dsInfo.ContainsKey("hasExtracts") || !dsInfo.Value<bool>("hasExtracts"))
+                yield break;
 
+            await foreach (var e in queryExtractRefreshes(session, "datasourceId", datasourceId))
+                yield return e;
+
+        }
+
+        private async IAsyncEnumerable<ExtractRefreshTask> empty()
+        {
+            await Task.CompletedTask;
+            yield break;
+
+        }
         private IAsyncEnumerable<ExtractRefreshTask> queryExtractRefreshes(TableauSession session, string field, string value)
         {
             //This query can only be sent like that (1 clause and 'and' operator)
