@@ -3,7 +3,7 @@
   <PropertyGroup>
     <IncludeSource>True</IncludeSource>
     <IncludeSymbols>True</IncludeSymbols>
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <TargetFramework>netstandard2.1</TargetFramework>
     <Authors>Soma Osvay</Authors>
     <Company>Starschema Ltd</Company>
     <Description>A C# wrapper around Tableau API. All versions and endpoints are supported up to 2018.2</Description>
@@ -30,6 +30,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Logging" Version="2.1.1" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 
 </Project>

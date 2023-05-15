@@ -18,6 +18,7 @@ using Microsoft.Extensions.Logging;
 using Tableau.Api.Attributes;
 using Tableau.Api.Exceptions;
 using Tableau.Api.Models;
+using Tableau.Api.VizPortal;
 
 namespace Tableau.Api
 {
@@ -43,7 +44,7 @@ namespace Tableau.Api
 
         public Uri BaseUrl { get; }
         public Version ApiVersion { get; }
-        private ILogger Log { get; }
+        internal ILogger Log { get; }
 
         /// <summary>
         /// The timeout of each request. Default: 2 minutes
@@ -77,10 +78,11 @@ namespace Tableau.Api
                     }
                 }
             else throw new ArgumentException($"'apiVersion' parameter cannot be converted to Version object", nameof(apiVersion));
-          
-
+            
             Log?.Log(LogLevel.Debug, $"Created TableauApiClient for tableau base url: '{tableauBaseUri}', api version: {apiVersion}");
+            
         }
+        public VizPortalClient VizPortal => new VizPortalClient(this);
         /// <inheritdoc />
         /// <summary>
         /// Initializes an instance of the Tableau Api client
