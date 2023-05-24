@@ -228,7 +228,11 @@ namespace Tableau.Api
                 //remove first (XML schema) tag for compatibility with old versions of API
                 xml = xml.Substring(xml.IndexOf("?>") +2);
                 // remove XML definitions from tsRequest
-                xml = Regex.Replace(xml, @"(?<=<tsRequest )[^>]+", "");
+                xml = Regex.Replace(xml, @"(?<=<tsRequest )[^>]+", "").Trim();
+                var m = Regex.Match(xml, @"<([^>]*)>$");
+                if (m.Success && !m.Groups[1].Value.StartsWith("/") && !m.Groups[1].Value.StartsWith("/"))
+                    xml = $"{xml.Substring(0, xml.Length - 1)}/>";
+
                 var content = new StringContent(xml);
                 content.Headers.ContentType =
                     new System.Net.Http.Headers.MediaTypeHeaderValue("application/xml");

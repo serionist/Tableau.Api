@@ -7,8 +7,8 @@ namespace Tableau.Api.VizPortal.Models
     public class ExtractRefreshQueryResponse: QueryResponseModel
     {
         public ExtractRefreshTask[] Tasks { get; set; }
-      
     }
+
     public class ExtractRefreshTask
     {
         public string Id { get; set; }
@@ -27,6 +27,11 @@ namespace Tableau.Api.VizPortal.Models
     {
         public string[] Ids { get; set; }
         public string ScheduleId { get; set; }
+    }
+
+    public class TriggerExtractRefreshTask
+    {
+        public string[] Ids { get; set; }
     }
 
 }

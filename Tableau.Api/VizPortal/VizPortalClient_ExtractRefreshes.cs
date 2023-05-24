@@ -21,7 +21,7 @@ namespace Tableau.Api.VizPortal
         /// <returns></returns>
         /// <exception cref="TableauRequestException"></exception>
         public IAsyncEnumerable<ExtractRefreshTask> QueryExtractRefreshesForWorkbook(
-            TableauSession session, string workbookId) => queryExtractRefreshes(session, "workbookId", workbookId);
+            TableauSession session, string workbookId) => queryExtractRefreshes(session, ("workbookId", workbookId));
 
         /// <summary>
         /// Returns Extract Refreshes for a single published Datasource. Returns an enumerable that will paginate results in the background
@@ -38,7 +38,47 @@ namespace Tableau.Api.VizPortal
             if (!dsInfo.ContainsKey("hasExtracts") || !dsInfo.Value<bool>("hasExtracts"))
                 yield break;
 
-            await foreach (var e in queryExtractRefreshes(session, "datasourceId", datasourceId))
+            await foreach (var e in queryExtractRefreshes(session, ("datasourceId", datasourceId)))
+                yield return e;
+
+        }
+
+        public async IAsyncEnumerable<ExtractRefreshTask> QueryExtractRefreshesForSchedule(
+          TableauSession session, string siteId, string scheduleId)
+        {
+            // get datasource info
+            var dsInfo = await Request(session, "getSchedules", JObject.FromObject(new QueryModel()
+            {
+                Page = new QueryModel.PageModel()
+                {
+                    MaxItems = 1,
+                    StartIndex = 0
+                },
+                Order = null,
+                Filter = new QueryModel.FilterModel()
+                {
+                    Operator = "and",
+                    Clauses = new[] {
+                    new QueryModel.FilterModel.Clause()
+                    {
+                        Field = "siteId",
+                        Operator = "eq",
+                        Value = siteId.ToString()
+                    },
+                    new QueryModel.FilterModel.Clause()
+                    {
+                        Field = "id",
+                        Operator = "eq",
+                        Value = scheduleId.ToString()
+                    },
+                    }
+                }
+            }));
+            if (!dsInfo.ContainsKey("schedules") || !(dsInfo.Property("schedules").Value is JArray j) || j.Count == 0)
+                yield break;
+
+
+            await foreach (var e in queryExtractRefreshes(session, ("scheduleId", scheduleId), ("siteId", siteId)))
                 yield return e;
 
         }
@@ -49,22 +89,19 @@ namespace Tableau.Api.VizPortal
             yield break;
 
         }
-        private IAsyncEnumerable<ExtractRefreshTask> queryExtractRefreshes(TableauSession session, string field, string value)
+        private IAsyncEnumerable<ExtractRefreshTask> queryExtractRefreshes(TableauSession session, params (string field, string value)[] search)
         {
             //This query can only be sent like that (1 clause and 'and' operator)
             var q = new QueryModel()
             {
                 Filter = new QueryModel.FilterModel()
                 {
-                    Clauses = new[]
+                    Clauses = search.Select(s => new QueryModel.FilterModel.Clause()
                     {
-                        new QueryModel.FilterModel.Clause()
-                        {
-                            Operator = "eq",
-                            Field = field,
-                            Value = value
-                        }
-                    },
+                        Operator = "eq",
+                        Field = s.field,
+                        Value = s.value
+                    }).ToArray(),
                     Operator = "and"
                 },
                 Order = new[]
@@ -79,6 +116,17 @@ namespace Tableau.Api.VizPortal
             return PaginateRequest(session, "getExtractTasks", q, (ExtractRefreshQueryResponse p) => p.Tasks);
         }
 
+
+   
+
+        /// <summary>
+        /// Change an extract refresh job schedule frequency
+        /// </summary>
+        /// <param name="session">The session obtained from the top level client</param>
+        /// <param name="extractRefreshId">The extract refresh ID</param>
+        /// <param name="scheduleId">The schedule ID</param>
+        /// <returns></returns>
+        /// <exception cref="TableauRequestException"></exception>
         public async Task ChangeExtractRefreshScheduleFrequency(TableauSession session, int extractRefreshId, int scheduleId)
         {
             var req = await Request<ChangeExtractRefreshTaskSchedule, Empty>(session, "setExtractTasksSchedule",
@@ -86,6 +134,23 @@ namespace Tableau.Api.VizPortal
                 {
                     ScheduleId = scheduleId.ToString(),
                     Ids = new[] {extractRefreshId.ToString()}
+                });
+
+        }
+
+        /// <summary>
+        /// Triggers an Extract Refresh Job
+        /// </summary>
+        /// <param name="session">The session obtained from the top level client</param>
+        /// <param name="extractRefreshId">The extract refresh ID</param>
+        /// <returns></returns>
+        /// <exception cref="TableauRequestException"></exception>
+        public async Task TriggerExtractRefresh(TableauSession session, int extractRefreshId)
+        {
+            var req = await Request<TriggerExtractRefreshTask, Empty>(session, "runExtractTasks",
+                new TriggerExtractRefreshTask()
+                {
+                    Ids = new[] { extractRefreshId.ToString() }
                 });
 
         }
