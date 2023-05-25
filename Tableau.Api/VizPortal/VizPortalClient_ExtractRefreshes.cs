@@ -46,8 +46,7 @@ namespace Tableau.Api.VizPortal
         public async IAsyncEnumerable<ExtractRefreshTask> QueryExtractRefreshesForSchedule(
           TableauSession session, string siteId, string scheduleId)
         {
-            // get datasource info
-            var dsInfo = await Request(session, "getSchedules", JObject.FromObject(new QueryModel()
+            var scheduleInfo = await Request(session, "getSchedules", JObject.FromObject(new QueryModel()
             {
                 Page = new QueryModel.PageModel()
                 {
@@ -74,7 +73,7 @@ namespace Tableau.Api.VizPortal
                     }
                 }
             }));
-            if (!dsInfo.ContainsKey("schedules") || !(dsInfo.Property("schedules").Value is JArray j) || j.Count == 0)
+            if (!scheduleInfo.ContainsKey("schedules") || !(scheduleInfo.Property("schedules").Value is JArray j) || j.Count == 0)
                 yield break;
 
 
@@ -89,6 +88,7 @@ namespace Tableau.Api.VizPortal
             yield break;
 
         }
+
         private IAsyncEnumerable<ExtractRefreshTask> queryExtractRefreshes(TableauSession session, params (string field, string value)[] search)
         {
             //This query can only be sent like that (1 clause and 'and' operator)
