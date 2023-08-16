@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Tableau.Api.VizPortal.Models
 {
@@ -30,6 +28,11 @@ namespace Tableau.Api.VizPortal.Models
     }
 
     public class TriggerExtractRefreshTask
+    {
+        public string[] Ids { get; set; }
+    }
+
+    public class DeleteExtractRefreshTask
     {
         public string[] Ids { get; set; }
     }

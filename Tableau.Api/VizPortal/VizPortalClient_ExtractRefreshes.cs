@@ -1,7 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using Tableau.Api.Exceptions;
@@ -43,6 +41,13 @@ namespace Tableau.Api.VizPortal
 
         }
 
+        /// <summary>
+        /// Returns Extract Refreshes for a single Schedule. Returns an enumerable that will paginate results in the background
+        /// </summary>
+        /// <param name="session">The session obtained from the top level client</param>
+        /// <param name="siteId">The site ID</param>
+        /// <param name="scheduleId">The schedule ID</param>
+        /// <returns></returns>
         public async IAsyncEnumerable<ExtractRefreshTask> QueryExtractRefreshesForSchedule(
           TableauSession session, string siteId, string scheduleId)
         {
@@ -117,8 +122,6 @@ namespace Tableau.Api.VizPortal
         }
 
 
-   
-
         /// <summary>
         /// Change an extract refresh job schedule frequency
         /// </summary>
@@ -152,7 +155,21 @@ namespace Tableau.Api.VizPortal
                 {
                     Ids = new[] { extractRefreshId.ToString() }
                 });
+        }
 
+        /// <summary>
+        /// Deletes an Extract Refresh Job
+        /// </summary>
+        /// <param name="session">The session obtained from the top level client</param>
+        /// <param name="extractRefreshId">The extract refresh ID</param>
+        /// <returns></returns>
+        public async Task DeleteExtractRefresh(TableauSession session, int extractRefreshId)
+        {
+            var req = await Request<DeleteExtractRefreshTask, Empty>(session, "deleteExtractTasks",
+                new DeleteExtractRefreshTask()
+                {
+                    Ids = new[] { extractRefreshId.ToString() }
+                });
         }
     }
 }
