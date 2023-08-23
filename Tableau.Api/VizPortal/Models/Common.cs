@@ -1,14 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Tableau.Api.VizPortal.Models
+﻿namespace Tableau.Api.VizPortal.Models
 {
     public class QueryModel
     {
         public FilterModel Filter { get; set; }
         public OrderModel[] Order { get; set; }
         public PageModel Page { get; set; }
+        public PageWithToken WithToken {get; set; }
+
         public class FilterModel
         {
             public Clause[] Clauses { get; set; }
@@ -34,6 +32,11 @@ namespace Tableau.Api.VizPortal.Models
             public long MaxItems { get; set; }
         }
 
+        public class PageWithToken
+        {
+            public long Size { get; set; }
+            public string Token { get; set; }
+        }
     }
 
     public class QueryResponseModel
