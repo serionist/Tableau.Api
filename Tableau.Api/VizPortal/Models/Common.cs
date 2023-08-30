@@ -5,7 +5,7 @@
         public FilterModel Filter { get; set; }
         public OrderModel[] Order { get; set; }
         public PageModel Page { get; set; }
-        public PageWithToken WithToken {get; set; }
+        public PageWithTokenModel PageWithToken { get; set; }
 
         public class FilterModel
         {
@@ -17,7 +17,6 @@
                 public string Operator { get; set; }
                 public string Value { get; set; }
             }
-
         }
 
         public class OrderModel
@@ -32,7 +31,7 @@
             public long MaxItems { get; set; }
         }
 
-        public class PageWithToken
+        public class PageWithTokenModel
         {
             public long Size { get; set; }
             public string Token { get; set; }
@@ -41,6 +40,13 @@
 
     public class QueryResponseModel
     {
+        public bool MoreItems { get; set; }
+        public long TotalCount { get; set; }
+    }
+
+    public class QueryResponseWithTokenModel
+    {
+        public string NextPageToken { get; set; }
         public bool MoreItems { get; set; }
         public long TotalCount { get; set; }
     }

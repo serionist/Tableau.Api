@@ -2,7 +2,7 @@
 
 namespace Tableau.Api.VizPortal.Models
 {
-    public class UsersQueryResponse : QueryResponseModel
+    public class UsersQueryResponse : QueryResponseWithTokenModel
     {
         public User[] Users { get; set; }
     }

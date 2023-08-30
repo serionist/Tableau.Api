@@ -1,4 +1,6 @@
-﻿using System.Threading.Tasks;
+﻿using System.Collections.Generic;
+using System.Threading.Tasks;
+using Tableau.Api.Exceptions;
 using Tableau.Api.Models;
 using Tableau.Api.VizPortal.Models;
 
@@ -7,19 +9,45 @@ namespace Tableau.Api.VizPortal
     public partial class VizPortalClient
     {
         /// <summary>
-        /// Unlicense a user
+        /// Returns Users for a site. Returns an enumerable that will paginate results in the background with next page tokens
+        /// </summary>
+        /// <param name="session">The session obtained from the top level client</param>
+        /// <returns></returns>
+        /// <exception cref="TableauRequestException"></exception>
+        public IAsyncEnumerable<User> QueryUsers(
+            TableauSession session) => queryUsers(session);
+
+        /// <summary>
+        /// Change a user site role
         /// </summary>
         /// <param name="session">The session obtained from the top level client</param>
         /// <param name="userId">The user ID</param>
+        /// <param name="role">The role that the user receives</param>
         /// <returns></returns>
-        public async Task UnlicenseUser(TableauSession session, int userId)
+        public async Task ChangeUserRole(TableauSession session, int userId, string role)
         {
             var req = await Request<ChangeUserRole, Empty>(session, "updateUsersSiteRole",
                 new ChangeUserRole()
                 {
-                    SiteRole = "Unlicensed",
+                    SiteRole = role,
                     UserIds = new[] { userId.ToString() }
                 });
+        }
+
+        private IAsyncEnumerable<User> queryUsers(TableauSession session)
+        {
+            var q = new QueryModel()
+            {
+                Order = new[]
+                {
+                    new QueryModel.OrderModel()
+                    {
+                        Field = "displayName",
+                        Ascending = true
+                    }
+                }
+            };
+            return NextPageTokenRequest(session, "getSiteUsersWithToken", q, (UsersQueryResponse u) => u.Users);
         }
     }
 }

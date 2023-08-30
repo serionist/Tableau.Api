@@ -171,7 +171,34 @@ namespace Tableau.Api.VizPortal
                     break;
                 startIndex += perPage;
             }
-            
+        }
+
+        public async IAsyncEnumerable<TResult> NextPageTokenRequest<TResult, TPageResponse, TParameters>(
+            TableauSession session, string methodName,
+            TParameters parameters, Func<TPageResponse, TResult[]> getResults) where TPageResponse : QueryResponseWithTokenModel
+            where TParameters : QueryModel
+        {
+            string token = null;
+            int size = 100;
+            while (true)
+            {
+                parameters.PageWithToken = new QueryModel.PageWithTokenModel()
+                {
+                    Size = size,
+                    Token = token
+                };
+                var pageResult = await Request<TParameters, TPageResponse>(session, methodName, parameters);
+                var any = false;
+                foreach (var res in getResults(pageResult) ?? Array.Empty<TResult>())
+                {
+                    yield return res;
+                    any = true;
+                }
+
+                if (!pageResult.MoreItems || !any)
+                    break;
+                token = pageResult.NextPageToken;
+            }
         }
 
         private async Task<TableauRequestException> buildException(HttpResponseMessage resp)
