@@ -25,4 +25,9 @@ namespace Tableau.Api.VizPortal.Models
         public string SiteRole { get; set; }
         public string[] UserIds { get; set; }
     }
+
+    public class DeleteUser
+    {
+        public string[] Ids { get; set; }
+    }
 }

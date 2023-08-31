@@ -34,6 +34,21 @@ namespace Tableau.Api.VizPortal
                 });
         }
 
+        /// <summary>
+        /// Delete a user
+        /// </summary>
+        /// <param name="session">The session obtained from the top level client</param>
+        /// <param name="userId">The user ID</param>
+        /// <returns></returns>
+        public async Task DeleteUser(TableauSession session, int userId)
+        {
+            var req = await Request<DeleteUser, Empty>(session, "deleteUsers",
+                new DeleteUser()
+                {
+                    Ids = new[] { userId.ToString() }
+                });
+        }
+
         private IAsyncEnumerable<User> queryUsers(TableauSession session)
         {
             var q = new QueryModel()
