@@ -30,4 +30,23 @@ namespace Tableau.Api.VizPortal.Models
     {
         public string[] Ids { get; set; }
     }
+
+    public class UserGroupMembership
+    {
+        public string[] userIds { get; set; }
+    }
+
+    public class UserGroupResponse
+    {
+        public UserGroup[] Groups { get; set; }
+    }
+
+    public class UserGroup
+    {
+        public bool? IsAllUsersGroup { get; set; }
+        public int? UserCount { get; set; }
+        public string DomainName { get; set; }
+        public string Name { get; set; }
+        public string Id { get; set; }
+    }
 }

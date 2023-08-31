@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Tableau.Api.Exceptions;
 using Tableau.Api.Models;
@@ -47,6 +48,26 @@ namespace Tableau.Api.VizPortal
                 {
                     Ids = new[] { userId.ToString() }
                 });
+        }
+
+        /// <summary>
+        /// User group memberships
+        /// </summary>
+        /// <param name="session">The session obtained from the top level client</param>
+        /// <param name="userId">The user ID</param>
+        /// <returns></returns>
+        public async IAsyncEnumerable<UserGroup> UserGroupMemberships(TableauSession session, int userId)
+        {
+            var req = await Request<UserGroupMembership, UserGroupResponse>(session, "getUsersGroupMembership",
+                new UserGroupMembership()
+                {
+                    userIds = new[] { userId.ToString() }
+                });
+
+            foreach (var res in req.Groups ?? Array.Empty<UserGroup>())
+            {
+                yield return res;
+            }
         }
 
         private IAsyncEnumerable<User> queryUsers(TableauSession session)
