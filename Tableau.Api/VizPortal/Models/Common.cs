@@ -7,6 +7,8 @@
         public PageModel Page { get; set; }
         public PageWithTokenModel PageWithToken { get; set; }
 
+        public string[] StatFields { get; set; }
+
         public class FilterModel
         {
             public Clause[] Clauses { get; set; }
@@ -16,6 +18,10 @@
                 public string Field { get; set; }
                 public string Operator { get; set; }
                 public string Value { get; set; }
+            }
+            public class ClauseWithBool : Clause
+            {
+                new public bool? Value { get; set; }
             }
         }
 

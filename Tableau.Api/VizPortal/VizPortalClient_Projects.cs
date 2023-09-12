@@ -35,13 +35,13 @@ namespace Tableau.Api.VizPortal
         }
 
         /// <summary>
-        /// Move project(s) to the selected destination project
+        /// Move project to the selected destination project
         /// </summary>
         /// <param name="session">The session obtained from the top level client</param>
         /// <param name="containerId">Target Project Id</param>
         /// <param name="contentId">Project Id that will be moved</param>
         /// <returns></returns>
-        public async Task MoveProjects(TableauSession session, int containerId, int contentId)
+        public async Task MoveProject(TableauSession session, int containerId, int contentId)
         {
             var req = await Request<MoveProject, Empty>(session, "moveContentToContainer",
             new MoveProject()
@@ -50,7 +50,7 @@ namespace Tableau.Api.VizPortal
                 ContainerType = "PROJECT",
                 ContentItems = new[]
                 {
-                    new ContentItems()
+                    new MoveProject.ProjectContentItems()
                     {
                         ContentId = contentId.ToString(),
                         ContentType = "project",
@@ -88,7 +88,7 @@ namespace Tableau.Api.VizPortal
                 new ChangeProjectOwner()
                 {
                     Ids = new[] { projectId.ToString() },
-                    ownerId = newOwnerId
+                    OwnerId = newOwnerId
                 });
         }
 

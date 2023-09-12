@@ -38,14 +38,14 @@ namespace Tableau.Api.VizPortal.Models
     {
         public string ContainerId { get; set; } // Target Project Id
         public string ContainerType { get; set; } = "PROJECT";
-        public ContentItems[] ContentItems { get; set; }
-    }
+        public ProjectContentItems[] ContentItems { get; set; }
 
-    public class ContentItems
-    {
-        public string ContentId { get; set; } // Project Id that will be moved
-        public string ContentType { get; set; } = "project";
-        public string MoveType { get; set; } = null;
+        public class ProjectContentItems
+        {
+            public string ContentId { get; set; } // Project Id that will be moved
+            public string ContentType { get; set; } = "project";
+            public string MoveType { get; set; } = null;
+        }
     }
 
     public class DeleteProject
@@ -56,6 +56,6 @@ namespace Tableau.Api.VizPortal.Models
     public class ChangeProjectOwner
     {
         public string[] Ids { get; set; } // Project ids
-        public int ownerId { get; set; } // New Owner User Site Id
+        public int OwnerId { get; set; } // New Owner User Site Id
     }
 }

@@ -5,6 +5,8 @@ namespace Tableau.Api.VizPortal.Models
     public class DatasourcesQueryResponse : QueryResponseModel
     {
         public Datasource[] Datasources { get; set; }
+        public ContentUser[] Users { get; set; }
+        public ContentProjectDs[] Projects { get; set; }
     }
 
     public class Datasource
@@ -12,7 +14,7 @@ namespace Tableau.Api.VizPortal.Models
         public CertificationDetails CertificationDetails { get; set; }
         public DateTime? DatasourceModifiedAt { get; set; }
         public bool? HasAlert { get; set; }
-        public DateTime? LastRefreshedAt {get;set;}
+        public DateTime? LastRefreshedAt { get; set; }
         public bool? ExtractCreationPending { get; set; }
         public bool? IsFileBased { get; set; }
         public int? ConnectedWorkbooksCount { get; set; }
@@ -56,11 +58,5 @@ namespace Tableau.Api.VizPortal.Models
         public string ServerName { get; set; }
         public string ServerPort { get; set; }
         public string Type { get; set; }
-    }
-
-    public class MoveDatasource
-    {
-        public string ContainerId { get; set; }
-        public string ContentId { get; set; }
     }
 }
