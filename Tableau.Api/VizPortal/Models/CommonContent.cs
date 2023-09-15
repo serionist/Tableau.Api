@@ -19,7 +19,7 @@ namespace Tableau.Api.VizPortal.Models
     {
         public string Id { get; set; }
         public string Name { get; set; }
-        public Content[] Contents { get; set; }
+        public Content Contents { get; set; }
         public class Content
         {
             public int[] DATASOURCE { get; set; }
@@ -30,7 +30,7 @@ namespace Tableau.Api.VizPortal.Models
     {
         public string Id { get; set; }
         public string Name { get; set; }
-        public Content[] Contents { get; set; }
+        public Content Contents { get; set; }
         public class Content
         {
             public int[] WORKBOOK { get; set; }

@@ -7,8 +7,6 @@
         public PageModel Page { get; set; }
         public PageWithTokenModel PageWithToken { get; set; }
 
-        public string[] StatFields { get; set; }
-
         public class FilterModel
         {
             public Clause[] Clauses { get; set; }

@@ -113,8 +113,7 @@ namespace Tableau.Api.VizPortal
                         Field = "name",
                         Ascending = true
                     }
-                },
-                StatFields = new[] { "hitsTotal", "hitsLastOneMonthTotal", "hitsLastThreeMonthsTotal", "hitsLastTwelveMonthsTotal", "connectedWorkbooksCount" }
+                }
             };
             return PaginateRequest(session, "getDatasources", q, (DatasourcesQueryResponse d) => new[] { (d.Datasources, d.Users, d.Projects) });
         }
