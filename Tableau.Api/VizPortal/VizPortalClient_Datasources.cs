@@ -14,7 +14,7 @@ namespace Tableau.Api.VizPortal
         /// </summary>
         /// <param name="session">The session obtained from the top level client</param>
         /// <returns></returns>
-        public IAsyncEnumerable<(Datasource[], ContentUser[], ContentProjectDs[])> QuerySchedules(
+        public IAsyncEnumerable<(Datasource[], ContentUser[], ContentProjectDs[])> QueryDatasources(
             TableauSession session) => queryDatasources(session, ("isPublished", true));
 
         /// <summary>
