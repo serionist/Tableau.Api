@@ -158,8 +158,8 @@ namespace Tableau.Api
             if (imageWidth == TableauImageWidth.High_1568)
                 args.Add(("resolution", "high"));
             args.AddRange(filters.Select(e =>
-                (e.filterName.StartsWith("vf_", StringComparison.CurrentCultureIgnoreCase)
-                    ? e.filterName.Substring(3)
+                (!e.filterName.StartsWith("vf_", StringComparison.CurrentCultureIgnoreCase)
+                    ? $"vf_{e.filterName}"
                     : e.filterName, e.filterValue)));
 
             return await (await apiRequest(
