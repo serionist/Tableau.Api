@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Tableau.Api.Attributes;
@@ -201,7 +200,38 @@ namespace Tableau.Api
                         : e.filterName, e.filterValue)));
 
             return await (await apiRequest(
-                    buildUri($"sites/{session.SiteId}/views/{viewId}/pdf", args.ToArray()), HttpMethod.Get, 200, cancelToken, session))
+                 buildUri($"sites/{session.SiteId}/views/{viewId}/pdf", args.ToArray()), HttpMethod.Get, 200, cancelToken, session))
+                .ReadAsStreamAsync();
+        }
+
+        /// <summary>
+        /// Returns a specified view rendered as a .xlsx file as data stream containing crosstab data from a view in workbook. Version 3.9+
+        /// </summary>
+        /// <param name="session"></param>
+        /// <param name="viewId">The ID of the view to render as a .xlsx file.</param>
+        /// <param name="filters">When provided, the filters will be set to the specified values on the view before downloading data.</param>
+        /// <param name="cancelToken"></param>
+        /// <returns></returns>
+        /// <exception cref="TableauRequestException"></exception>
+        /// <exception cref="TableauApiVersionException"></exception>
+        /// <exception cref="TableauOnlineNotSupportedException"></exception>
+        [ApiVersion(3, 9)]
+        public async Task<Stream> QueryViewCrosstabExcel(TableauSession session, string viewId,
+            (string filterName, string filterValue)[] filters = null, CancellationToken? cancelToken = null)
+        {
+            checkEndpointAvailability();
+            checkNullParameters((nameof(session), session), (nameof(viewId), viewId));
+            foreach (var (filterName, filterValue) in filters ?? new (string filterName, string filterValue)[0])
+                checkNullParameters((nameof(filterName), filterName), (nameof(filterValue), filterValue));
+            var args = new List<(string, string)>();
+            if (filters != null)
+                args.AddRange(filters.Select(e =>
+                   (!e.filterName.StartsWith("vf_", StringComparison.CurrentCultureIgnoreCase)
+                       ? $"vf_{e.filterName}"
+                       : e.filterName, e.filterValue)));
+
+            return await (await apiRequest(
+                buildUri($"sites/{session.SiteId}/views/{viewId}/crosstab/excel", args.ToArray()), HttpMethod.Get, 200, cancelToken, session))
                 .ReadAsStreamAsync();
         }
 
@@ -376,6 +406,7 @@ namespace Tableau.Api
                     cancelToken, session));
             return (obj.Item1, obj.Item2.workbook);
         }
+
         /// <summary>
         /// Downloads a workbook in .twb or .twbx format. Available in all versions
         /// </summary>
