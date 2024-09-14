@@ -9,6 +9,7 @@ using Tableau.Api.Attributes;
 using Tableau.Api.Enums;
 using Tableau.Api.Exceptions;
 using Tableau.Api.Models;
+using Tableau.Api.VizPortal.Models;
 
 namespace Tableau.Api
 {
@@ -105,6 +106,24 @@ namespace Tableau.Api
                     ("includeUsageStatistics", includeUsageStatistics.ToString())), HttpMethod.Get, 200, cancelToken,
                 session))).view;
 
+        }
+        /// <summary>
+        /// Gets the details of a specific view.
+        /// </summary>
+        /// <param name="session"></param>
+        /// <param name="viewId">The ID of the view to get the details for.</param>
+        /// <param name="includeUsageStatistics">true to return usage statistics. The default is false.</param>
+        /// <param name="cancelToken"></param>
+        /// <returns></returns>
+        [ApiVersion(3, 0)]
+        public async Task<viewType> QueryView(TableauSession session, string viewId,
+            bool includeUsageStatistics = false, CancellationToken? cancelToken = null)
+        {
+            checkEndpointAvailability();
+            checkNullParameters((nameof(session), session), (nameof(viewId), viewId));
+            return await getResponseAsObject<viewType>(await apiRequest(
+                buildUri($"sites/{session.SiteId}/views/{viewId}",
+                    ("includeUsageStatistics", includeUsageStatistics.ToString())), HttpMethod.Get, 200, cancelToken, session));
         }
         /// <summary>
         /// Returns a data stream of the specified view rendered as data in comma-separated-value (CSV) format. Save it to file, or read it using StreamReader. Versions 2.8+
@@ -206,6 +225,7 @@ namespace Tableau.Api
 
         /// <summary>
         /// Returns a specified view rendered as a .xlsx file as data stream containing crosstab data from a view in workbook. Version 3.9+
+        /// If a crosstab is exported from a dashboard, data from only the first view in the dashboard will appear in the .xlsx file.
         /// </summary>
         /// <param name="session"></param>
         /// <param name="viewId">The ID of the view to render as a .xlsx file.</param>
