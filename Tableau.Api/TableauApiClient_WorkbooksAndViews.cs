@@ -9,7 +9,6 @@ using Tableau.Api.Attributes;
 using Tableau.Api.Enums;
 using Tableau.Api.Exceptions;
 using Tableau.Api.Models;
-using Tableau.Api.VizPortal.Models;
 
 namespace Tableau.Api
 {
