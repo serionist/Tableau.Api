@@ -4265,6 +4265,9 @@ namespace Tableau.Api.Models
 
         /// <remarks/>
         SAML,
+
+        /// <remarks/> (Manually added)
+        TableauIDWithMFA,
     }
 
     /// <remarks/>
