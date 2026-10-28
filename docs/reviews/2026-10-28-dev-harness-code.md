@@ -69,3 +69,50 @@ The port of the attribution rule matches omniverse-mcp's:
 - rest-contract, public-api and vizportal: nothing in scope.
 - A macOS run, and Claude Code's permission engine itself: its rules were read as prefix patterns.
 - A live Tableau site: none exists.
+
+## Round 2
+
+**Where:** PR #3 at `4c49db3`, the fixes since round 1 (`695193e`, `3d03082`). A fresh reviewer read the delta and the open findings, re-ran round 1's reproductions in scratch clones, and checked every command the docs name against the permission rules. **Verdict:** needs-fixes.
+
+- **Round 1 findings:** F2 to F7, F9, F10, F12, F13 and F14 are confirmed fixed.
+- **Partly fixed:**
+  - F1: the start-work description, now F22;
+  - F8: other spellings, now F15 and F16;
+  - F11: bundles and the PowerShell tool, now F20 and F21.
+
+| # | Sev | Where | Finding | Status |
+|---|---|---|---|---|
+| F15 | major | `.claude/settings.json`, allow `git blame *` | git takes bundled short flags and unique prefixes, so `git blame -wS <file>`, `--cont <file>` and `--ignore-revs <file>` print a git-ignored file past the denies | fixed `06617b2`: the `git blame` allow is gone; every allow is now exact. Checked by the 12 blame probes and the permission sweep |
+| F16 | major | `.claude/settings.json`, allow `git diff origin/main...HEAD*` | With no space before `*`, `git diff origin/main...HEAD/../../<file> <outside path>` switches git to implicit no-index and prints the file on Windows | fixed `06617b2`: the `origin/main...HEAD` forms are exact. Checked by the probes and the sweep's implicit no-index rows (0 allowed) |
+| F17 | major | `eng/gate.cs` gitleaks check | A regression from F9's fix: a range whose commits only delete, rename or change a mode fails "scanned 0 commits", and so does the `--chmod=+x` the hooks check asks for | fixed `06617b2`: the commit-count comparison is gone; full ids, `--no-color` and failing on ERR or FTL stay. Checked by selftest cases for delete-, rename-, mode- and empty-file-only commits and a blobless clone |
+| F18 | minor | `eng/gate.cs` identity check | A person whose name is just `Claude` or `Devin` is refused as a tool | fixed `06617b2`: identities are decided by address, and by name only with a tool's qualifier. Checked by 17 `tool identity:` selftest cases and a pre-push in a clone |
+| F19 | minor | `eng/gate.cs` commit-msg | A cut line followed by a no-break space or `\x0B`, with a real trailer below, passes the hook; pre-push refuses it | fixed `06617b2`: git's line splitting, its exact cut line, and a cut only above a diff. Checked by the reviewer's three messages as selftest cases and `-F` and `-v` commits in a clone |
+| F20 | minor | `.claude/settings.json` asks | Bundled flags (`-an`, `-qn`) skip commit-msg after "don't ask again" on `git commit *` | wontfix: pre-push refuses the commit whatever skipped commit-msg, and `git push *--no-v*` is denied |
+| F21 | minor | `.claude/settings.json` | Every deny and ask is a Bash rule; the PowerShell tool has its own rules, so `git push --no-verify` there meets no deny | fixed `06617b2`: every deny and ask is mirrored as a `PowerShell(...)` rule |
+| F22 | minor | `start-work` description | Still gives the old order: plan, then branch | fixed `06617b2` |
+| F23 | minor | `AGENTS.md`, `.claude/settings.json` | "A live test run always asks" has no ask rule behind it, and Commits and PRs doesn't name the identity check | fixed `06617b2`: `dotnet test` asks in both shells; AGENTS.md names the identity check |
+
+Refuted: the following don't print content or are refused by git:
+- `git diff --cached` with an outside path;
+- abbreviated `--output` on log, show and diff;
+- `git log --stdin < file`, which a Read deny covers;
+- `rev-parse --resolve-git-dir` and `ls-files -X`;
+- the gate's text lane on a secrets file;
+- `dotnet *@*` blocking `--base HEAD@{1}`: undocumented, and a full id works.
+
+The `#:property` pins hold on a clean machine under a hostile Directory.Build.props.
+
+Two rounds have each found one more spelling of the same hole. So the fix for F15 and F16 narrows the allows, rather than adding denies, and comes with an exhaustive sweep of each allowed command's file-reading options instead of more examples.
+
+| Improvement | Answer |
+|---|---|
+| review-code step 1 writes every pack path in full | taken `06617b2` |
+| AGENTS.md How a change lands numbered in the new order | taken `06617b2` |
+| `ResolveRange` peels after resolving, so a `:/<text>` base works | taken `06617b2` |
+| REVIEW.md names bundled flags, abbreviations and implicit no-index, and says permission rules are no security boundary | taken `06617b2` |
+
+Not covered: Claude Code's permission engine itself was not run; macOS and Linux for F16; GitHub's co-author parsing of F19's messages.
+
+The permission sweep behind F15 and F16:
+- **What it tried:** each allowed git and gh command's 760 options, 165 of which read, write or run something. Every abbreviation and bundle was tried at each position, plus implicit no-index: 224,871 commands in all.
+- **Result:** 0 reach an allow other than the 15 allowed commands themselves.
