@@ -1,0 +1,141 @@
+# Review
+
+What every review of a change to this repo checks, whoever does it: a maintainer, an AI agent (`review-plan`,
+`review-code`) or another tool. Same rules for all.
+
+## What a finding is
+
+Not a bug hunt. A finding is a real problem with a scenario you can reproduce: the input or state, what happens, and
+why it matters to a user, their Tableau site or the next change.
+
+- No scenario, no finding. Style is `.editorconfig`'s; taste is the author's, at most an improvement (below).
+- Refute each finding before you report it: quote the line that proves or kills it. A refuted one stays in the
+  record, with its reason.
+
+| Severity | What it is |
+|---|---|
+| blocker | a password, personal access token, session token or runsettings file leaked (code, logs, exceptions, tests, commits, the PR); certificate checks turned off that the caller didn't turn off; a one-way door broken; a check loosened |
+| major | a real user hits it in normal use: a request Tableau refuses or answers otherwise than the code expects, a response that fails to deserialise, a stream left open or read past its end, the library's build broken or warning, new behaviour that nothing checked |
+| minor | everything else that is real: an edge case few meet, a missing doc comment, a clumsy error message |
+
+- Most findings are minor. An edge case that needs several unlikely things at once is a minor at most.
+- Another round only after a blocker or a major. Minors are fixed in the same round, or recorded with a reason, and
+  the review ends.
+
+## Improvements
+
+Apart from findings, a review lists only the improvements worth more than the edit they cost: a reuse it missed, a
+simpler approach, a clearer name, a step a person must remember that a check could do.
+
+- Not improvements: rewording or reshuffling for taste, options for cases nobody hits, "while you're here" extras.
+- No severity, no scenario. Never counted, never a reason for another round.
+- The author answers each: `taken`, `left: <why>` or `later: <issue>`. "left: not worth it" is a normal answer.
+
+## The questions
+
+Each is a yes or no; a "no" is a finding.
+
+1. Did `dotnet run eng/gate.cs -- full` pass on the reviewed commit, and CI on the PR's head once there is CI? A PR
+   from outside the maintainers is never run here, so until CI exists its answer is "not verified" and it waits.
+2. Does the change do what its issue and plan say, and nothing nobody asked for?
+3. Is new behaviour checked: by a test that fails without it once offline tests exist, and until then by the live
+   suite or a run against a site, which the PR names (Tableau Server and its version, or Tableau Cloud) with what it
+   could not show? Do tests use invented data and delete what they create on the site?
+4. Does each request match Tableau's REST API reference for its method, path (`sites/{site-id}/...`), query, body and
+   expected status, and does its `[ApiVersion]` name the version the reference gives?
+5. No password, token or runsettings in code, tests, logs, exception messages, docs, commits or the PR?
+6. Do the public members of `TableauApiClient`, `VizPortalClient` and the `Models` types stay as they were, or does the
+   change name the one it breaks?
+7. Does the library still build alone on netstandard2.1 with 0 warnings?
+8. Do paths, encodings, line endings and processes work on Windows and Linux?
+9. Does it leave the one-way doors in `AGENTS.md` alone, or name the one it changes and link the maintainers'
+   agreement?
+10. Did the docs move with it (XML doc comments, `how_to_generate_schema.txt`, `AGENTS.md`), written the way
+    `AGENTS.md` asks?
+11. Is each new package needed, from nuget.org, under a licence compatible with MIT, and free of known advisories
+    (NuGet audit)?
+12. Is the PR title a plain imperative sentence, does the body say `Closes #<n>` or `Refs #<n>`, and is there no tool
+    attribution anywhere?
+
+## When the change touches
+
+- **Authentication** (`TableauApiClient_Authentication.cs`, `TableauSession`): a password, a personal access token
+  and a session token travel only in a request body or the `X-Tableau-Auth` header, never in a URL; impersonation
+  (`userIdToImpersonate`) reaches only the sign-in that asked for it; `SignOut` still ends the session.
+- **Logging** (`Log?.Log...`): no password, token, cookie or request body that holds one, in any level; a logged URL
+  holds no secret.
+- **URLs** (`buildUri`): every value in a path or a query is escaped; `filter` and `sort` pass through as the caller
+  wrote them, so a value inside them is the caller's to escape; a new endpoint keeps the base URL's scheme, host and
+  port.
+- **XML and JSON:** a type regenerated in `XmlSchema.cs` keeps the manual additions `how_to_generate_schema.txt`
+  lists; a new field or enum value deserialises from both Tableau Server and Tableau Cloud; Vizportal's JSON keeps its
+  camel case and string enums; an XML reader keeps DTDs off.
+- **Streams and uploads** (`PartialStream`, `TableauApiClient_Publishing.cs`): an `AppendToFileUpload` chunk reads at
+  most its limit, never over 64 MB, counting the stream's position apart from the buffer's offset; the upload session
+  id from `InitiateFileUpload` reaches the publish; each stream is disposed by whoever owns it, the caller's by the
+  caller.
+- **Pagination, cancellation, versions:** page size 1 to 1,000, page number from 1, every page reachable; every public
+  async method takes the `CancellationToken?` last and passes it to the request; a new endpoint carries `[ApiVersion]`,
+  and `[OnPremiseOnly]` when Tableau Cloud lacks it.
+- **Vizportal** (`Tableau.Api/VizPortal/`): an internal, unversioned API, so the PR names the Tableau version it was
+  checked on; the session token goes only in the `workgroup_session_id` cookie, with an `X-Xsrf-Token` that matches
+  its cookie; certificate validation follows the caller's `IgnoreSSLErrors`.
+- **The harness** (below).
+
+## The harness
+
+These decide how every other change is checked:
+
+- `AGENTS.md`, `REVIEW.md`, `.claude/` (`CLAUDE.md`, the settings, the skills), `.agents/`, `.mcp.json`;
+- `eng/`, `.githooks/`, `.gitleaks.toml`, `.github/`;
+- `Directory.Build.props`, `.editorconfig` and the csproj settings that make warnings errors;
+- `nuget.config` (its sources and their mapping), `global.json`, and the secrets block of `.gitignore`.
+
+Rules:
+
+- A change that loosens a check is a blocker unless a maintainer agrees in the PR.
+- That includes a gate step dropped or made a warning, a rule or a test skipped, a `NoWarn` or an ignore added, a
+  question or a lens removed, attribution let through, a permission widened.
+- A change that only makes a check stricter needs no more than a normal review.
+- The attribution rule in `eng/gate.cs` is omniverse-mcp's, with Python's meaning, and its selftest cases are that
+  repo's: a change to one changes the other, or says why not.
+- Permission rules are no security boundary, and the `Read` denies in `.claude/settings.json` don't cover a shell: a
+  command that may take any option can print any file, through an option that reads one (`git blame --contents`, a
+  `dotnet` response file `@<file>`), a short flag bundled with others (`git blame -wS <file>`), an abbreviated long
+  option (`--ignore-revs-f`), a quote or backslash inside an option's or a git subcommand's name (`--no-i''ndex`,
+  `-\-no-index`, `git bl''ame`), a redirection before the command's name (`<f git grep ...`), or git's implicit
+  no-index (`git diff` of two paths, one outside the repo).
+- So an allow is an exact command, or has a `*` only where nothing after it can be an option or a path that reads
+  a file; for `git diff` not even after `--`, where two paths still switch it to no-index. A new allow is checked
+  option by option against `git help <command>` or the gh docs.
+- Claude Code's built-in read-only commands run without a prompt whatever the allows say, and only a deny or ask rule
+  stops one. Some it takes flag by flag, by their full spelling (git, gh, `grep`, `rg`, `tree`). Others it takes
+  with any flag in any abbreviation, by name (`cat`, `diff`, `wc`, `du`, `strings`) or by a pattern (`jq`, `find`),
+  and checks only their positional paths: `diff --fr=<file>` and `strings @<file>` read past every Read deny.
+- So each of their options whose value or effect reads a file or a folder past the named paths has a deny: by its
+  full spelling for the first kind, by its shortest unique prefix for the second (`diff *--fr*`), in both `Bash(...)`
+  and `PowerShell(...)` forms. A short one (`-f`, `-X`) has a Bash deny, and an ask in both shells for any dash-word
+  holding its letter, which is what stops a bundle (`grep -iR`): those asks are load-bearing, and every new short
+  deny gets one.
+- PowerShell rules ignore case, asks as well as denies: a short-flag deny there would also refuse `-r` for `-R`, so
+  PowerShell has the asks alone, and they ask for `grep -rn` too.
+- A rule matches the command's text, quotes included, but the read-only check reads its words after bash removes
+  quotes and backslashes: `--no-i''ndex` passes the deny on `--no-index` and runs, and so does `git bl''ame`, whose
+  subcommand the deny on `git blame` never sees. So every command with a deny asks, in Bash, for a `'`, a `"` or a
+  `\` anywhere in it, and every `git` command does, whatever its subcommand. A quoted pattern (`grep -n "a b"`,
+  `git log --format='%h'`, `git commit -m "..."`, which `git commit -F <file>` avoids) asks too: that is the cost.
+  The backslash rule holds four backslashes (eight in the JSON), as Claude Code unescapes a rule twice; one or two
+  match nothing. PowerShell denies or asks for the quoted spellings already, and passes a backslash on to the tool,
+  which refuses the option.
+- Claude Code checks none of the paths of `du`, `tree`, `fd` and `fdfind`, so each asks with any argument.
+- A rule matches from the command's first character, and bash takes redirections before the name, which the
+  read-only check skips: `2>&1 git blame --ignore-revs-file <file>` matches no rule. So Bash asks for a command that
+  starts with `<`, `>`, `&` or a digit. PowerShell refuses a leading redirection.
+- A recursive read inside the clone (`grep -r`, a glob) has no deny, which is why a runsettings file lives outside it
+  (`AGENTS.md`, Build and test).
+- A change to the permission rules is checked against Claude Code's own engine, headless, in a scratch clone with
+  canary files: `claude -p --permission-mode default --setting-sources project --tools Bash` (then `PowerShell`)
+  `--model haiku --output-format stream-json --verbose`, each command's result read from the stream. The project's
+  allows count only in a folder Claude Code trusts, or in settings passed with `--settings <file>`; denies and asks
+  count everywhere. A matcher is no substitute. The built-in table can change with each Claude Code release, so
+  the derivation of these rules from it is rerun for each release.
