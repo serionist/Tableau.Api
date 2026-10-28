@@ -116,3 +116,45 @@ Not covered: Claude Code's permission engine itself was not run; macOS and Linux
 The permission sweep behind F15 and F16:
 - **What it tried:** each allowed git and gh command's 760 options, 165 of which read, write or run something. Every abbreviation and bundle was tried at each position, plus implicit no-index: 224,871 commands in all.
 - **Result:** 0 reach an allow other than the 15 allowed commands themselves.
+
+## Round 3
+
+**Where:** PR #3 at `d901d86`, the fixes in `06617b2`.
+- A fresh reviewer re-ran round 2's reproductions.
+- It audited the permission sweep.
+- It ran Claude Code's own permission engine (2.1.312, headless `claude -p`, project settings only) in scratch clones holding git-ignored canary files.
+
+**Verdict:** needs-fixes.
+
+**Status of round 2's findings:**
+- **Fixed:** F16 to F19 and F21 to F23. The engine itself refuses F16's `..` path and the implicit no-index with an outside path.
+- **F20:** stays wontfix.
+- **F15:** only partly fixed; see F24.
+- **The sweep:** faithful for the rules it models. It can't see Claude Code's built-in read-only set, which is decisive here.
+
+| # | Sev | Where | Finding | Status |
+|---|---|---|---|---|
+| F24 | major | `.claude/settings.json` | Claude Code runs a built-in set of read-only commands without a prompt, whatever the allows say. Round 2 dropped the denies that covered its file-reading flags, so `git diff --no-index <dir> <dir>` and `git blame --ignore-revs-file <file>` print git-ignored files again, in both shells | fixed `e6350c8`, `98afc37`: 74 denies per shell, derived from Claude Code 2.1.312's built-in read-only table (every flag that reads past the named paths), and asks for bundles of those short flags. Checked with the engine headless: 238 commands, 234 as expected; the 4 bundles that ran now prompt |
+| F25 | major | `AGENTS.md` the live suite and `.claude/` row, `REVIEW.md` | A recursive read (`grep -r`, `rg --no-ignore`, `head dir/*`, `diff -r`, `git grep --no-index`) prints a runsettings file inside the clone without a prompt. Read denies only cover a path a command names. AGENTS.md said Claude Code may not read one | fixed `e6350c8`: AGENTS.md keeps the runsettings file outside the clone and passes its full path; it says what Read denies cover. Checked with the engine: recursive reads of a folder outside the clone are blocked |
+| F26 | minor | `eng/gate.cs` identity check | `Claude Max`, `Devin Max` and `Claude (work)` are refused as tools, since some qualifiers are also surnames | fixed `e6350c8`: a name decides only with a model or version token or a product's full name. Checked by selftest cases for Claude Max, Devin Max, Claude (work), Claude Pro and Gemini Flash |
+
+**Refuted:**
+- a single named path through `git diff --no-index`, which the engine refuses;
+- `git status --ignored` and `ls-files --ignored`, which list names only;
+- `ls-files -X` and `diff -O`, which read patterns and print none of the file;
+- a crafted `-F` message with attribution as diff context: pre-push refuses it;
+- dropping F17's count reopening F9: it doesn't.
+
+**Engine checks of the classes the sweep didn't model:**
+- `&&` and `;` are split and each part checked;
+- `GIT_PAGER=` and `git -c core.pager=` prompt;
+- no allowed lane writes git config.
+
+`git fetch origin main:refs/remotes/origin/main` only creates or fast-forwards that ref.
+
+| Improvement | Answer |
+|---|---|
+| Check a permission change against Claude Code's engine, headless, not only a matcher | taken `e6350c8`: REVIEW.md, The harness |
+| REVIEW.md's "a `*` after `--`" is unsafe for `git diff`, whose paths can still switch it to no-index | taken `e6350c8` |
+
+Not covered: the engine on macOS or Linux and on other Claude Code versions; trusted sessions' project allows; GitHub's trailer parsing.
