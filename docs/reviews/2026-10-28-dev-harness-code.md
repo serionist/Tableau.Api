@@ -194,3 +194,44 @@ Not covered: the engine on macOS or Linux and on other Claude Code versions; tru
 | Keep the derivation and the engine check in the repo, so each Claude Code release can be re-derived | later: #4 |
 
 Not covered: the engine on macOS, Linux, other Claude Code versions and trusted sessions; `tree` and `hexdump`, which aren't installed here; GitHub's trailer parsing.
+
+## Round 5
+
+**Where:** PR #3 at `6978b73`, the fixes in `c019d41`.
+- A fresh reviewer ran Claude Code's engine headless: 154 commands, one process at a time, against a clone of the head with canaries inside and outside it.
+- It read the manuals of the commands the derivation lists as having no file option.
+
+**Verdict:** needs-fixes.
+
+**Status:**
+- **F28:** confirmed fixed.
+- **F27:** confirmed for what it covers. Round 4's eighteen leaking forms deny, `du -a <outside>` prompts, and the derivation is complete for the commands taken with any arguments and the pattern commands. 20 sampled rules behave as derived.
+- **F29:** confirmed fixed, but F30 makes two of its sentences untrue.
+- **No documented command is denied** in either shell.
+
+| # | Sev | Where | Finding | Status |
+|---|---|---|---|---|
+| F30 | major | `.claude/settings.json`, `REVIEW.md`, `AGENTS.md` | Deny rules match the command as typed, but the built-in read-only check reads it after the shell removes quotes and backslashes. So a quote or backslash inside a denied option's name (`git grep --no-i''ndex`, `git blame --ignore-revs-f''ile <file>`, `diff -\-from-file=<outside file>`, `wc -''-files0-from=<file>`) prints the file without a prompt in Bash | fixed `1ef5d60`: Bash asks on `'`, `"` and `\` for each of the 23 built-in commands with a deny, generated with the derivation; the backslash rule needs four backslashes, as Claude Code unescapes rule text twice. Checked with the engine: 129 cases as expected, every spelling prompts, the documented commands still run; a quoted argument to those commands now prompts, the accepted cost |
+| F31 | minor | `.claude/settings.json` | lsof's `-A` reads a name list file, as `-k` does, with no rule | fixed `1ef5d60`: a Bash deny and bundle asks in both shells, checked with the engine |
+
+Refuted:
+- input redirection, which a Read deny or a prompt catches;
+- `sed r`, capitalised command names, and xargs, which isn't in the Windows table;
+- `gh auth status` without `--show-token`;
+- `tree --info`, which needs a planted file;
+- `ls-files --exclude-from`, which lists names only;
+- wrappers (`timeout`, `nice`, `command`, `\diff`) and quoted command names, which the engine normalises before the deny.
+
+| Improvement | Answer |
+|---|---|
+| Asks on `tree *`, `fd *` and `fdfind *`, which list an outside folder's names | taken `1ef5d60` |
+| REVIEW.md: PowerShell asks are case-blind too, and allows count only in a trusted folder or with `--settings` | taken `1ef5d60` |
+| The extractor accepts any flag-type string | taken: re-run on 2.1.312, it adds xargs' `-I` and `-E`, neither reads a file |
+| `printf` and `[[` in the no-file-option list | taken |
+| Report the quoting mismatch to Claude Code | taken: drafted as feedback for the maintainer to send |
+
+`git commit` and `git push` aren't read-only commands, so they always prompt here. Their `--no-v` denies carry no quote asks, because those would make every `git commit -m "..."` prompt for someone who allowed `git commit`. pre-push stays the backstop.
+
+**Stopping the loop:** after round 5 the maintainer (serionist) asked for one more round. It confirms this fix with the engine, and the PR merges if it finds no new major.
+
+Not covered: macOS, Linux, other Claude Code versions, trusted sessions. Tree, fd, hexdump, jq and lsof aren't installed here, so for them only the engine's decision was seen.
