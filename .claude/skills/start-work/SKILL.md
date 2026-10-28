@@ -3,8 +3,8 @@ name: start-work
 description: >-
   Use when someone wants to work on something in Tableau.Api ("let's do #12", "pick up the publish issue", "add an
   endpoint for X", "fix Y"), before any code or docs change. Finds or creates the issue, reads the code and the APIs it
-  touches, decides whether it needs a plan, writes the plan and reviews it with review-plan until it is approved,
-  then starts the branch from origin/main with the plan as its first commit.
+  touches, decides whether it needs a plan, starts the branch from origin/main, writes the plan as its first commit,
+  reviews it with review-plan until it is approved, and gets a maintainer's approval.
 ---
 
 # Start a change

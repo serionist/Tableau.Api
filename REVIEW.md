@@ -99,6 +99,10 @@ Rules:
 - A change that only makes a check stricter needs no more than a normal review.
 - The attribution rule in `eng/gate.cs` is omniverse-mcp's, with Python's meaning, and its selftest cases are that
   repo's: a change to one changes the other, or says why not.
-- The `Read` denies in `.claude/settings.json` don't cover Bash: an allowed command that can print any file (a
-  `git diff --no-index`, `git blame --contents` or `-S`, a `dotnet` response file `@<file>`) gets around them. Keep Bash
-  allows to narrow forms, and deny the flags that read a file.
+- Permission rules are no security boundary, and the `Read` denies in `.claude/settings.json` don't cover a shell: a
+  command that may take any option can print any file, through an option that reads one (`git blame --contents`, a
+  `dotnet` response file `@<file>`), a short flag bundled with others (`git blame -wS <file>`), an abbreviated long
+  option (`--ignore-revs-f`), or git's implicit no-index (`git diff` of two paths, one outside the repo).
+- So an allow is an exact command, or has a `*` only where nothing after it can be an option or a path git reads,
+  such as after `--`; everything else asks. A new allow is checked option by option against `git help <command>` or
+  the gh docs, and denies stay few: the secrets, `--no-verify` and its prefixes, `dotnet` response files.

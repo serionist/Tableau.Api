@@ -27,7 +27,7 @@ Microsoft.Extensions.Logging.
 | `.githooks/` | `commit-msg` refuses attribution, `pre-push` runs gate quick on what the push sends, `post-checkout` and `post-merge` name changed AI setup files |
 | `docs/plans/`, `docs/reviews/` | plans of non-trivial changes, with the template; review records. Dated records, never current truth |
 | `.github/` | `CODEOWNERS`, `pull_request_template.md` |
-| `.claude/` | `CLAUDE.md` (imports this file), `settings.json` (no attribution; allows read-only git and gh, the library's build and the gate; a live test run always asks; denies reading secrets), `settings.local.json.example`, `skills/` (below) |
+| `.claude/` | `CLAUDE.md` (imports this file), `settings.json` (no attribution; allows exact read-only git and gh commands, the library's build and the gate, and nothing else without a prompt; a live test run always asks; denies reading secrets), `settings.local.json.example`, `skills/` (below) |
 | `.agents/skills/` | links to `.claude/skills/<name>` for Codex, written into git's index by `dotnet run eng/gate.cs -- link` |
 | `AGENTS.md`, `REVIEW.md` | this file; what a review finding is, and the questions every review answers |
 | `.mcp.json` | Microsoft Learn and Context7 over HTTP; `.claude/settings.local.json.example` turns them on |
@@ -67,10 +67,9 @@ their own PRs included: no approval is required, and merging is the approval. An
 the skills, *the developer* is the person driving the session; approving a plan and merging belong to a maintainer.
 
 1. **An issue** for every change, a typo included: the PR names it, and gate text checks that.
-2. **A plan** in `docs/plans/` for non-trivial work (`docs/plans/README.md` says when), reviewed with `review-plan`
-   until approved, then approved by a maintainer.
-3. **A branch** `<issue>-<slug>` from `origin/main`, started before the plan is written: the plan is its first
-   commit.
+2. **A branch** `<issue>-<slug>` from `origin/main`, started before the plan is written.
+3. **A plan** in `docs/plans/` for non-trivial work (`docs/plans/README.md` says when), the branch's first commit,
+   reviewed with `review-plan` until approved, then approved by a maintainer.
 4. **The code,** with its docs in the same change.
 5. **finish-work:** `dotnet run eng/gate.cs -- full`, a draft PR, `review-code` until clean.
 6. **A maintainer** squash-merges.
@@ -94,6 +93,8 @@ The skills in `.claude/skills/` run this loop: `start-work` (1 to 3), `review-pl
 - PRs are squash-merged: the PR title becomes the subject on `main`, its description the body.
 - No tool attribution anywhere: no AI co-author trailers, no "Generated with" lines, no session links, in commits,
   PR titles or PR bodies. `commit-msg` refuses them, and the gate checks every message on the branch.
+- The gate also refuses a commit whose author or committer is a tool: by its address, or by a name a person can't
+  have ("Claude Code", "GitHub Copilot", a model or a version).
 
 ## One-way doors
 

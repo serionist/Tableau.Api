@@ -477,15 +477,36 @@ internal static class Rules
            select $"{commit.Sha[..Math.Min(10, commit.Sha.Length)]}: {line}",
     ];
 
+    // A tool's name alone, which a person may also be called.
+    private static readonly PyRegex BareToolName = new(
+        @"^(?:claude|anthropic|codex|chatgpt|copilot|gemini|cursor|devin|aider|windsurf)$", ignoreCase: true);
+
     /// <summary>
-    /// One line per commit whose author or committer is a tool, by the co-author rule: a commit a tool made under its
-    /// own name carries no trailer at all.
+    /// True when a commit's author or committer, `Name &lt;email&gt;`, is a tool. The address decides, as for a
+    /// co-author: a tool's address, any bot's but the allowed ones, a bot's name. The name decides only when it says
+    /// more than a first name could ("Claude Code", "GitHub Copilot", a model, a version): a commit's identity is
+    /// someone's own, and Claude Dupont may commit as Claude, where a co-author trailer naming Claude alone is a tool.
     /// </summary>
+    public static bool ToolIdentity(string who)
+    {
+        var match = Who.Match(Py.Strip(who));
+        if (match is null) return false;
+        var email = Py.Strip(match.Group("email") ?? "");
+        var name = Py.Strip(match.Group("name") ?? "");
+        var bot = BotEmail.Match(email);
+        if (bot is not null)
+            return !(NonAiBots.Contains(Py.Lower(bot.Group("login")!)) && NonAiBotNames.Contains(Py.Lower(name)));
+        var namedBot = BotName.Match(name);
+        if (namedBot is not null && !NonAiBots.Contains(Py.Lower(namedBot.Group("login")!))) return true;
+        return ToolEmail.Match(email) is not null || (ToolName.Match(name) is not null && BareToolName.Match(name) is null);
+    }
+
+    /// <summary>One line per commit whose author or committer is a tool: a commit a tool made under its own name carries no trailer.</summary>
     public static List<string> IdentityProblems(IEnumerable<Commit> commits) =>
     [
         .. from commit in commits
            from person in new[] { ("author", commit.Author), ("committer", commit.Committer) }
-           where ToolCoAuthor(person.Item2)
+           where ToolIdentity(person.Item2)
            select $"{commit.Sha[..Math.Min(10, commit.Sha.Length)]}: the {person.Item1} is a tool: {person.Item2}",
     ];
 
@@ -504,22 +525,18 @@ internal static class Rules
     public const string LogFormat = "--format=%H%x00%an <%ae>%x00%cn <%ce>%x00%B%x01";
 
     private static readonly Regex GitleaksError = new(@"^\S+ (?:ERR|FTL) ", RegexOptions.CultureInvariant | RegexOptions.Multiline);
-    private static readonly Regex GitleaksScanned = new(@"\b(\d+) commits scanned\b", RegexOptions.CultureInvariant);
 
     /// <summary>
     /// Why a gitleaks run that exited 0 can't be trusted, or null: when git log fails under it (a blob it can't fetch,
-    /// a range it can't read), gitleaks logs the error, scans nothing and still exits 0. withChanges is how many
-    /// commits in the range change a file; gitleaks doesn't count one that changes none.
+    /// a range it can't read), gitleaks logs the error, scans nothing and still exits 0. Its count of commits scanned
+    /// says nothing: it leaves out a commit that only deletes, renames, changes a mode or adds an empty file.
     /// </summary>
-    public static string? GitleaksProblem(string output, int withChanges)
+    public static string? GitleaksProblem(string output)
     {
         var error = GitleaksError.Match(output);
-        if (error.Success)
-            return $"gitleaks logged an error, so the scan can't be trusted: {Py.Strip(output[error.Index..].Split('\n')[0])}";
-        var scanned = GitleaksScanned.Matches(output).LastOrDefault();
-        if (withChanges > 0 && (scanned is null || scanned.Groups[1].Value == "0"))
-            return $"gitleaks scanned {(scanned is null ? "no" : "0")} commits, where {withChanges} change a file";
-        return null;
+        return error.Success
+            ? $"gitleaks logged an error, so the scan can't be trusted: {Py.Strip(output[error.Index..].Split('\n')[0])}"
+            : null;
     }
 
     /// <summary>AGENTS.md stays within its line limit: every agent reads all of it at the start of each session.</summary>
@@ -769,19 +786,33 @@ internal static class Lanes
         var ends = new List<string>();
         foreach (var end in new[] { rev[..cut], rev[(cut + 2)..] })
         {
-            var sha = Py.Strip(Proc.Git(["rev-parse", "--verify", "--quiet", $"{end}^{{commit}}"], cwd).Stdout);
+            // Resolved first, then peeled: `:/<text>` takes the rest of its argument as the text it looks for, so
+            // `:/<text>^{commit}` would look for that suffix too.
+            var resolved = Py.Strip(Proc.Git(["rev-parse", "--verify", "--quiet", end], cwd).Stdout);
+            var sha = resolved.Length == 0 ? ""
+                : Py.Strip(Proc.Git(["rev-parse", "--verify", "--quiet", $"{resolved}^{{commit}}"], cwd).Stdout);
             if (sha.Length != 40 && sha.Length != 64) return (null, $"can't resolve {end} in {rev} to a commit");
             ends.Add(sha);
         }
         return ($"{ends[0]}..{ends[1]}", null);
     }
 
-    /// <summary>How many commits in the range change a file, against their first parent, as gitleaks reads them.</summary>
-    public static int CommitsWithChanges(string range, string? cwd = null)
+    /// <summary>
+    /// gitleaks on one range of the repo at root, with the config at config: null when it found nothing it could
+    /// trust, or the failed result.
+    /// </summary>
+    public static Result? Gitleaks(string exe, string root, string config, string rev)
     {
-        var done = Proc.Git(["log", "--format=%x01", "--diff-merges=first-parent", "--name-only", range], cwd);
-        if (done.ExitCode != 0) throw new IOException($"git log {range} failed: {Py.Strip(done.Stderr)}");
-        return done.Stdout.Split('\x01').Skip(1).Count(record => Py.Strip(record).Length > 0);
+        var (range, unresolved) = ResolveRange(rev, root);
+        if (range is null) return new Result("gitleaks", "FAIL", unresolved!);
+        var done = Proc.Run(exe,
+        [
+            "git", "--config", config, "--log-opts", $"{GitleaksPlainLog} {range}",
+            "--redact", "--no-banner", "--no-color", "--ignore-gitleaks-allow", "--exit-code", "1", "-v", root,
+        ], cwd: root);
+        var output = Py.Strip(done.Stdout + done.Stderr);
+        if (done.ExitCode != 0) return new Result("gitleaks", "FAIL", $"secrets found in {rev}, or the scan failed", output);
+        return Rules.GitleaksProblem(output) is { } problem ? new Result("gitleaks", "FAIL", $"{rev}: {problem}", output) : null;
     }
 
     /// <summary>Each folder under .claude/skills that holds a SKILL.md, by name.</summary>
@@ -812,10 +843,11 @@ internal static class Lanes
 
     private static Result CheckSelftest(Scope _)
     {
-        var (cases, failures) = SelfTest.Run();
+        var (cases, failures, skipped) = SelfTest.Run();
+        var also = skipped.Count > 0 ? $", {skipped.Count} skipped ({skipped[0][(skipped[0].IndexOf(": ", StringComparison.Ordinal) + 2)..]})" : "";
         return failures.Count == 0
-            ? new Result("selftest", "pass", $"{cases} cases")
-            : new Result("selftest", "FAIL", $"{failures.Count} of {cases} cases failed", string.Join("\n", failures));
+            ? new Result("selftest", "pass", $"{cases} cases{also}")
+            : new Result("selftest", "FAIL", $"{failures.Count} of {cases} cases failed{also}", string.Join("\n", failures));
     }
 
     private static Result CheckBuild(Scope _)
@@ -913,19 +945,7 @@ internal static class Lanes
         if (scope.Problem is not null) return new Result("gitleaks", "FAIL", scope.Problem);
         if (scope.Commits.Count == 0) return new Result("gitleaks", "pass", "no commits to scan");
         foreach (var rev in scope.Ranges)
-        {
-            var (range, unresolved) = ResolveRange(rev);
-            if (range is null) return new Result("gitleaks", "FAIL", unresolved!);
-            var done = Proc.Run(exe,
-            [
-                "git", "--config", Path.Combine(Repo.Root, Repo.GitleaksConfig), "--log-opts", $"{GitleaksPlainLog} {range}",
-                "--redact", "--no-banner", "--no-color", "--ignore-gitleaks-allow", "--exit-code", "1", "-v", Repo.Root,
-            ]);
-            var output = Py.Strip(done.Stdout + done.Stderr);
-            if (done.ExitCode != 0) return new Result("gitleaks", "FAIL", $"secrets found in {rev}, or the scan failed", output);
-            if (Rules.GitleaksProblem(output, CommitsWithChanges(range)) is { } problem)
-                return new Result("gitleaks", "FAIL", $"{rev}: {problem}", output);
-        }
+            if (Gitleaks(exe, Repo.Root, Path.Combine(Repo.Root, Repo.GitleaksConfig), rev) is { } failed) return failed;
         return new Result("gitleaks", "pass", $"{scope.Commits.Count} commits");
     }
 
@@ -1071,18 +1091,34 @@ internal static class Hooks
 
     private static void Say(TextWriter stderr, string hook, string text) => stderr.WriteLine($"{hook}: {text}");
 
+    // What `git commit -v` writes below its cut line: git's diff headers and hunks, its comments, nothing else.
+    private static readonly string[] DiffHeaders =
+    [
+        "diff ", "index ", "@@", "old mode ", "new mode ", "new file mode ", "deleted file mode ", "similarity index ",
+        "dissimilarity index ", "rename from ", "rename to ", "copy from ", "copy to ", "Binary files ",
+    ];
+
     /// <summary>
-    /// The message git may record: everything above git's cut line when a `diff --git` line follows it, comment lines
-    /// included; otherwise all of it. comments: the comment strings git may have written the cut line with.
+    /// The message git may record: everything above git's cut line, comment lines included, when a `diff --git` line
+    /// follows it and every line below it is one git's diff or its comments could be; otherwise all of it. The lines
+    /// are git's here, split at \n alone, so a char Python breaks lines at (\v, \x1c, U+2028) can't make a cut line,
+    /// or hide a line below one. comments: the comment strings git may have written the cut line with.
     /// </summary>
     public static string MessageText(string raw, IReadOnlyCollection<string> comments)
     {
-        var lines = Py.SplitLines(raw);
-        var cut = Enumerable.Range(0, lines.Count).FirstOrDefault(i =>
-            comments.Any(comment => Py.RStrip(lines[i]) == $"{comment} {CutLine}")
-            && lines.Skip(i + 1).Any(line => line.StartsWith("diff --git ", StringComparison.Ordinal)), -1);
-        return Py.Strip(string.Join("\n", cut < 0 ? lines : lines.Take(cut)));
+        var lines = raw.Split('\n').Select(line => line.EndsWith('\r') ? line[..^1] : line).ToList();
+        var cut = lines.FindIndex(line => comments.Any(comment => line == $"{comment} {CutLine}"));
+        var below = cut < 0 ? [] : lines.Skip(cut + 1).ToList();
+        var isDiff = below.Any(line => line.StartsWith("diff --git ", StringComparison.Ordinal))
+            && below.All(line => DiffShaped(line, comments));
+        return isDiff ? Py.Strip(string.Join("\n", lines.Take(cut))) : Py.Strip(string.Join("\n", Py.SplitLines(raw)));
     }
+
+    private static bool DiffShaped(string line, IReadOnlyCollection<string> comments) =>
+        line.Length == 0
+        || line[0] is ' ' or '+' or '-' or '\\'
+        || DiffHeaders.Any(header => line.StartsWith(header, StringComparison.Ordinal))
+        || comments.Any(comment => line.StartsWith(comment, StringComparison.Ordinal));
 
     /// <summary>
     /// The comment strings from `git config --get-regexp` of core.commentChar and core.commentString, which are
@@ -1099,7 +1135,8 @@ internal static class Hooks
     public static int CommitMsg(string path, TextWriter stderr, IReadOnlyCollection<string>? comments = null)
     {
         comments ??= CommentStrings(Proc.Git(["config", "--get-regexp", @"^core\.comment(char|string)$"]).Stdout);
-        var text = MessageText(Lanes.ReadText(path, () => Stream.Null), comments);
+        // As git reads it, \r and all: where the message is cut is git's decision.
+        var text = MessageText(Encoding.UTF8.GetString(File.ReadAllBytes(path)), comments);
         const string Hint = "take those lines out and commit again (AGENTS.md, Commits and PRs)";
         return Lanes.ReportAttribution(text, "commit-msg", Hint, null, stderr);
     }
@@ -1611,6 +1648,10 @@ internal static class SelfTest
     {
         public int Cases { get; private set; }
         public List<string> Failures { get; } = [];
+        public List<string> Skipped { get; } = [];
+
+        /// <summary>A case that can't run here, such as one that needs gitleaks: it is neither passed nor failed.</summary>
+        public void Skip(string name, string why) => Skipped.Add($"{name}: {why}");
 
         public void True(string name, bool ok, string detail = "")
         {
@@ -1641,13 +1682,15 @@ internal static class SelfTest
     /// <summary>The selftest lane: every case, then each failure.</summary>
     public static int Lane(TextWriter stdout)
     {
-        var (cases, failures) = Run();
+        var (cases, failures, skipped) = Run();
+        foreach (var skip in skipped) stdout.WriteLine($"SKIP {skip}");
         foreach (var failure in failures) stdout.WriteLine($"FAIL {failure}");
-        stdout.WriteLine(failures.Count == 0 ? $"selftest passed: {cases} cases" : $"selftest FAILED: {failures.Count} of {cases} cases");
+        var also = skipped.Count > 0 ? $", {skipped.Count} skipped" : "";
+        stdout.WriteLine(failures.Count == 0 ? $"selftest passed: {cases} cases{also}" : $"selftest FAILED: {failures.Count} of {cases} cases{also}");
         return failures.Count == 0 ? 0 : 1;
     }
 
-    public static (int Cases, List<string> Failures) Run()
+    public static (int Cases, List<string> Failures, List<string> Skipped) Run()
     {
         var t = new Tally();
         var scratch = Path.Combine(Path.GetTempPath(), $"tableau-api-gate-{Guid.NewGuid():N}");
@@ -1670,7 +1713,7 @@ internal static class SelfTest
         {
             DeleteTree(scratch);
         }
-        return (t.Cases, t.Failures);
+        return (t.Cases, t.Failures, t.Skipped);
     }
 
     private static void Attribution(Tally t)
@@ -1696,19 +1739,34 @@ internal static class SelfTest
                  })
             t.Same($"a commit's people: {author}, {committer}", expected, Rules.IdentityProblems([new Commit(A, author, committer, "Fix it")]));
 
+        // An identity is a tool by its address; by its name only when the name is more than a first name could be.
+        foreach (var (who, tool) in new[]
+                 {
+                     ("Claude <claude.dupont@example.fr>", false), ("Devin <devin.okafor@example.org>", false),
+                     ("Gemini <gemini@example.org>", false), ("Claude Martin <claude.martin@example.fr>", false),
+                     ("GitHub <noreply@github.com>", false),
+                     ("dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>", false),
+                     ("Claude <noreply@anthropic.com>", true), ("Claude Code <claude@example.org>", true),
+                     ("GitHub Copilot <copilot@example.org>", true), ("Claude Opus 4.6 <claude@example.org>", true),
+                     ("Gemini 2.5 Pro <gemini@example.org>", true), ("gpt-4o <gpt@example.org>", true),
+                     ("Copilot <175728472+Copilot@users.noreply.github.com>", true), ("claude[bot] <claude@example.org>", true),
+                     ("Jane Doe <41898282+github-actions[bot]@users.noreply.github.com>", true),
+                     ("Codex <codex@openai.com>", false), ("Codex <noreply@openai.com>", true),
+                 })
+            t.Equal($"tool identity: {who}", tool, Rules.ToolIdentity(who));
+
         const string Scanned = "5:02PM INF 3 commits scanned.\n5:02PM INF scanned ~1 bytes (1) in 1ms\n5:02PM INF no leaks found";
         const string Failed = "5:02PM ERR [git] fatal: could not fetch 1ff0c42 from promisor remote\n"
             + "5:02PM ERR error=\"stderr is not empty\"\n5:02PM INF 0 commits scanned.\n5:02PM INF no leaks found";
-        t.Equal("gitleaks: a scan of every commit passes", null, Rules.GitleaksProblem(Scanned, 3));
+        t.Equal("gitleaks: a clean scan passes", null, Rules.GitleaksProblem(Scanned));
         t.Equal("gitleaks: an error git log gave it fails the scan",
             "gitleaks logged an error, so the scan can't be trusted: 5:02PM ERR [git] fatal: could not fetch 1ff0c42 from promisor remote",
-            Rules.GitleaksProblem(Failed, 2));
-        t.Equal("gitleaks: no commit scanned where some change a file fails", "gitleaks scanned 0 commits, where 2 change a file",
-            Rules.GitleaksProblem("5:02PM INF 0 commits scanned.\n5:02PM INF no leaks found", 2));
-        t.Equal("gitleaks: no count at all fails", "gitleaks scanned no commits, where 1 change a file",
-            Rules.GitleaksProblem("5:02PM INF no leaks found", 1));
-        t.Equal("gitleaks: a range of empty commits scans none, and passes", null,
-            Rules.GitleaksProblem("5:02PM INF 0 commits scanned.\n5:02PM INF no leaks found", 0));
+            Rules.GitleaksProblem(Failed));
+        t.Equal("gitleaks: a fatal error fails the scan",
+            "gitleaks logged an error, so the scan can't be trusted: 5:02PM FTL could not create log cmd",
+            Rules.GitleaksProblem("5:02PM FTL could not create log cmd"));
+        t.Equal("gitleaks: 0 commits scanned without an error passes, as for a range that only deletes", null,
+            Rules.GitleaksProblem("5:02PM INF 0 commits scanned.\n5:02PM INF no leaks found"));
 
         foreach (var (line, found, why) in PythonMeaning) t.Same($"Python's meaning, {why}: {line}", found, Rules.AttributionLines(line));
         t.Equal("Python's meaning: \\x1f after a tool's name is stripped", true, Rules.ToolCoAuthor("Claude\u001F"));
@@ -1915,6 +1973,29 @@ internal static class SelfTest
             CommitMsg(GitTemplate.Replace("\n#", "\n@") + Below("@"), out _, "auto"));
         t.Equal("a cut line of // for core.commentString //", 0, CommitMsg(GitTemplate.Replace("\n#", "\n//") + Below("//"), out _, "//"));
         t.Equal("the reviewer's message is read whole", Py.Strip(Probe), Hooks.MessageText(Probe, ["#"]));
+
+        // Below git's cut line only git's diff and comments can stand: a line of anything else means git didn't write
+        // what follows, and with -F it reaches the commit. Lines are git's, split at \n alone.
+        foreach (var (name, message) in new[]
+                 {
+                     ("a trailer below a diff header", "Add scissors probe\n\nRefs #1\n\n# ------------------------ >8 ------------------------\n"
+                         + "diff --git a/x b/x\n\nCo-Authored-By: Claude <noreply@anthropic.com>\n"),
+                     ("a no-break space after the cut line", "Add nbsp probe\n\nRefs #1\n\n# ------------------------ >8 ------------------------\u00A0\n"
+                         + "diff --git a/x b/x\n\nCo-Authored-By: Claude <noreply@anthropic.com>\n"),
+                     ("a vertical tab, which Python breaks lines at", "Add vt probe\n\nRefs #1\n\n# ------------------------ >8 ------------------------\u000B"
+                         + "diff --git a/x b/x\n\nCo-Authored-By: Claude <noreply@anthropic.com>\n"),
+                     ("a trailer after git's own diff", GitTemplate + Below("#") + "Co-Authored-By: Claude <noreply@anthropic.com>\n"),
+                 })
+            t.Equal($"commit-msg reads past the cut line: {name}", 1, CommitMsg(message, out _));
+        t.Equal("commit-msg cuts a message git wrote with \\r\\n", 0,
+            CommitMsg((GitTemplate + Below("#")).Replace("\n", "\r\n"), out _));
+        var headers = "# ------------------------ >8 ------------------------\n# Do not modify or remove the line above.\n"
+            + "diff --git a/old.txt b/new.txt\nsimilarity index 90%\nrename from old.txt\nrename to new.txt\nold mode 100644\n"
+            + "new mode 100755\nindex 1a2b3c4..5d6e7f8\n--- a/old.txt\n+++ b/new.txt\n@@ -1 +1 @@\n-Generated with Claude Code\n"
+            + "+Co-Authored-By: Claude <noreply@anthropic.com>\n context\n\\ No newline at end of file\n"
+            + "diff --git a/gone.bin b/gone.bin\ndeleted file mode 100644\nBinary files a/gone.bin and /dev/null differ\n"
+            + "diff --git a/c.txt b/d.txt\ncopy from c.txt\ncopy to d.txt\ndiff --git a/n.txt b/n.txt\nnew file mode 100644\n";
+        t.Equal("commit-msg cuts above every header git's diff writes", 0, CommitMsg("Add the gate\n\nRefs #4\n\n" + headers, out _));
         foreach (var (config, expected) in new[]
                  {
                      ("", "#"), ("core.commentchar ;\n", ";"), ("core.commentchar ;\ncore.commentstring //\n", "//"),
@@ -2037,14 +2118,17 @@ internal static class SelfTest
             [$"{claude[..Math.Min(10, claude.Length)]}: the author is a tool: Claude <noreply@anthropic.com>"],
             Rules.IdentityProblems(people));
 
-        // gitleaks gets full commit ids, and its count is checked against the commits that change a file.
-        git(["commit", "-q", "--allow-empty", "-m", "Empty"]);
+        // gitleaks gets full commit ids: it splits its --log-opts at spaces.
+        var fullRange = new Regex("^[0-9a-f]{40}\\.\\.[0-9a-f]{40}$");
         var (resolved, unresolved) = Lanes.ResolveRange("main..people", merges);
-        t.True("a range resolves to two full commit ids", resolved is not null
-            && Regex.IsMatch(resolved, "^[0-9a-f]{40}\\.\\.[0-9a-f]{40}$"), resolved ?? unresolved ?? "");
-        t.Equal("an empty commit changes no file", 3, resolved is null ? -1 : Lanes.CommitsWithChanges(resolved, merges));
+        t.True("a range resolves to two full commit ids", resolved is not null && fullRange.IsMatch(resolved), resolved ?? unresolved ?? "");
+        (resolved, unresolved) = Lanes.ResolveRange(":/Main moves..feature", merges);
+        t.True("a base found by its message, with a space in it, resolves", resolved is not null && fullRange.IsMatch(resolved),
+            resolved ?? unresolved ?? "");
         var (_, bad) = Lanes.ResolveRange("nothing-here..people", merges);
         t.Equal("a range that doesn't resolve says which end", "can't resolve nothing-here in nothing-here..people to a commit", bad);
+
+        GitleaksCases(t, scratch, NewRepo, CommitFile, Fresh);
 
         var noBase = Fresh("no-base");
         CommitFile(NewRepo(noBase), noBase, "a.txt", "Base");
@@ -2097,6 +2181,53 @@ internal static class SelfTest
         t.Same("a link only staged is no change", [], Setup.ChangedLinks(staged));
         t.Equal("setup checks out a link that is only staged", "core.symlinks=true (set)",
             Setup.CheckoutLinks(staged, () => true).FirstOrDefault());
+    }
+
+    // gitleaks on commits that change no file's text, which it counts as no commit scanned and must pass, and on a
+    // blobless clone whose remote is gone, where git log fails under it and the gate must fail. Skipped without gitleaks.
+    private static void GitleaksCases(Tally t, string scratch, Func<string, Func<string[], string>> newRepo,
+        Action<Func<string[], string>, string, string, string> commitFile, Func<string, string> fresh)
+    {
+        var exe = Proc.Which("gitleaks");
+        var config = Path.Combine(Repo.Root, Repo.GitleaksConfig);
+        string[] names = ["a commit that only deletes", "a commit that only renames", "a commit that only changes a mode",
+            "a commit that adds an empty file", "a blobless clone whose remote is gone"];
+        if (exe is null || !File.Exists(config))
+        {
+            foreach (var name in names) t.Skip($"gitleaks on {name}", exe is null ? "gitleaks is not installed" : $"no {Repo.GitleaksConfig}");
+            return;
+        }
+        var repo = fresh("leaks");
+        var git = newRepo(repo);
+        foreach (var file in new[] { "a.txt", "b.txt", "c.txt" }) commitFile(git, repo, file, $"Add {file}");
+        var steps = new (string Name, string[][] Commands)[]
+        {
+            (names[0], [["rm", "-q", "a.txt"]]),
+            (names[1], [["mv", "b.txt", "b2.txt"]]),
+            (names[2], [["update-index", "--chmod=+x", "c.txt"]]),
+            (names[3], [["add", "-A"]]),
+        };
+        foreach (var (name, commands) in steps)
+        {
+            if (name == names[3]) File.WriteAllText(Path.Combine(repo, "empty.txt"), "");
+            foreach (var command in commands) git(command);
+            git(["commit", "-q", "-m", $"Change: {name}"]);
+            var failed = Lanes.Gitleaks(exe, repo, config, "HEAD~1..HEAD");
+            t.Equal($"gitleaks on {name} passes", "pass", failed is null ? "pass" : $"{failed.Detail}: {failed.Output}");
+        }
+
+        git(["config", "uploadpack.allowFilter", "true"]);
+        var blobless = Path.Combine(scratch, "blobless");
+        var cloned = Proc.Git(["clone", "-q", "--filter=blob:none", "--no-checkout", new Uri(repo).AbsoluteUri, blobless], scratch);
+        var gone = new Uri(Path.Combine(scratch, "gone.git")).AbsoluteUri;
+        if (cloned.ExitCode != 0 || Proc.Git(["remote", "set-url", "origin", gone], blobless).ExitCode != 0)
+        {
+            t.True($"gitleaks on {names[4]} fails", false, $"the clone failed: {Py.Strip(cloned.Stderr)}");
+            return;
+        }
+        var result = Lanes.Gitleaks(exe, blobless, config, "HEAD~4..HEAD");
+        t.True($"gitleaks on {names[4]} fails", result is not null && result.Detail.Contains("gitleaks logged an error", StringComparison.Ordinal),
+            result is null ? "it passed" : result.Detail);
     }
 
     private static bool Throws(Action action)
