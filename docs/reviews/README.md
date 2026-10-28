@@ -34,7 +34,7 @@ verdict: needs-fixes
 | `date` | the day of the first round |
 | `round` | `1`; later rounds are sections of their own |
 | `tier` | how it was read: the reviewers, and who checked their findings against the code |
-| `verdict` | `clean`, `needs-fixes` or `needs-answers` |
+| `verdict` | a code review: `clean` or `needs-fixes`; a plan review: `approved`, `needs-fixes` or `needs-answers` |
 
 ## Body
 

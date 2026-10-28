@@ -55,7 +55,8 @@ signature stays beside the new one. A silent break is a one-way door broken: a b
 
 ## compatibility
 
-Does it work for the library's users: netstandard2.1 consumers on .NET Framework and .NET, Windows and Linux, Tableau
+Does it work for the library's users: the target frameworks they build for (1.2.5 ships netstandard2.0, which .NET
+Framework loads; `main` targets netstandard2.1, which it can't), Windows and Linux, Tableau
 Server and Tableau Cloud, every REST API version the client claims? A behaviour checked on one Tableau version only is
 the usual way this breaks.
 

@@ -30,22 +30,22 @@ start: an issue, a plan when it needs one, the plan approved, and a branch. `fin
      Microsoft Learn (`AGENTS.md`, Look up APIs before coding against them).
 3. **Decide whether it needs a plan,** by the rule in `docs/plans/README.md`. Unsure: ask, and recommend one for
    anything that touches a one-way door, authentication, the schema in `XmlSchema.cs`, or the harness.
-4. **Write the plan** at `docs/plans/<today>-<slug>.md` from the template in `docs/plans/README.md`, with `issue` set.
-   Fill every section; "none" is an answer, a blank is not. A one-way door it changes is named under Compatibility.
-5. **Review it** with `review-plan` until its verdict is `approved`.
-6. **Get it approved** by a maintainer: give the plan's path and the review's verdict, and ask. No code before the
-   yes. Then set `status: approved`, `approved_by` (their GitHub login) and `approved_at` in the frontmatter.
-   - Someone outside the maintainers: do steps 7 and 8 first, push the branch to your fork, and open a draft PR titled
-     `Plan: <title>` that links the issue. A maintainer approves it there, and the code lands on the same branch.
-7. **Start the branch** `<n>-<slug>` from `origin/main`, after `git fetch origin`. Ask where, as one question with a
-   recommendation:
+4. **Start the branch** `<n>-<slug>` from `origin/main`, after `git fetch origin`, before the plan is written, so
+   every commit of the plan lands on the branch. Ask where, as one question with a recommendation:
    - a new branch here, `git switch -c <n>-<slug> origin/main`, when the checkout is clean and nothing else runs in
      it;
    - a new worktree, `git worktree add .claude/worktrees/<n>-<slug> -b <n>-<slug> origin/main`, when other work is
      in flight; then move the session there.
    - `post-checkout:` lines name AI setup files that changed on the way: re-read the ones you already read, this
      skill among them.
-8. **Commit the plan** as the branch's first commit: subject `Plan: <title>`, body `Refs #<n>`.
+5. **Write the plan** at `docs/plans/<today>-<slug>.md` from the template in `docs/plans/README.md`, with `issue` set.
+   Fill every section; "none" is an answer, a blank is not. A one-way door it changes is named under Compatibility.
+6. **Commit the plan** as the branch's first commit: subject `Plan: <title>`, body `Refs #<n>`.
+7. **Review it** with `review-plan` until its verdict is `approved`. Each round's fixes are commits on the branch.
+8. **Get it approved** by a maintainer: give the plan's path and the review's verdict, and ask. No code before the
+   yes. Then set `status: approved`, `approved_by` (their GitHub login) and `approved_at` in the frontmatter.
+   - Someone outside the maintainers: push the branch to your fork and open a draft PR titled `Plan: <title>` that
+     links the issue. A maintainer approves it there, and the code lands on the same branch.
 9. **Ask how to build:** directly in this session, or in forked agents for independent steps, each brief naming the
    plan's path, its step and the files it may touch. This session stays the plan's anchor either way.
 

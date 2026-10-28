@@ -102,8 +102,8 @@ scenario (the two copies already disagree).
 
 Applies when: the scope touches the target framework, packages, paths, files, encodings or processes.
 
-- netstandard2.1: an API that consumers on .NET Framework or older .NET don't have, or a package that raises the
-  target.
+- The target framework: an API or a package that raises it. 1.2.5 ships netstandard2.0, which .NET Framework loads;
+  `main` targets netstandard2.1, which it can't. A change to the target is a one-way door (`AGENTS.md`).
 - Tableau Server and Tableau Cloud, and every REST API version the client claims.
 - Windows and Linux: path separators, `\r\n`, text read and written as UTF-8 explicitly, a tool assumed on PATH.
 

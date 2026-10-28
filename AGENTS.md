@@ -6,14 +6,15 @@ Codex reads it directly; the gate caps it at 150 lines.
 ## What this is
 
 A .NET client for Tableau's REST API and its internal Vizportal API, published on nuget.org as `Tableau.Api` (last
-release 1.2.5, 2021). It targets netstandard2.1, on Newtonsoft.Json and Microsoft.Extensions.Logging.
+release 1.2.5, 2021, built for netstandard2.0). `main` targets netstandard2.1, on Newtonsoft.Json and
+Microsoft.Extensions.Logging.
 
 - **`TableauApiClient`:** the REST API, one partial class per area (`TableauApiClient_<Area>.cs`). It sends and reads
   XML through `XmlSerializer`, with the types in `Models/XmlSchema.cs`, generated from Tableau's REST API 3.16 schema.
 - **`VizPortalClient`:** Tableau's own web client's API (`/vizportal/api/web/v1/`), JSON through Newtonsoft.Json. It
   is internal and unversioned: Tableau documents none of it and may change it in any release.
-- **Where the work stands:** issue #2 reviews the code and modernizes it (.NET 10, slnx, central package management,
-  System.Text.Json, offline tests, CI, README, release). Until then the code is as it was in 2024.
+- **Where the work stands:** issue #2 reviews the code and modernizes it; its plan in `docs/plans/` records the
+  decisions. Until then the code is as it was in 2024.
 
 ## Where things are
 
@@ -68,9 +69,10 @@ the skills, *the developer* is the person driving the session; approving a plan 
 1. **An issue** for every change, a typo included: the PR names it, and gate text checks that.
 2. **A plan** in `docs/plans/` for non-trivial work (`docs/plans/README.md` says when), reviewed with `review-plan`
    until approved, then approved by a maintainer.
-3. **A branch** `<issue>-<slug>` from `origin/main`, the plan its first commit.
+3. **A branch** `<issue>-<slug>` from `origin/main`, started before the plan is written: the plan is its first
+   commit.
 4. **The code,** with its docs in the same change.
-5. **finish-work:** `dotnet run eng/gate.cs -- full`, `review-code` until clean, a PR.
+5. **finish-work:** `dotnet run eng/gate.cs -- full`, a draft PR, `review-code` until clean.
 6. **A maintainer** squash-merges.
 
 The skills in `.claude/skills/` run this loop: `start-work` (1 to 3), `review-plan`, `review-code`, `finish-work`
@@ -102,6 +104,8 @@ maintainers agree in its issue.
 - the root namespace `Tableau.Api`, and the namespaces under it;
 - the public API of `TableauApiClient`, `VizPortalClient` and the `Models` types users get back
   (`Tableau.Api.Models`, `Tableau.Api.VizPortal.Models`): names, parameters, defaults, return types;
+- the target frameworks: 1.2.5 ships netstandard2.0, which .NET Framework 4.6.1 and later load; `main` already
+  targets netstandard2.1 (`e19a822`), which .NET Framework can't;
 - the Tableau versions it claims: REST API 2.0 and up, a version above 3.14 used as 3.14 with a warning
   (`_minVersion`, `_maxVersion` in `TableauApiClient.cs`), on Tableau Server and Tableau Cloud.
 
@@ -119,7 +123,7 @@ What this repo's history already paid for:
 | `AppendToFileUpload` POSTed a new upload instead of PUTting to `fileUploads/{id}` | `b5edc7b` | Method and path from the REST API reference |
 | `SwitchSite` sent the site's id where the API takes its content URL | `60e39fd` | `siteType.contentUrl` |
 | `QueryViewPreviewImage` and `UpdateGroup` left an id out of their path; each fix added a parameter, a public API break | `56a69c4`, `faf9c4a` | Every id the reference's path names is a parameter |
-| View filters lost their `vf_` prefix: the condition was inverted | `2d2c50f` | A name gets `vf_` unless it has it |
+| View filters lost their `vf_` prefix: the condition was inverted | `2d2c50f` (PDF), `315da09` (image), `ada1595` (crosstab) | A name gets `vf_` unless it has it; `QueryViewData` still strips it (#2) |
 
 ## Look up APIs before coding against them
 

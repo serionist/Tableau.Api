@@ -35,7 +35,8 @@ simpler approach, a clearer name, a step a person must remember that a check cou
 
 Each is a yes or no; a "no" is a finding.
 
-1. Did `dotnet run eng/gate.cs -- full` pass on the reviewed commit, and CI on the PR's head once there is CI?
+1. Did `dotnet run eng/gate.cs -- full` pass on the reviewed commit, and CI on the PR's head once there is CI? A PR
+   from outside the maintainers is never run here, so until CI exists its answer is "not verified" and it waits.
 2. Does the change do what its issue and plan say, and nothing nobody asked for?
 3. Is new behaviour checked: by a test that fails without it once offline tests exist, and until then by the live
    suite or a run against a site, which the PR names (Tableau Server and its version, or Tableau Cloud) with what it
@@ -87,7 +88,8 @@ These decide how every other change is checked:
 
 - `AGENTS.md`, `REVIEW.md`, `.claude/` (`CLAUDE.md`, the settings, the skills), `.agents/`, `.mcp.json`;
 - `eng/`, `.githooks/`, `.gitleaks.toml`, `.github/`;
-- `Directory.Build.props`, `.editorconfig` and the csproj settings that make warnings errors.
+- `Directory.Build.props`, `.editorconfig` and the csproj settings that make warnings errors;
+- `nuget.config` (its sources and their mapping), `global.json`, and the secrets block of `.gitignore`.
 
 Rules:
 

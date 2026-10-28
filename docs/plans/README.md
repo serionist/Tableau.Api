@@ -5,8 +5,8 @@ A non-trivial change gets a plan here before any code: a new area of endpoints, 
 change to the harness. A fix a reviewer can follow from the PR alone needs none; its PR says `Trivial: <why>`.
 
 - One file per plan: `YYYY-MM-DD-<slug>.md`, dated the day it was started.
-- Written with `start-work`, reviewed with `review-plan` until approved, approved by a maintainer, and committed as
-  the first commit of its branch. Someone outside the maintainers puts it up as a draft PR for that approval
+- Written with `start-work` on its branch, committed as the branch's first commit, reviewed with `review-plan` until
+  approved, then approved by a maintainer. Someone outside the maintainers puts it up as a draft PR for that approval
   (`start-work`).
 - A plan records what was decided and why at the time. It changes while its branch is open, when the work departs from
   it, and not after the merge.

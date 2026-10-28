@@ -3,6 +3,8 @@
 # TreatWarningsAsErrors for every project so the build fails every `warning` here. Until then the IDE rules warn in the
 # editor only, and the analyzer rules a build runs (CA, SYSLIB) are `suggestion`, marked `-> warning`, so no build's
 # output changes. The library's build runs no analyzers today (netstandard2.1); eng/gate.cs, on net10.0, runs them.
+# Public names are a one-way door (AGENTS.md): the naming rules reach a public member only in a change the maintainers
+# agreed, and a name that is also a wire name (an XML or JSON property) keeps it through an explicit attribute.
 root = true
 
 [*]

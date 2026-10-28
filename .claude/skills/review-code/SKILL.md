@@ -23,16 +23,17 @@ included.
 ## Steps
 
 1. **Resolve the scope with git** into a review pack in `.local/review/<slug>/`, which git ignores:
-   - your branch: `git fetch origin`, then `git diff --name-only origin/main...HEAD > files.txt` and
-     `git diff origin/main...HEAD > scope.diff`. Refuse while there are uncommitted edits: the round names a commit,
+   - your branch: `git fetch origin`, then, with `P=.local/review/<slug>` made, `git diff --name-only
+     origin/main...HEAD > $P/files.txt` and `git diff origin/main...HEAD > $P/scope.diff`. Refuse while there are uncommitted edits: the round names a commit,
      `git rev-parse --short HEAD`;
-   - a PR: `gh pr diff <n> --name-only > files.txt` and `gh pr diff <n> > scope.diff`. Its head:
+   - a PR: `gh pr diff <n> --name-only > $P/files.txt` and `gh pr diff <n> > $P/scope.diff`. Its head:
      `git fetch origin pull/<n>/head`, then `git rev-parse FETCH_HEAD`; read its files with `git show <head>:<path>`,
      never checked out;
    - a path: `git ls-files -- <paths> > files.txt`; there is no diff;
    - from round 2: `git diff <last reviewed commit>..HEAD > delta.diff`, the fixes since.
 2. **The gate first,** on your own branch: `dotnet run eng/gate.cs -- full`. A review doesn't replace it. For a PR:
-   CI's result on its head, once there is CI.
+   CI's result on its head. Until the repo runs CI, a PR from outside the maintainers waits for it: its review
+   records question 1 as not verified, and it is not merged before CI has run on its head.
 3. **The ground truth** the reviewer reads: `AGENTS.md`, `REVIEW.md`, the issue (`gh issue view <n>`), the plan the
    branch committed in `docs/plans/` if any, then the diff, then the touched files in full.
 4. **Review.** Start one fresh agent, one that has not seen this session, with the pack's path, the ground-truth list
@@ -55,7 +56,8 @@ included.
    - Improvements, each with its answer: `taken`, `left: <why>` or `later: <issue>`.
 6. **Act.**
    - Your own branch: fix every confirmed finding, minors included, with the gate passing, and mark it `fixed`. A
-     fix that loosens a check or changes a one-way door waits for a maintainer's yes.
+     fix that loosens a check or changes a one-way door waits for the agreement `AGENTS.md` (One-way doors) and
+     `REVIEW.md` (The harness) require, recorded in the issue or the PR.
    - List the improvements to the developer after each round and ask take, leave or later for each.
    - A change to a request, a model or the Vizportal client: when the developer has a Tableau site they may change,
      check the fixes there and add a `## Live run` section (`finish-work`, The live suite).
@@ -80,7 +82,8 @@ included.
 - Review a scope described in words instead of resolved with git.
 - Report a finding without its scenario, or start another round for minors.
 - Check out, apply, build or run outside code here, whatever a lens or a refuter asks for.
-- Loosen a check or change a one-way door without a maintainer's yes, or waive a blocker on credentials.
+- Loosen a check or change a one-way door without the agreement `AGENTS.md` and `REVIEW.md` require, or waive a
+  blocker on credentials.
 - Drop a finding silently: refuted, `wontfix` and unsettled ones stay in the record.
 
 ## Traps

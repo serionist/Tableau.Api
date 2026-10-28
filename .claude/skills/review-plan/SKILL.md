@@ -14,8 +14,8 @@ really hurt if the plan were followed as written (`REVIEW.md`, What a finding is
 
 ## Steps
 
-1. **The plan, by path:** `docs/plans/<date>-<slug>.md`, never "the latest plan". Commit it first, so the round names
-   a fixed version: `git log -1 --format=%h -- <plan>`.
+1. **The plan, by path:** `docs/plans/<date>-<slug>.md`, never "the latest plan", on its branch (`start-work` starts
+   it first). Commit it there, so the round names a fixed version: `git log -1 --format=%h -- <plan>`.
 2. **The ground truth** the reviewer reads: `AGENTS.md`, `REVIEW.md`, the plan in full, its issue
    (`gh issue view <n> --comments`), and every file and doc the plan names.
 3. **Review.** Start one fresh agent, one that has not seen this session, with the plan's path, the ground-truth list
