@@ -158,3 +158,39 @@ The permission sweep behind F15 and F16:
 | REVIEW.md's "a `*` after `--`" is unsafe for `git diff`, whose paths can still switch it to no-index | taken `e6350c8` |
 
 Not covered: the engine on macOS or Linux and on other Claude Code versions; trusted sessions' project allows; GitHub's trailer parsing.
+
+## Round 4
+
+**Where:** PR #3 at `9bef2ff`, the fixes in `e6350c8` and `98afc37`.
+- A fresh reviewer ran Claude Code's engine headless: 197 commands, one process at a time, in a clone of the head with canary files inside and outside it.
+- It re-ran every earlier reproduction and sampled the derived denies and the bundle asks.
+- It ran the commands the docs name.
+
+**Verdict:** needs-fixes.
+
+**Status:**
+- **F26:** confirmed fixed.
+- **F24:** confirmed for what it added. Round 3's reproductions and every earlier one deny or prompt, and 24 sampled denies and 19 sampled bundle asks behave as derived. It missed a class, now F27.
+- **F25:** fixed for its scenario, but F27 makes its claim about the outside folder false.
+- **No documented command is denied** in either shell.
+
+| # | Sev | Where | Finding | Status |
+|---|---|---|---|---|
+| F27 | major | `.claude/settings.json`, `AGENTS.md`, `REVIEW.md` | The built-in commands the engine takes with any arguments (`diff`, `wc`, `du`, `strings`, `tree` and others) are path-checked only on their positional arguments. So `diff --from-file=<runsettings outside the clone> LICENSE`, `wc --files0-from=<file>`, `du --files0-from=<file>`, their abbreviations and `strings @<file>` print the file without a prompt in Bash | fixed `c019d41`: every command the table takes with any arguments or by a pattern was walked; diff, wc, du, strings, hexdump, jq, tree and lsof have file-valued options, now denied in both shells by shortest unique prefix (short ones denied in Bash with bundle asks in both); `du *` asks. Checked with the engine: 170 cases as expected, the reviewer's ten forms denied in both shells, no canary printed |
+| F28 | minor | `.claude/settings.json` PowerShell rules | PowerShell rules ignore case, so the short-flag denies also deny harmless `grep -r`, `grep -F`, `rg -l`, `pgrep -f`, `git ls-files -x` and `tree -L` outright | fixed `c019d41`: the PowerShell short-flag denies are gone; the bundle asks cover them. Checked with the engine: `grep -rn`, `grep -F`, `rg -l`, `pgrep -f` prompt in PowerShell and run in Bash |
+| F29 | minor | `REVIEW.md`, `AGENTS.md` `.claude/` row | The bundle asks aren't described, and REVIEW.md still says the table takes only full spellings | fixed `c019d41`: REVIEW.md splits the commands taken flag by flag from those taken with any flag, says only positional paths are checked, that bundle asks are load-bearing and that PowerShell ignores case; AGENTS.md's row and live-suite text follow |
+
+**Refuted:**
+- git's global options before a denied subcommand, which prompt;
+- `xargs cat` and `cd <outside> && cat`, which prompt;
+- sed's `e` command, which prompts;
+- PowerShell's path cmdlets on a secret or outside path, which prompt;
+- `strings @` on a `.runsettings` or `.env` name, which a Read deny catches;
+- F26 as a loosened check: the identity check is new in this PR.
+
+| Improvement | Answer |
+|---|---|
+| An ask for `du *`, which has no path check and lists an outside folder's names | taken `c019d41` |
+| Keep the derivation and the engine check in the repo, so each Claude Code release can be re-derived | later: #4 |
+
+Not covered: the engine on macOS, Linux, other Claude Code versions and trusted sessions; `tree` and `hexdump`, which aren't installed here; GitHub's trailer parsing.
