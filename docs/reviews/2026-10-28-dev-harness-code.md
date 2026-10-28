@@ -235,3 +235,27 @@ Refuted:
 **Stopping the loop:** after round 5 the maintainer (serionist) asked for one more round. It confirms this fix with the engine, and the PR merges if it finds no new major.
 
 Not covered: macOS, Linux, other Claude Code versions, trusted sessions. Tree, fd, hexdump, jq and lsof aren't installed here, so for them only the engine's decision was seen.
+
+## Round 6
+
+**Where:** PR #3 at `3b7da85`, the fix in `1ef5d60`. This is the confirming round the maintainer asked for. A fresh reviewer ran Claude Code's engine headless: 204 commands, one process at a time, against a clone of the head with canaries inside and outside it. **Verdict:** needs-fixes.
+
+- **F30:** fixed for option names. Round 5's thirteen forms prompt in Bash, and deny or prompt in PowerShell. The four-backslash rule matches a real backslash and is load-bearing: a control with two backslashes leaked.
+- **F31:** fixed.
+- **Quote asks:** generated for all 23 commands with a deny.
+- **Shell rewrites:** none printed a canary: `$''`, `$""`, `${IFS}`, brace expansion, line continuations, tabs, globs, wrappers and quoted command names.
+- **Documented commands:** none denied in Bash (57 run).
+
+| # | Sev | Where | Finding | Status |
+|---|---|---|---|---|
+| F32 | major | `.claude/settings.json`, `REVIEW.md`, `AGENTS.md` | F30's root cause in the git subcommand's name. `git bl''ame --ignore-revs-file <file outside the clone>`, `git "blame"`, `git gr\ep --no-index` and `git grep'' --no-index` match neither the deny nor the per-subcommand quote ask. Blame printed a one-line credential file outside the clone, without a prompt | fixed `875dec0`: Bash asks on `'`, `"` and `\` for every git command replace the per-subcommand ones. Checked with the engine: round 6's eight forms prompt; `git status`, `git log`, `git diff --stat`, `git blame LICENSE`, `git grep -n MIT LICENSE` and `diff` still run |
+
+**Refuted** (none printed a canary at the reviewed head):
+- `$''` and `$""` strings, `${IFS}`, brace expansion and globs, which prompt;
+- line continuations and tabs, which deny;
+- `git.exe`, `env git` and absolute paths, which deny;
+- PowerShell's `&` and quoted subcommands, which deny.
+
+**Stopping the loop:** the fix was checked with the engine in this session, not by another fresh round. Whether to merge now or run another round is the maintainer's call.
+
+Not covered: macOS, Linux, other Claude Code versions, trusted sessions.
