@@ -34,13 +34,9 @@
       "Bash(gh pr diff *)",
       "Bash(gh pr checks *)",
       "Bash(gh pr list*)",
-      "Bash(dotnet build)",
-      "Bash(dotnet build *)",
-      "Bash(dotnet test)",
-      "Bash(dotnet test *)",
-      "Bash(dotnet restore)",
-      "Bash(dotnet restore *)",
-      "Bash(dotnet format --verify-no-changes*)",
+      "Bash(dotnet build Tableau.Api/Tableau.Api.csproj)",
+      "Bash(dotnet restore Tableau.Api/Tableau.Api.csproj)",
+      "Bash(dotnet format Tableau.Api/Tableau.Api.csproj --verify-no-changes)",
       "Bash(dotnet run eng/gate.cs -- quick*)",
       "Bash(dotnet run eng/gate.cs -- full*)",
       "Bash(dotnet run eng/gate.cs -- text *)",
@@ -56,6 +52,8 @@
       "Read(**/*.key)",
       "Read(**/*.pfx)",
       "Read(**/*.p12)",
+      "Read(**/*.secrets)",
+      "Read(**/*.token)",
       "Read(**/.claude/settings.local.json)",
       "Bash(git diff --no-index*)",
       "Bash(git diff *--no-index*)",
@@ -67,8 +65,15 @@
       "Bash(git show *--output*)",
       "Bash(git blame --contents*)",
       "Bash(git blame *--contents*)",
-      "Bash(git commit *--no-verify*)",
-      "Bash(git push *--no-verify*)"
+      "Bash(git blame *-S*)",
+      "Bash(git blame *--ignore-revs-file*)",
+      "Bash(dotnet *@*)",
+      "Bash(git commit *--no-v*)",
+      "Bash(git push *--no-v*)"
+    ],
+    "ask": [
+      "Bash(git commit -n*)",
+      "Bash(git commit * -n*)"
     ]
   }
 }

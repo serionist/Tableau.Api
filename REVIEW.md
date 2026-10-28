@@ -100,4 +100,5 @@ Rules:
 - The attribution rule in `eng/gate.cs` is omniverse-mcp's, with Python's meaning, and its selftest cases are that
   repo's: a change to one changes the other, or says why not.
 - The `Read` denies in `.claude/settings.json` don't cover Bash: an allowed command that can print any file (a
-  `git diff --no-index`, `git blame --contents`) gets around them. Keep Bash allows to narrow forms.
+  `git diff --no-index`, `git blame --contents` or `-S`, a `dotnet` response file `@<file>`) gets around them. Keep Bash
+  allows to narrow forms, and deny the flags that read a file.

@@ -6,6 +6,7 @@ testsettings.json
 .env.*
 !.env.example
 *.secrets
+*.token
 **/secrets/*
 *.key
 *.pfx

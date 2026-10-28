@@ -1,4 +1,18 @@
+#:property TargetFramework=net10.0
+#:property LangVersion=latest
+#:property ImplicitUsings=enable
+#:property Nullable=enable
 #:property PublishAot=false
+#:property RestorePackagesWithLockFile=false
+#:property TreatWarningsAsErrors=false
+#:property CodeAnalysisTreatWarningsAsErrors=false
+#:property EnforceCodeStyleInBuild=false
+#:property AnalysisMode=Default
+#:property GenerateDocumentationFile=false
+// The properties above hold this app's build as it is, whatever Directory.Build.props takes on for the library: the
+// hooks build and run this file on every commit and push, so warnings as errors, the code style in the build, another
+// language version, implicit usings turned off or a lock file there would stop every commit, or leave a file in eng/.
+//
 // The gate: the checks a change passes before it lands. People run it, and the git hooks in .githooks/ call it.
 //
 // Usage: dotnet run eng/gate.cs -- quick|full [--base <ref>] [--head <ref>]
@@ -13,7 +27,8 @@
 // - the working tree: the library builds, AGENTS.md is within 150 lines, each skill's frontmatter and its Codex link,
 //   the hooks stored as executable and turned on in this clone; full adds the offline tests. These run when the head is
 //   the checked-out commit, and are skipped, with the reason, when the tree is not what is checked;
-// - the commits: no tool attribution in any message, and gitleaks, on base..head (merges included).
+// - the commits: no tool attribution in any message, author or committer, and gitleaks, on base..head (merges
+//   included).
 // Both start with the selftest, the gate's own tests. The gate prints a table and exits 1 when a check failed; a
 // warning or a skip never fails it. Without gitleaks the secret scan is a warning, unless GATE_REQUIRE_GITLEAKS=1.
 //
@@ -462,17 +477,49 @@ internal static class Rules
            select $"{commit.Sha[..Math.Min(10, commit.Sha.Length)]}: {line}",
     ];
 
-    /// <summary>(sha, message) pairs from `git log --format=%H%x00%B%x01`.</summary>
-    public static List<(string Sha, string Message)> ParseLog(string output)
+    /// <summary>
+    /// One line per commit whose author or committer is a tool, by the co-author rule: a commit a tool made under its
+    /// own name carries no trailer at all.
+    /// </summary>
+    public static List<string> IdentityProblems(IEnumerable<Commit> commits) =>
+    [
+        .. from commit in commits
+           from person in new[] { ("author", commit.Author), ("committer", commit.Committer) }
+           where ToolCoAuthor(person.Item2)
+           select $"{commit.Sha[..Math.Min(10, commit.Sha.Length)]}: the {person.Item1} is a tool: {person.Item2}",
+    ];
+
+    /// <summary>The commits in `git log --format=%H%x00%an &lt;%ae&gt;%x00%cn &lt;%ce&gt;%x00%B%x01` (LogFormat).</summary>
+    public static List<Commit> ParseLog(string output)
     {
-        var commits = new List<(string, string)>();
+        var commits = new List<Commit>();
         foreach (var record in output.Split('\x01'))
         {
-            var trimmed = Py.Strip(record, "\r\n");
-            var cut = trimmed.IndexOf('\0', StringComparison.Ordinal);
-            if (cut >= 0) commits.Add((Py.Strip(trimmed[..cut]), Py.Strip(trimmed[(cut + 1)..])));
+            var fields = Py.Strip(record, "\r\n").Split('\0', 4);
+            if (fields.Length == 4) commits.Add(new Commit(Py.Strip(fields[0]), fields[1], fields[2], Py.Strip(fields[3])));
         }
         return commits;
+    }
+
+    public const string LogFormat = "--format=%H%x00%an <%ae>%x00%cn <%ce>%x00%B%x01";
+
+    private static readonly Regex GitleaksError = new(@"^\S+ (?:ERR|FTL) ", RegexOptions.CultureInvariant | RegexOptions.Multiline);
+    private static readonly Regex GitleaksScanned = new(@"\b(\d+) commits scanned\b", RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// Why a gitleaks run that exited 0 can't be trusted, or null: when git log fails under it (a blob it can't fetch,
+    /// a range it can't read), gitleaks logs the error, scans nothing and still exits 0. withChanges is how many
+    /// commits in the range change a file; gitleaks doesn't count one that changes none.
+    /// </summary>
+    public static string? GitleaksProblem(string output, int withChanges)
+    {
+        var error = GitleaksError.Match(output);
+        if (error.Success)
+            return $"gitleaks logged an error, so the scan can't be trusted: {Py.Strip(output[error.Index..].Split('\n')[0])}";
+        var scanned = GitleaksScanned.Matches(output).LastOrDefault();
+        if (withChanges > 0 && (scanned is null || scanned.Groups[1].Value == "0"))
+            return $"gitleaks scanned {(scanned is null ? "no" : "0")} commits, where {withChanges} change a file";
+        return null;
     }
 
     /// <summary>AGENTS.md stays within its line limit: every agent reads all of it at the start of each session.</summary>
@@ -626,6 +673,9 @@ internal static class Rules
     private static int Length(string text) => text.EnumerateRunes().Count();
 }
 
+/// <summary>A commit as the gate checks it: its id, `Name &lt;email&gt;` of its author and its committer, its message.</summary>
+internal sealed record Commit(string Sha, string Author, string Committer, string Message);
+
 internal sealed class Result(string name, string status, string detail = "", string output = "")
 {
     public string Name { get; } = name;
@@ -636,11 +686,11 @@ internal sealed class Result(string name, string status, string detail = "", str
 }
 
 /// <summary>What one run checks: the commits in its ranges, listed once, and whether the working tree is what they hold.</summary>
-internal sealed class Scope(List<string> ranges, string? treeSkipped, List<(string Sha, string Message)> commits, string? problem)
+internal sealed class Scope(List<string> ranges, string? treeSkipped, List<Commit> commits, string? problem)
 {
     public List<string> Ranges { get; } = ranges;
     public string? TreeSkipped { get; set; } = treeSkipped;
-    public List<(string Sha, string Message)> Commits { get; } = commits;
+    public List<Commit> Commits { get; } = commits;
     public string? Problem { get; } = problem;
 
     public static Scope Of(List<string> ranges, string? treeSkipped = null, string? cwd = null)
@@ -684,23 +734,54 @@ internal static class Lanes
         ("tests", CheckTests, true),
     ];
 
-    /// <summary>(sha, message) of every commit in the ranges, merges included, each once; and why they could not be listed.</summary>
-    public static (List<(string Sha, string Message)> Commits, string? Problem) ListCommits(List<string> ranges, string? cwd = null)
+    /// <summary>Every commit in the ranges, merges included, each once; and why they could not be listed.</summary>
+    public static (List<Commit> Commits, string? Problem) ListCommits(List<string> ranges, string? cwd = null)
     {
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        var commits = new List<(string, string)>();
+        var commits = new List<Commit>();
         foreach (var rev in ranges)
         {
-            var done = Proc.Git(["log", "--format=%H%x00%B%x01", rev], cwd);
+            var done = Proc.Git(["log", Rules.LogFormat, rev], cwd);
             if (done.ExitCode != 0)
             {
                 var reason = Py.SplitLines(Py.Strip(done.Stderr)).FirstOrDefault() ?? "git log failed";
-                return ([], $"can't list {rev} ({reason}): git fetch origin, then run it again");
+                return ([], $"can't list {rev} ({reason}): {FetchHint(rev)}, then run it again");
             }
-            foreach (var (sha, message) in Rules.ParseLog(done.Stdout))
-                if (seen.Add(sha)) commits.Add((sha, message));
+            foreach (var commit in Rules.ParseLog(done.Stdout))
+                if (seen.Add(commit.Sha)) commits.Add(commit);
         }
         return (commits, null);
+    }
+
+    // A plain `git fetch origin` doesn't make origin/main in a clone that fetches one other branch, or none.
+    private static string FetchHint(string rev) => rev.StartsWith($"{Repo.Base}..", StringComparison.Ordinal)
+        ? "git fetch origin main:refs/remotes/origin/main"
+        : "fetch the commits it names";
+
+    /// <summary>
+    /// A `from..to` range with both ends as full commit ids, or why it can't be. gitleaks splits its --log-opts at
+    /// spaces, so a ref such as `HEAD@{1 day ago}` would reach git log as three words and scan nothing.
+    /// </summary>
+    public static (string? Range, string? Problem) ResolveRange(string rev, string? cwd = null)
+    {
+        var cut = rev.IndexOf("..", StringComparison.Ordinal);
+        if (cut < 0) return (null, $"{rev} is no from..to range");
+        var ends = new List<string>();
+        foreach (var end in new[] { rev[..cut], rev[(cut + 2)..] })
+        {
+            var sha = Py.Strip(Proc.Git(["rev-parse", "--verify", "--quiet", $"{end}^{{commit}}"], cwd).Stdout);
+            if (sha.Length != 40 && sha.Length != 64) return (null, $"can't resolve {end} in {rev} to a commit");
+            ends.Add(sha);
+        }
+        return ($"{ends[0]}..{ends[1]}", null);
+    }
+
+    /// <summary>How many commits in the range change a file, against their first parent, as gitleaks reads them.</summary>
+    public static int CommitsWithChanges(string range, string? cwd = null)
+    {
+        var done = Proc.Git(["log", "--format=%x01", "--diff-merges=first-parent", "--name-only", range], cwd);
+        if (done.ExitCode != 0) throw new IOException($"git log {range} failed: {Py.Strip(done.Stderr)}");
+        return done.Stdout.Split('\x01').Skip(1).Count(record => Py.Strip(record).Length > 0);
     }
 
     /// <summary>Each folder under .claude/skills that holds a SKILL.md, by name.</summary>
@@ -790,12 +871,17 @@ internal static class Lanes
     private static Result CheckHooks(Scope _)
     {
         var entries = IndexEntries(Repo.HooksDir).Select(entry => (entry.Mode, entry.Path)).ToList();
+        return HooksResult(entries, Py.Strip(Proc.Git(["config", "--get", "core.hooksPath"]).Stdout), Repo.Root);
+    }
+
+    /// <summary>The hooks check on what git's index and config say: stored executable, and turned on in this clone.</summary>
+    public static Result HooksResult(List<(string Mode, string Path)> entries, string hooksPath, string root)
+    {
         if (entries.Count == 0) return new Result("hooks", "FAIL", $"nothing in {Repo.HooksDir} is in git's index");
         var problems = Rules.HookProblems(entries);
         if (problems.Count > 0) return Outcome("hooks", problems, "");
         // A clone that never ran setup commits without commit-msg; the branch's messages are still checked below.
-        var hooksPath = Py.Strip(Proc.Git(["config", "--get", "core.hooksPath"]).Stdout);
-        if (hooksPath.Length == 0 || !Proc.SamePath(Path.Combine(Repo.Root, hooksPath), Path.Combine(Repo.Root, Repo.HooksDir)))
+        if (hooksPath.Length == 0 || !Proc.SamePath(Path.Combine(root, hooksPath), Path.Combine(root, Repo.HooksDir)))
             return new Result("hooks", "warn", $"{entries.Count} executable, but this clone doesn't run them: dotnet run eng/gate.cs -- setup");
         return new Result("hooks", "pass", $"{entries.Count} executable, turned on");
     }
@@ -803,10 +889,12 @@ internal static class Lanes
     private static Result CheckAttribution(Scope scope)
     {
         if (scope.Problem is not null) return new Result("attribution", "FAIL", scope.Problem);
-        var found = Rules.CommitProblems(scope.Commits);
+        var found = Rules.CommitProblems(scope.Commits.Select(commit => (commit.Sha, commit.Message)))
+            .Concat(Rules.IdentityProblems(scope.Commits)).ToList();
         return found.Count > 0
-            ? new Result("attribution", "FAIL", $"tool attribution in {found.Count} line(s)",
-                string.Join("\n", found) + "\nReword each commit without it (git rebase -i, reword).")
+            ? new Result("attribution", "FAIL", $"tool attribution in {found.Count} place(s)",
+                string.Join("\n", found) + "\nReword each commit without it (git rebase -i, reword); a commit a tool authored or "
+                + "committed takes a person's name (git commit --amend --reset-author).")
             : new Result("attribution", "pass", $"{scope.Commits.Count} commits");
     }
 
@@ -826,13 +914,17 @@ internal static class Lanes
         if (scope.Commits.Count == 0) return new Result("gitleaks", "pass", "no commits to scan");
         foreach (var rev in scope.Ranges)
         {
+            var (range, unresolved) = ResolveRange(rev);
+            if (range is null) return new Result("gitleaks", "FAIL", unresolved!);
             var done = Proc.Run(exe,
             [
-                "git", "--config", Path.Combine(Repo.Root, Repo.GitleaksConfig), "--log-opts", $"{GitleaksPlainLog} {rev}",
-                "--redact", "--no-banner", "--ignore-gitleaks-allow", "--exit-code", "1", "-v", Repo.Root,
+                "git", "--config", Path.Combine(Repo.Root, Repo.GitleaksConfig), "--log-opts", $"{GitleaksPlainLog} {range}",
+                "--redact", "--no-banner", "--no-color", "--ignore-gitleaks-allow", "--exit-code", "1", "-v", Repo.Root,
             ]);
-            if (done.ExitCode != 0)
-                return new Result("gitleaks", "FAIL", $"secrets found in {rev}, or the scan failed", Py.Strip(done.Stdout + done.Stderr));
+            var output = Py.Strip(done.Stdout + done.Stderr);
+            if (done.ExitCode != 0) return new Result("gitleaks", "FAIL", $"secrets found in {rev}, or the scan failed", output);
+            if (Rules.GitleaksProblem(output, CommitsWithChanges(range)) is { } problem)
+                return new Result("gitleaks", "FAIL", $"{rev}: {problem}", output);
         }
         return new Result("gitleaks", "pass", $"{scope.Commits.Count} commits");
     }
@@ -960,9 +1052,16 @@ internal static class Lanes
 /// <summary>The git hooks behind the .githooks/ shims, which setup turns on.</summary>
 internal static class Hooks
 {
-    // The line above the diff `git commit -v` adds, behind whatever comment character is set; git drops it and all
-    // below it. Everything above, comment lines included, is the message: with -m git keeps comment lines.
-    private static readonly PyRegex Scissors = new(@"^\S+ -{24} >8 -{24}\s*$");
+    // The line `git commit -v` writes above its diff, behind git's comment string; git drops it and all below it.
+    // Everything above, comment lines included, is the message: with -m git keeps comment lines. Only that cut line
+    // with a diff below it cuts the message. With -F or -m git keeps every line, a cut line included, so a trailer
+    // below a line that merely looks like one would reach the commit. omniverse-mcp's hook cuts at any such line, with
+    // any first word; this one is stricter on purpose.
+    private const string CutLine = "------------------------ >8 ------------------------";
+
+    // What core.commentChar=auto may pick: `#` when the message holds none, else the first of these that starts no line.
+    public static readonly string[] AutoCommentChars = ["#", ";", "@", "!", "$", "%", "^", "&", "|", ":"];
+
     private static readonly PyRegex ZeroSha = new(@"^0+$");
 
     // What an agent reads as its rules when a session starts (REVIEW.md, The harness).
@@ -972,14 +1071,35 @@ internal static class Hooks
 
     private static void Say(TextWriter stderr, string hook, string text) => stderr.WriteLine($"{hook}: {text}");
 
-    /// <summary>The message git may record: everything above the scissors line, comment lines included.</summary>
-    public static string MessageText(string raw) =>
-        Py.Strip(string.Join("\n", Py.SplitLines(raw).TakeWhile(line => Scissors.Match(line) is null)));
+    /// <summary>
+    /// The message git may record: everything above git's cut line when a `diff --git` line follows it, comment lines
+    /// included; otherwise all of it. comments: the comment strings git may have written the cut line with.
+    /// </summary>
+    public static string MessageText(string raw, IReadOnlyCollection<string> comments)
+    {
+        var lines = Py.SplitLines(raw);
+        var cut = Enumerable.Range(0, lines.Count).FirstOrDefault(i =>
+            comments.Any(comment => Py.RStrip(lines[i]) == $"{comment} {CutLine}")
+            && lines.Skip(i + 1).Any(line => line.StartsWith("diff --git ", StringComparison.Ordinal)), -1);
+        return Py.Strip(string.Join("\n", cut < 0 ? lines : lines.Take(cut)));
+    }
+
+    /// <summary>
+    /// The comment strings from `git config --get-regexp` of core.commentChar and core.commentString, which are
+    /// aliases: the last one set wins, `#` when neither is, and git's candidates for `auto`.
+    /// </summary>
+    public static IReadOnlyCollection<string> CommentStrings(string configOutput)
+    {
+        var value = Py.SplitLines(configOutput).Where(line => line.Contains(' ', StringComparison.Ordinal))
+            .Select(line => line[(line.IndexOf(' ', StringComparison.Ordinal) + 1)..]).LastOrDefault() ?? "";
+        return value == "auto" ? AutoCommentChars : [value.Length > 0 ? value : "#"];
+    }
 
     /// <summary>Refuse a message with tool attribution; 1 refuses the commit.</summary>
-    public static int CommitMsg(string path, TextWriter stderr)
+    public static int CommitMsg(string path, TextWriter stderr, IReadOnlyCollection<string>? comments = null)
     {
-        var text = MessageText(Lanes.ReadText(path, () => Stream.Null));
+        comments ??= CommentStrings(Proc.Git(["config", "--get-regexp", @"^core\.comment(char|string)$"]).Stdout);
+        var text = MessageText(Lanes.ReadText(path, () => Stream.Null), comments);
         const string Hint = "take those lines out and commit again (AGENTS.md, Commits and PRs)";
         return Lanes.ReportAttribution(text, "commit-msg", Hint, null, stderr);
     }
@@ -1560,9 +1680,35 @@ internal static class SelfTest
         foreach (var (who, tool) in CoAuthors) t.Equal($"tool co-author: {who}", tool, Rules.ToolCoAuthor(who));
         t.Same("commit problems name the commit and the line", ["aaaaaaaaaa: Generated with Claude Code"],
             Rules.CommitProblems([(A, Message("Generated with Claude Code")), (B, Message("Refs #2"))]));
-        t.Equal("parse_log reads each commit and its whole message",
-            "1111|Subject one\n\nBody;2222|Subject two",
-            string.Join(";", Rules.ParseLog("1111\0Subject one\n\nBody\n\u0001\n2222\0Subject two\n\u0001\n").Select(c => $"{c.Sha}|{c.Message}")));
+        t.Equal("parse_log reads each commit, its people and its whole message",
+            "1111|Ada <ada@example.org>|Bo <bo@example.org>|Subject one\n\nBody;2222|Ada <>|Ada <>|Subject two",
+            string.Join(";", Rules.ParseLog("1111\0Ada <ada@example.org>\0Bo <bo@example.org>\0Subject one\n\nBody\n\u0001\n"
+                + "2222\0Ada <>\0Ada <>\0Subject two\n\u0001\n").Select(c => $"{c.Sha}|{c.Author}|{c.Committer}|{c.Message}")));
+
+        const string Person = "Ada Lovelace <ada@example.org>";
+        foreach (var (author, committer, expected) in new (string, string, string[])[]
+                 {
+                     ("Claude <noreply@anthropic.com>", Person, ["aaaaaaaaaa: the author is a tool: Claude <noreply@anthropic.com>"]),
+                     (Person, "Claude Code <claude@example.org>", ["aaaaaaaaaa: the committer is a tool: Claude Code <claude@example.org>"]),
+                     ("dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>", "GitHub <noreply@github.com>", []),
+                     (Person, "GitHub <noreply@github.com>", []),
+                     ("Claude Martin <claude.martin@example.fr>", Person, []),
+                 })
+            t.Same($"a commit's people: {author}, {committer}", expected, Rules.IdentityProblems([new Commit(A, author, committer, "Fix it")]));
+
+        const string Scanned = "5:02PM INF 3 commits scanned.\n5:02PM INF scanned ~1 bytes (1) in 1ms\n5:02PM INF no leaks found";
+        const string Failed = "5:02PM ERR [git] fatal: could not fetch 1ff0c42 from promisor remote\n"
+            + "5:02PM ERR error=\"stderr is not empty\"\n5:02PM INF 0 commits scanned.\n5:02PM INF no leaks found";
+        t.Equal("gitleaks: a scan of every commit passes", null, Rules.GitleaksProblem(Scanned, 3));
+        t.Equal("gitleaks: an error git log gave it fails the scan",
+            "gitleaks logged an error, so the scan can't be trusted: 5:02PM ERR [git] fatal: could not fetch 1ff0c42 from promisor remote",
+            Rules.GitleaksProblem(Failed, 2));
+        t.Equal("gitleaks: no commit scanned where some change a file fails", "gitleaks scanned 0 commits, where 2 change a file",
+            Rules.GitleaksProblem("5:02PM INF 0 commits scanned.\n5:02PM INF no leaks found", 2));
+        t.Equal("gitleaks: no count at all fails", "gitleaks scanned no commits, where 1 change a file",
+            Rules.GitleaksProblem("5:02PM INF no leaks found", 1));
+        t.Equal("gitleaks: a range of empty commits scans none, and passes", null,
+            Rules.GitleaksProblem("5:02PM INF 0 commits scanned.\n5:02PM INF no leaks found", 0));
 
         foreach (var (line, found, why) in PythonMeaning) t.Same($"Python's meaning, {why}: {line}", found, Rules.AttributionLines(line));
         t.Equal("Python's meaning: \\x1f after a tool's name is stripped", true, Rules.ToolCoAuthor("Claude\u001F"));
@@ -1701,16 +1847,31 @@ internal static class SelfTest
         t.Same("a hook added from Windows without the bit fails",
             [".githooks/pre-push is stored as mode 100644, so Linux and macOS skip it: git update-index --chmod=+x .githooks/pre-push"],
             Rules.HookProblems([("100755", ".githooks/commit-msg"), ("100644", ".githooks/pre-push")]));
+
+        var root = Path.GetTempPath();
+        List<(string, string)> stored = [("100755", ".githooks/commit-msg"), ("100755", ".githooks/pre-push")];
+        foreach (var (hooksPath, status) in new[]
+                 {
+                     ("", "warn"), (".githooks", "pass"), ("./.githooks", "pass"), (".githooks/", "pass"),
+                     (Path.Combine(root, ".githooks"), "pass"), (".git/hooks", "warn"), (Path.Combine(root, "elsewhere"), "warn"),
+                 })
+            t.Equal($"hooks with core.hooksPath {Show(hooksPath)}", status, Lanes.HooksResult(stored, hooksPath, root).Status);
+        t.Contains("the hooks warning says how to turn them on", Lanes.HooksResult(stored, "", root).Detail, "dotnet run eng/gate.cs -- setup");
+        t.Equal("hooks stored without the bit fail, whatever core.hooksPath says", "FAIL",
+            Lanes.HooksResult([("100644", ".githooks/pre-push")], ".githooks", root).Status);
+        t.Equal("no hooks in git's index fails", "FAIL", Lanes.HooksResult([], ".githooks", root).Status);
     }
+
+    private static string Show(string text) => text.Length == 0 ? "unset" : text;
 
     private static void CommitMsgCases(Tally t, string scratch)
     {
-        int CommitMsg(string text, out string stderr)
+        int CommitMsg(string text, out string stderr, string comment = "#")
         {
             var file = Path.Combine(scratch, "COMMIT_EDITMSG");
             File.WriteAllText(file, text, new UTF8Encoding(false));
             var error = new StringWriter();
-            var code = Hooks.CommitMsg(file, error);
+            var code = Hooks.CommitMsg(file, error, comment == "auto" ? Hooks.AutoCommentChars : [comment]);
             stderr = error.ToString();
             return code;
         }
@@ -1726,18 +1887,46 @@ internal static class SelfTest
         foreach (var comment in new[] { "#", ";" })
         {
             var template = GitTemplate.Replace("\n#", $"\n{comment}");
-            t.Equal($"commit-msg accepts the template git writes, comments {comment}", 0, CommitMsg(template, out _));
+            t.Equal($"commit-msg accepts the template git writes, comments {comment}", 0, CommitMsg(template, out _, comment));
             // With -m git keeps comment lines in the message; the diff `git commit -v` adds below the scissors never
             // reaches the commit, and a diff of the Refused list must not refuse the commit that changes it.
-            var below = $"{comment} ------------------------ >8 ------------------------\n"
-                + $"{comment} Do not modify or remove the line above.\n{comment} Everything below it will be ignored.\n"
-                + "diff --git a/eng/gate.cs b/eng/gate.cs\n" + string.Join("\n", Refused.Select(line => $"+        \"{line}\",")) + "\n";
-            t.Equal($"commit-msg reads nothing below the scissors, comments {comment}", 0, CommitMsg(template + below, out _));
+            var below = Below(comment);
+            t.Equal($"commit-msg reads nothing below the scissors, comments {comment}", 0, CommitMsg(template + below, out _, comment));
             t.Equal($"commit-msg reads comment lines, comments {comment}", 1,
-                CommitMsg($"{template}{comment} Generated with Claude Code\n{below}", out _));
-            t.Equal($"the message is what is above the scissors, comments {comment}", Py.Strip(template), Hooks.MessageText(template + below));
+                CommitMsg($"{template}{comment} Generated with Claude Code\n{below}", out _, comment));
+            t.Equal($"the message is what is above the scissors, comments {comment}", Py.Strip(template),
+                Hooks.MessageText(template + below, [comment]));
         }
+
+        // Only git's own cut line, with git's comment string and a diff below it, cuts the message: with -F or -m git
+        // keeps every line, so anything else that looks like one would hide a trailer that reaches the commit.
+        const string Probe = "Add trailer probe\n\nRefs #5\n\n; ------------------------ >8 ------------------------\n\n"
+            + "Co-Authored-By: Claude <noreply@anthropic.com>\n";
+        const string NoDiff = "Add probe\n\nWhy.\n\n# ------------------------ >8 ------------------------\n"
+            + "Co-Authored-By: Claude <noreply@anthropic.com>\n";
+        t.Equal("commit-msg reads past a cut line of another comment character", 1, CommitMsg(Probe, out var probeErr));
+        t.True("it names the trailer below it",
+            Py.SplitLines(probeErr).Contains("commit-msg: refused: tool attribution: Co-Authored-By: Claude <noreply@anthropic.com>"), probeErr);
+        t.Equal("commit-msg reads past a cut line with no diff below it", 1, CommitMsg(NoDiff, out _));
+        t.Equal("commit-msg cuts at the cut line of core.commentChar ;", 0,
+            CommitMsg(GitTemplate.Replace("\n#", "\n;") + Below(";"), out _, ";"));
+        t.Equal("a cut line of # with comments ; cuts nothing", 1, CommitMsg(GitTemplate + Below("#"), out _, ";"));
+        t.Equal("core.commentChar auto: the cut line may use any of git's candidates", 0,
+            CommitMsg(GitTemplate.Replace("\n#", "\n@") + Below("@"), out _, "auto"));
+        t.Equal("a cut line of // for core.commentString //", 0, CommitMsg(GitTemplate.Replace("\n#", "\n//") + Below("//"), out _, "//"));
+        t.Equal("the reviewer's message is read whole", Py.Strip(Probe), Hooks.MessageText(Probe, ["#"]));
+        foreach (var (config, expected) in new[]
+                 {
+                     ("", "#"), ("core.commentchar ;\n", ";"), ("core.commentchar ;\ncore.commentstring //\n", "//"),
+                     ("core.commentstring //\ncore.commentchar ;\n", ";"), ("core.commentchar auto\n", string.Concat(Hooks.AutoCommentChars)),
+                 })
+            t.Equal($"comment strings from git config: {Show(config.Replace("\n", " ").Trim())}", expected, string.Concat(Hooks.CommentStrings(config)));
     }
+
+    private static string Below(string comment) =>
+        $"{comment} ------------------------ >8 ------------------------\n"
+        + $"{comment} Do not modify or remove the line above.\n{comment} Everything below it will be ignored.\n"
+        + "diff --git a/eng/gate.cs b/eng/gate.cs\n" + string.Join("\n", Refused.Select(line => $"+        \"{line}\",")) + "\n";
 
     private static void PushCases(Tally t)
     {
@@ -1828,13 +2017,41 @@ internal static class SelfTest
         t.Same("list commits includes merges and lists each commit once", ["Merge main", "Feature work"],
             commits.Select(commit => Py.SplitLines(commit.Message)[0]));
         t.Same("a merge's message is checked", commits.Count > 0 ? [$"{commits[0].Sha[..10]}: Generated with Claude Code"] : ["(no commits)"],
-            Rules.CommitProblems(commits));
+            Rules.CommitProblems(commits.Select(commit => (commit.Sha, commit.Message))));
+        t.Same("list commits reads each commit's author and committer", ["Test <test@example.org>|Test <test@example.org>"],
+            commits.Select(commit => $"{commit.Author}|{commit.Committer}").Distinct());
+
+        // A commit a tool made under its own name, beside one from a person and one from Dependabot.
+        git(["switch", "-q", "main"]);
+        git(["switch", "-q", "-c", "people"]);
+        File.WriteAllText(Path.Combine(merges, "d.txt"), "d\n");
+        git(["add", "-A"]);
+        git(["commit", "-q", "-m", "Made by a tool", "--author", "Claude <noreply@anthropic.com>"]);
+        File.WriteAllText(Path.Combine(merges, "e.txt"), "e\n");
+        git(["add", "-A"]);
+        git(["commit", "-q", "-m", "Bump a package", "--author", "dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>"]);
+        CommitFile(git, merges, "f.txt", "Made by a person");
+        var (people, _) = Lanes.ListCommits(["main..people"], merges);
+        var claude = people.FirstOrDefault(commit => commit.Message == "Made by a tool")?.Sha ?? "";
+        t.Same("a commit a tool authored is refused, Dependabot's and a person's are not",
+            [$"{claude[..Math.Min(10, claude.Length)]}: the author is a tool: Claude <noreply@anthropic.com>"],
+            Rules.IdentityProblems(people));
+
+        // gitleaks gets full commit ids, and its count is checked against the commits that change a file.
+        git(["commit", "-q", "--allow-empty", "-m", "Empty"]);
+        var (resolved, unresolved) = Lanes.ResolveRange("main..people", merges);
+        t.True("a range resolves to two full commit ids", resolved is not null
+            && Regex.IsMatch(resolved, "^[0-9a-f]{40}\\.\\.[0-9a-f]{40}$"), resolved ?? unresolved ?? "");
+        t.Equal("an empty commit changes no file", 3, resolved is null ? -1 : Lanes.CommitsWithChanges(resolved, merges));
+        var (_, bad) = Lanes.ResolveRange("nothing-here..people", merges);
+        t.Equal("a range that doesn't resolve says which end", "can't resolve nothing-here in nothing-here..people to a commit", bad);
 
         var noBase = Fresh("no-base");
         CommitFile(NewRepo(noBase), noBase, "a.txt", "Base");
         var (none, missing) = Lanes.ListCommits(["origin/main..HEAD"], noBase);
-        t.True("list commits says what to do when the base is missing", none.Count == 0 && missing is not null
-            && missing.Contains("git fetch origin", StringComparison.Ordinal), missing ?? "no problem");
+        t.True("list commits says how to fetch origin/main when it is missing", none.Count == 0 && missing is not null
+            && missing.EndsWith(": git fetch origin main:refs/remotes/origin/main, then run it again", StringComparison.Ordinal),
+            missing ?? "no problem");
 
         var linked = Fresh("link");
         git = NewRepo(linked);
