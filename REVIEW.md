@@ -103,8 +103,8 @@ Rules:
   command that may take any option can print any file, through an option that reads one (`git blame --contents`, a
   `dotnet` response file `@<file>`), a short flag bundled with others (`git blame -wS <file>`), an abbreviated long
   option (`--ignore-revs-f`), a quote or backslash inside an option's or a git subcommand's name (`--no-i''ndex`,
-  `-\-no-index`, `git bl''ame`), or git's
-  implicit no-index (`git diff` of two paths, one outside the repo).
+  `-\-no-index`, `git bl''ame`), a redirection before the command's name (`<f git grep ...`), or git's implicit
+  no-index (`git diff` of two paths, one outside the repo).
 - So an allow is an exact command, or has a `*` only where nothing after it can be an option or a path that reads
   a file; for `git diff` not even after `--`, where two paths still switch it to no-index. A new allow is checked
   option by option against `git help <command>` or the gh docs.
@@ -123,10 +123,14 @@ Rules:
   quotes and backslashes: `--no-i''ndex` passes the deny on `--no-index` and runs, and so does `git bl''ame`, whose
   subcommand the deny on `git blame` never sees. So every command with a deny asks, in Bash, for a `'`, a `"` or a
   `\` anywhere in it, and every `git` command does, whatever its subcommand. A quoted pattern (`grep -n "a b"`,
-  `git log --format='%h'`) asks too: that is the cost. The backslash rule holds four backslashes (eight in the
-  JSON), as Claude Code unescapes a rule twice; one or two match nothing. PowerShell denies or asks for the quoted
-  spellings already, and passes a backslash on to the tool, which refuses the option.
+  `git log --format='%h'`, `git commit -m "..."`, which `git commit -F <file>` avoids) asks too: that is the cost.
+  The backslash rule holds four backslashes (eight in the JSON), as Claude Code unescapes a rule twice; one or two
+  match nothing. PowerShell denies or asks for the quoted spellings already, and passes a backslash on to the tool,
+  which refuses the option.
 - Claude Code checks none of the paths of `du`, `tree`, `fd` and `fdfind`, so each asks with any argument.
+- A rule matches from the command's first character, and bash takes redirections before the name, which the
+  read-only check skips: `2>&1 git blame --ignore-revs-file <file>` matches no rule. So Bash asks for a command that
+  starts with `<`, `>`, `&` or a digit. PowerShell refuses a leading redirection.
 - A recursive read inside the clone (`grep -r`, a glob) has no deny, which is why a runsettings file lives outside it
   (`AGENTS.md`, Build and test).
 - A change to the permission rules is checked against Claude Code's own engine, headless, in a scratch clone with

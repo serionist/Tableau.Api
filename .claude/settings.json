@@ -405,7 +405,20 @@
       "PowerShell(fdfind *)",
       "Bash(git *'*)",
       "Bash(git *\"*)",
-      "Bash(git *\\\\\\\\*)"
+      "Bash(git *\\\\\\\\*)",
+      "Bash(<*)",
+      "Bash(>*)",
+      "Bash(&*)",
+      "Bash(0*)",
+      "Bash(1*)",
+      "Bash(2*)",
+      "Bash(3*)",
+      "Bash(4*)",
+      "Bash(5*)",
+      "Bash(6*)",
+      "Bash(7*)",
+      "Bash(8*)",
+      "Bash(9*)"
     ]
   }
 }
