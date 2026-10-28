@@ -106,13 +106,20 @@ Rules:
 - So an allow is an exact command, or has a `*` only where nothing after it can be an option or a path that reads
   a file; for `git diff` not even after `--`, where two paths still switch it to no-index. A new allow is checked
   option by option against `git help <command>` or the gh docs.
-- Claude Code's built-in read-only commands (`cat`, `grep`, `rg`, `tree`, read-only forms of git and gh) run without
-  a prompt whatever the allows say, and only a deny or ask rule stops one. Each of their flags whose value or effect
-  reads a file or a folder past the paths the command names (`git blame --ignore-revs-file`, `git grep --no-index`,
-  `grep -f`) has a deny in both `Bash(...)` and `PowerShell(...)` forms, by its full spelling: the table takes no
-  other. A recursive read inside the clone (`grep -r`, a glob) has none, which is why a runsettings file lives
-  outside it (`AGENTS.md`, Build and test).
+- Claude Code's built-in read-only commands run without a prompt whatever the allows say, and only a deny or ask rule
+  stops one. Some it takes flag by flag, by their full spelling (git, gh, `grep`, `rg`, `tree`). Others it takes
+  with any flag in any abbreviation, by name (`cat`, `diff`, `wc`, `du`, `strings`) or by a pattern (`jq`, `find`),
+  and checks only their positional paths: `diff --fr=<file>` and `strings @<file>` read past every Read deny.
+- So each of their options whose value or effect reads a file or a folder past the named paths has a deny: by its
+  full spelling for the first kind, by its shortest unique prefix for the second (`diff *--fr*`), in both `Bash(...)`
+  and `PowerShell(...)` forms. A short one (`-f`, `-X`) has a Bash deny, and an ask in both shells for any dash-word
+  holding its letter, which is what stops a bundle (`grep -iR`): those asks are load-bearing, and every new short
+  deny gets one. PowerShell rules ignore case, so a short-flag deny there would also refuse `-r` for `-R`; PowerShell
+  has the asks alone, and `grep -rn` asks there. Claude Code checks none of `du`'s paths, so `du *` asks.
+- A recursive read inside the clone (`grep -r`, a glob) has no deny, which is why a runsettings file lives outside it
+  (`AGENTS.md`, Build and test).
 - A change to the permission rules is checked against Claude Code's own engine, headless, in a scratch clone with
   canary files: `claude -p --permission-mode default --setting-sources project --tools Bash` (then `PowerShell`)
   `--model haiku --output-format stream-json --verbose`, each command's result read from the stream. A matcher is no
-  substitute, and the built-in table can change with each Claude Code release.
+  substitute. The built-in table can change with each Claude Code release, so the derivation of these rules from it
+  is rerun for each release.
