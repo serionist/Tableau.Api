@@ -102,7 +102,8 @@ Rules:
 - Permission rules are no security boundary, and the `Read` denies in `.claude/settings.json` don't cover a shell: a
   command that may take any option can print any file, through an option that reads one (`git blame --contents`, a
   `dotnet` response file `@<file>`), a short flag bundled with others (`git blame -wS <file>`), an abbreviated long
-  option (`--ignore-revs-f`), a quote or backslash inside an option's name (`--no-i''ndex`, `-\-no-index`), or git's
+  option (`--ignore-revs-f`), a quote or backslash inside an option's or a git subcommand's name (`--no-i''ndex`,
+  `-\-no-index`, `git bl''ame`), or git's
   implicit no-index (`git diff` of two paths, one outside the repo).
 - So an allow is an exact command, or has a `*` only where nothing after it can be an option or a path that reads
   a file; for `git diff` not even after `--`, where two paths still switch it to no-index. A new allow is checked
@@ -119,11 +120,12 @@ Rules:
 - PowerShell rules ignore case, asks as well as denies: a short-flag deny there would also refuse `-r` for `-R`, so
   PowerShell has the asks alone, and they ask for `grep -rn` too.
 - A rule matches the command's text, quotes included, but the read-only check reads its words after bash removes
-  quotes and backslashes: `--no-i''ndex` passes the deny on `--no-index` and runs. So every command with a deny asks,
-  in Bash, for a `'`, a `"` or a `\` anywhere in it, and a quoted pattern (`grep -n "a b"`) asks too: that is the
-  cost. The backslash rule holds four backslashes (eight in the JSON), as Claude Code unescapes a rule twice; one or
-  two match nothing. PowerShell denies or asks for the quoted spellings already, and passes a backslash on to the
-  tool, which refuses the option.
+  quotes and backslashes: `--no-i''ndex` passes the deny on `--no-index` and runs, and so does `git bl''ame`, whose
+  subcommand the deny on `git blame` never sees. So every command with a deny asks, in Bash, for a `'`, a `"` or a
+  `\` anywhere in it, and every `git` command does, whatever its subcommand. A quoted pattern (`grep -n "a b"`,
+  `git log --format='%h'`) asks too: that is the cost. The backslash rule holds four backslashes (eight in the
+  JSON), as Claude Code unescapes a rule twice; one or two match nothing. PowerShell denies or asks for the quoted
+  spellings already, and passes a backslash on to the tool, which refuses the option.
 - Claude Code checks none of the paths of `du`, `tree`, `fd` and `fdfind`, so each asks with any argument.
 - A recursive read inside the clone (`grep -r`, a glob) has no deny, which is why a runsettings file lives outside it
   (`AGENTS.md`, Build and test).

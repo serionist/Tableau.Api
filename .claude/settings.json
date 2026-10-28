@@ -289,18 +289,6 @@
       "Bash(tree *)",
       "Bash(fd *)",
       "Bash(fdfind *)",
-      "Bash(git diff *'*)",
-      "Bash(git diff *\"*)",
-      "Bash(git diff *\\\\\\\\*)",
-      "Bash(git blame *'*)",
-      "Bash(git blame *\"*)",
-      "Bash(git blame *\\\\\\\\*)",
-      "Bash(git ls-files *'*)",
-      "Bash(git ls-files *\"*)",
-      "Bash(git ls-files *\\\\\\\\*)",
-      "Bash(git grep *'*)",
-      "Bash(git grep *\"*)",
-      "Bash(git grep *\\\\\\\\*)",
       "Bash(grep *'*)",
       "Bash(grep *\"*)",
       "Bash(grep *\\\\\\\\*)",
@@ -414,7 +402,10 @@
       "PowerShell(du *)",
       "PowerShell(tree *)",
       "PowerShell(fd *)",
-      "PowerShell(fdfind *)"
+      "PowerShell(fdfind *)",
+      "Bash(git *'*)",
+      "Bash(git *\"*)",
+      "Bash(git *\\\\\\\\*)"
     ]
   }
 }
