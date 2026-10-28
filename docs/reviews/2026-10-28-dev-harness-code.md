@@ -287,3 +287,31 @@ Not covered: macOS, Linux, other Claude Code versions, trusted sessions.
 | Rewrap REVIEW.md lines 104 and 105 | taken `edfc7d7` |
 
 Not covered: macOS, Linux, other Claude Code versions, trusted sessions; the tools not installed here.
+
+## Round 8
+
+**Where:** PR #3 at `c57c480`, the fix in `edfc7d7`. This is the round the maintainer asked for before the merge. A fresh reviewer ran Claude Code's engine headless, one process at a time, against a clone of the head with canaries inside and outside it. **Verdict:** clean.
+
+- **F33:** confirmed fixed. Round 7's 20 leaking forms prompt.
+- **Rounds 3 to 6:** a sample of their reproductions still deny or prompt.
+- **A systematic sweep** replaces one idea per round.
+  - **What it ran:** a generator crossed five denied forms with every effect-preserving bash rewrite the reviewer could list, singly and in pairs. That is 780 commands, covering:
+    - leading and trailing redirections, assignments, wrappers;
+    - grouping, subshells and compound forms;
+    - every quoting style, expansions, case, absolute paths and lookalikes.
+  - **Result:** 444 deny, 336 prompt, 0 ran, 0 printed a canary.
+  - A safe assignment before a leading redirection (`LC_ALL=C <f git grep --no-index`) denies.
+- **Documented commands:** 60 run through the engine; none is denied.
+
+No new finding.
+
+The minors and residuals on record:
+- recursive reads inside the clone (the reason the runsettings file lives outside it);
+- F20, wontfix;
+- the prompts that the quote and redirection asks cost.
+
+The sweep's generator and results are kept for #4.
+
+Not covered: macOS, Linux, other Claude Code versions, trusted sessions, GitHub's trailer parsing; the tools not installed here, for which only the engine's decision was seen.
+
+**The loop ends here:** no blocker or major is open, the gate passed on the reviewed commit, and the docs moved with the change.
