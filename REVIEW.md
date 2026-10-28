@@ -102,7 +102,8 @@ Rules:
 - Permission rules are no security boundary, and the `Read` denies in `.claude/settings.json` don't cover a shell: a
   command that may take any option can print any file, through an option that reads one (`git blame --contents`, a
   `dotnet` response file `@<file>`), a short flag bundled with others (`git blame -wS <file>`), an abbreviated long
-  option (`--ignore-revs-f`), or git's implicit no-index (`git diff` of two paths, one outside the repo).
+  option (`--ignore-revs-f`), a quote or backslash inside an option's name (`--no-i''ndex`, `-\-no-index`), or git's
+  implicit no-index (`git diff` of two paths, one outside the repo).
 - So an allow is an exact command, or has a `*` only where nothing after it can be an option or a path that reads
   a file; for `git diff` not even after `--`, where two paths still switch it to no-index. A new allow is checked
   option by option against `git help <command>` or the gh docs.
@@ -114,12 +115,21 @@ Rules:
   full spelling for the first kind, by its shortest unique prefix for the second (`diff *--fr*`), in both `Bash(...)`
   and `PowerShell(...)` forms. A short one (`-f`, `-X`) has a Bash deny, and an ask in both shells for any dash-word
   holding its letter, which is what stops a bundle (`grep -iR`): those asks are load-bearing, and every new short
-  deny gets one. PowerShell rules ignore case, so a short-flag deny there would also refuse `-r` for `-R`; PowerShell
-  has the asks alone, and `grep -rn` asks there. Claude Code checks none of `du`'s paths, so `du *` asks.
+  deny gets one.
+- PowerShell rules ignore case, asks as well as denies: a short-flag deny there would also refuse `-r` for `-R`, so
+  PowerShell has the asks alone, and they ask for `grep -rn` too.
+- A rule matches the command's text, quotes included, but the read-only check reads its words after bash removes
+  quotes and backslashes: `--no-i''ndex` passes the deny on `--no-index` and runs. So every command with a deny asks,
+  in Bash, for a `'`, a `"` or a `\` anywhere in it, and a quoted pattern (`grep -n "a b"`) asks too: that is the
+  cost. The backslash rule holds four backslashes (eight in the JSON), as Claude Code unescapes a rule twice; one or
+  two match nothing. PowerShell denies or asks for the quoted spellings already, and passes a backslash on to the
+  tool, which refuses the option.
+- Claude Code checks none of the paths of `du`, `tree`, `fd` and `fdfind`, so each asks with any argument.
 - A recursive read inside the clone (`grep -r`, a glob) has no deny, which is why a runsettings file lives outside it
   (`AGENTS.md`, Build and test).
 - A change to the permission rules is checked against Claude Code's own engine, headless, in a scratch clone with
   canary files: `claude -p --permission-mode default --setting-sources project --tools Bash` (then `PowerShell`)
-  `--model haiku --output-format stream-json --verbose`, each command's result read from the stream. A matcher is no
-  substitute. The built-in table can change with each Claude Code release, so the derivation of these rules from it
-  is rerun for each release.
+  `--model haiku --output-format stream-json --verbose`, each command's result read from the stream. The project's
+  allows count only in a folder Claude Code trusts, or in settings passed with `--settings <file>`; denies and asks
+  count everywhere. A matcher is no substitute. The built-in table can change with each Claude Code release, so
+  the derivation of these rules from it is rerun for each release.

@@ -27,7 +27,7 @@ Microsoft.Extensions.Logging.
 | `.githooks/` | `commit-msg` refuses attribution, `pre-push` runs gate quick on what the push sends, `post-checkout` and `post-merge` name changed AI setup files |
 | `docs/plans/`, `docs/reviews/` | plans of non-trivial changes, with the template; review records. Dated records, never current truth |
 | `.github/` | `CODEOWNERS`, `pull_request_template.md` |
-| `.claude/` | `CLAUDE.md` (imports this file), `settings.json` (no attribution; allows exact read-only git and gh commands, the library's build and the gate; denies the flags of Claude Code's built-in read-only commands that read a file, and asks for bundles of them, since those commands run without a prompt; a live test run always asks; denies reading secrets), `settings.local.json.example`, `skills/` (below) |
+| `.claude/` | `CLAUDE.md` (imports this file), `settings.json` (no attribution; allows exact read-only git and gh commands, the library's build and the gate; denies the flags of Claude Code's built-in read-only commands that read a file, since those commands run without a prompt, and asks for bundles of those flags and, in Bash, for a quote or backslash in those commands; a live test run always asks; denies reading secrets), `settings.local.json.example`, `skills/` (below) |
 | `.agents/skills/` | links to `.claude/skills/<name>` for Codex, written into git's index by `dotnet run eng/gate.cs -- link` |
 | `AGENTS.md`, `REVIEW.md` | this file; what a review finding is, and the questions every review answers |
 | `.mcp.json` | Microsoft Learn and Context7 over HTTP; `.claude/settings.local.json.example` turns them on |
@@ -59,8 +59,8 @@ PowerShell. The `--` after `eng/gate.cs` is needed: without it `dotnet run` take
   `Password`, `Site`, `NonAdminUser`, `NonAdminPassword`, `NonAdminUserId` (`A01_Prepare.cs`, `A02_Authentication.cs`).
 - **Keep that file outside the clone,** pass its full path to `--settings`; the solution's `test.runsettings` is a
   leftover. Read denies stop a command naming the file, not one reaching it unnamed (`grep -r`, a glob, `diff -r`);
-  outside the working directory, Claude Code's path checks narrow the reads, and the denies cover the file-valued
-  flags known for its current built-in table. `*.runsettings` stays git-ignored as a backstop.
+  outside the working directory, Claude Code's path checks narrow the reads, and the denies and asks cover the
+  file-valued flags known for its current built-in table. `*.runsettings` stays git-ignored as a backstop.
 - **Hosted CI doesn't exist yet:** a PR says what ran, and on which Tableau version.
 
 ## How a change lands
