@@ -4,12 +4,7 @@
     <IncludeSource>True</IncludeSource>
     <IncludeSymbols>True</IncludeSymbols>
     <TargetFramework>netstandard2.1</TargetFramework>
-    <Authors>Soma Osvay</Authors>
-    <Company>Starschema Ltd</Company>
     <Description>A C# wrapper around Tableau API. All versions and endpoints are supported up to 2018.2</Description>
-    <PackageProjectUrl>https://starschema.visualstudio.com/Tableau.Api</PackageProjectUrl>
-    <RepositoryUrl>https://starschema.visualstudio.com/_git/Tableau.Api</RepositoryUrl>
-    <RepositoryType>Git</RepositoryType>
     <PackageTags>Tableau, Tableau API, Tableau C#</PackageTags>
     <AssemblyVersion>1.0.2.5</AssemblyVersion>
     <FileVersion>1.0.2.5</FileVersion>
