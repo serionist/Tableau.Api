@@ -259,3 +259,31 @@ Not covered: macOS, Linux, other Claude Code versions, trusted sessions. Tree, f
 **Stopping the loop:** the fix was checked with the engine in this session, not by another fresh round. Whether to merge now or run another round is the maintainer's call.
 
 Not covered: macOS, Linux, other Claude Code versions, trusted sessions.
+
+## Round 7
+
+**Where:** PR #3 at `e66370b`, the fix in `875dec0`. This is the round the maintainer asked for before the merge. A fresh reviewer ran Claude Code's engine headless: about 262 commands in 20 processes, one at a time, against a clone of the head with canaries inside and outside it. **Verdict:** needs-fixes.
+
+- **F32:** confirmed fixed.
+  - Bash: round 6's 21 forms prompt, and 15 new git spellings prompt or deny (a quote in `git` itself, tabs, continuations, `$@`, `--no-pager`).
+  - PowerShell: they deny or prompt.
+- **Quoting elsewhere:** no other command has the gap. The engine strips quotes from a command's name, find's own validator sees through them, and gh and docker have no file-reading flag.
+- **Documented commands:** none denied (60 run).
+- **The cost:** `git commit -m "..."` now asks even where `git commit` is allowed. This reverses round 5's reason for leaving commit without quote asks, and REVIEW.md names it.
+
+| # | Sev | Where | Finding | Status |
+|---|---|---|---|---|
+| F33 | major | `.claude/settings.json`, `REVIEW.md`, `AGENTS.md` | Every rule starts with a command's name, but bash takes redirections before the name and the read-only check skips them. So `2>&1 git blame --ignore-revs-file <file outside the clone>`, `<LICENSE git grep --no-index`, `<LICENSE wc --files0-from=<outside file>` and `2>&1 strings @<outside file>` ran in Bash with no prompt and printed canaries, also after `true &&`, `;` or `\|`. PowerShell refuses these. The gap predates the delta | fixed `edfc7d7`: Bash asks for a command that starts with `<`, `>`, `&` or a digit. Checked with the engine: the reviewer's 17 forms prompt with the candidate settings, which match the committed ones exactly, and a re-run here gave 7 of 7 prompting. `git status --short 2>&1`, the documented git commands and the gate still run |
+
+**Refuted:**
+- a redirection between `git` and its subcommand, which prompts;
+- `X=1`, `!`, `time`, `exec`, `nohup`, `if` and a comment line before the command, which deny;
+- `{x}<` and `<>`, which prompt;
+- `<f cat .env`, which denies.
+
+| Improvement | Answer |
+|---|---|
+| Name `git commit -m` among the quote ask's costs | taken `edfc7d7` |
+| Rewrap REVIEW.md lines 104 and 105 | taken `edfc7d7` |
+
+Not covered: macOS, Linux, other Claude Code versions, trusted sessions; the tools not installed here.
