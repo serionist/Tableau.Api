@@ -477,15 +477,20 @@ internal static class Rules
            select $"{commit.Sha[..Math.Min(10, commit.Sha.Length)]}: {line}",
     ];
 
-    // A tool's name alone, which a person may also be called.
-    private static readonly PyRegex BareToolName = new(
-        @"^(?:claude|anthropic|codex|chatgpt|copilot|gemini|cursor|devin|aider|windsurf)$", ignoreCase: true);
+    // What in a tool's name no person's name holds: a model (Opus, Sonnet, Haiku) or anything with a digit, a version
+    // or gpt-4o. Max, Pro, Mini, Flash or a word in brackets may be a surname or a note: "Claude Max", "Claude (work)".
+    private static readonly PyRegex ModelOrVersion = new(@"\d|(?:^|\s)(?:opus|sonnet|haiku)(?:\s|$)", ignoreCase: true);
+
+    // A tool's product name in full, as the trailer rule's names spell them.
+    private static readonly HashSet<string> ProductNames = new(
+        ["claude code", "github copilot", "openai codex", "gemini code assist", "cursor agent", "devin ai"], StringComparer.Ordinal);
 
     /// <summary>
     /// True when a commit's author or committer, `Name &lt;email&gt;`, is a tool. The address decides, as for a
-    /// co-author: a tool's address, any bot's but the allowed ones, a bot's name. The name decides only when it says
-    /// more than a first name could ("Claude Code", "GitHub Copilot", a model, a version): a commit's identity is
-    /// someone's own, and Claude Dupont may commit as Claude, where a co-author trailer naming Claude alone is a tool.
+    /// co-author: a tool's address, any bot's but the allowed ones, a bot's name. The name decides only when it is a
+    /// tool's name with a model or a version ("Claude Opus 4.6", "gpt-4o"), or a tool's product name in full ("Claude
+    /// Code", "GitHub Copilot"): a commit's identity is someone's own, and Claude Dupont may commit as Claude, or Claude
+    /// Max as Claude Max, where a co-author trailer naming Claude alone is a tool.
     /// </summary>
     public static bool ToolIdentity(string who)
     {
@@ -498,7 +503,9 @@ internal static class Rules
             return !(NonAiBots.Contains(Py.Lower(bot.Group("login")!)) && NonAiBotNames.Contains(Py.Lower(name)));
         var namedBot = BotName.Match(name);
         if (namedBot is not null && !NonAiBots.Contains(Py.Lower(namedBot.Group("login")!))) return true;
-        return ToolEmail.Match(email) is not null || (ToolName.Match(name) is not null && BareToolName.Match(name) is null);
+        if (ToolEmail.Match(email) is not null) return true;
+        return ToolName.Match(name) is not null
+            && (ModelOrVersion.Search(name) is not null || ProductNames.Contains(string.Join(" ", Py.Split(Py.Lower(name)))));
     }
 
     /// <summary>One line per commit whose author or committer is a tool: a commit a tool made under its own name carries no trailer.</summary>
@@ -1752,6 +1759,11 @@ internal static class SelfTest
                      ("Copilot <175728472+Copilot@users.noreply.github.com>", true), ("claude[bot] <claude@example.org>", true),
                      ("Jane Doe <41898282+github-actions[bot]@users.noreply.github.com>", true),
                      ("Codex <codex@openai.com>", false), ("Codex <noreply@openai.com>", true),
+                     ("Claude Max <claude.max@example.fr>", false), ("Devin Max <devin.max@example.org>", false),
+                     ("Claude (work) <claude@example.org>", false), ("Claude Pro <claude.pro@example.fr>", false),
+                     ("Gemini Flash <gemini.flash@example.org>", false), ("Claude Sonnet <claude@example.org>", true),
+                     ("OpenAI Codex <codex@example.org>", true), ("claude  code <claude@example.org>", true),
+                     ("aider (gpt-4o) <aider@example.org>", true), ("Claude v2 <claude@example.org>", true),
                  })
             t.Equal($"tool identity: {who}", tool, Rules.ToolIdentity(who));
 

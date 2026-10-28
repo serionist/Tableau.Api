@@ -103,6 +103,16 @@ Rules:
   command that may take any option can print any file, through an option that reads one (`git blame --contents`, a
   `dotnet` response file `@<file>`), a short flag bundled with others (`git blame -wS <file>`), an abbreviated long
   option (`--ignore-revs-f`), or git's implicit no-index (`git diff` of two paths, one outside the repo).
-- So an allow is an exact command, or has a `*` only where nothing after it can be an option or a path git reads,
-  such as after `--`; everything else asks. A new allow is checked option by option against `git help <command>` or
-  the gh docs, and denies stay few: the secrets, `--no-verify` and its prefixes, `dotnet` response files.
+- So an allow is an exact command, or has a `*` only where nothing after it can be an option or a path that reads
+  a file; for `git diff` not even after `--`, where two paths still switch it to no-index. A new allow is checked
+  option by option against `git help <command>` or the gh docs.
+- Claude Code's built-in read-only commands (`cat`, `grep`, `rg`, `tree`, read-only forms of git and gh) run without
+  a prompt whatever the allows say, and only a deny or ask rule stops one. Each of their flags whose value or effect
+  reads a file or a folder past the paths the command names (`git blame --ignore-revs-file`, `git grep --no-index`,
+  `grep -f`) has a deny in both `Bash(...)` and `PowerShell(...)` forms, by its full spelling: the table takes no
+  other. A recursive read inside the clone (`grep -r`, a glob) has none, which is why a runsettings file lives
+  outside it (`AGENTS.md`, Build and test).
+- A change to the permission rules is checked against Claude Code's own engine, headless, in a scratch clone with
+  canary files: `claude -p --permission-mode default --setting-sources project --tools Bash` (then `PowerShell`)
+  `--model haiku --output-format stream-json --verbose`, each command's result read from the stream. A matcher is no
+  substitute, and the built-in table can change with each Claude Code release.

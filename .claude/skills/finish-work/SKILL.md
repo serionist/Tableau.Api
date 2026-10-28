@@ -21,11 +21,12 @@ work feels complete. `main` takes PRs only, and a maintainer squash-merges them 
 2. **The gate:** `dotnet run eng/gate.cs -- full`. Fix every failure; never weaken a test, a check or a warning
    setting to pass.
 3. **The live suite,** for a change to a request, a model or the Vizportal client, when the developer has a Tableau
-   site they may change and a `.runsettings` file for it outside git (`AGENTS.md`, Build and test): run it, or until
-   the test project builds, call the changed endpoints against that site from a scratch program. Note Tableau Server
-   and its version, or Tableau Cloud, what passed, and which failures `main` has too on the same site. Never read the
-   runsettings file, and never run it against a site the developer did not name. No site: say so; the PR says it did
-   not run.
+   site they may change and a `.runsettings` file for it outside the clone (`AGENTS.md`, Build and test): run it with
+   that file's full path, or until the test project builds, call the changed endpoints against that site from a
+   scratch program. Note Tableau Server and its version, or Tableau Cloud, what passed, and which failures `main` has
+   too on the same site. Never read the runsettings file, and never run it against a site the developer did not name.
+   If the developer keeps one inside the clone, ask them to move it out first: a recursive search there prints it. No
+   site: say so; the PR says it did not run.
 4. **Commit:** a plain imperative subject that says what changed, a body that says why, `Refs #<n>`. No tool
    attribution: `commit-msg` refuses it.
 5. **Open a draft PR.** Write the body to `.local/pr-body.md` from `.github/pull_request_template.md`: what and why;

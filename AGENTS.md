@@ -27,7 +27,7 @@ Microsoft.Extensions.Logging.
 | `.githooks/` | `commit-msg` refuses attribution, `pre-push` runs gate quick on what the push sends, `post-checkout` and `post-merge` name changed AI setup files |
 | `docs/plans/`, `docs/reviews/` | plans of non-trivial changes, with the template; review records. Dated records, never current truth |
 | `.github/` | `CODEOWNERS`, `pull_request_template.md` |
-| `.claude/` | `CLAUDE.md` (imports this file), `settings.json` (no attribution; allows exact read-only git and gh commands, the library's build and the gate, and nothing else without a prompt; a live test run always asks; denies reading secrets), `settings.local.json.example`, `skills/` (below) |
+| `.claude/` | `CLAUDE.md` (imports this file), `settings.json` (no attribution; allows exact read-only git and gh commands, the library's build and the gate; denies the flags of Claude Code's built-in read-only commands that read a file, since those commands run without a prompt; a live test run always asks; denies reading secrets), `settings.local.json.example`, `skills/` (below) |
 | `.agents/skills/` | links to `.claude/skills/<name>` for Codex, written into git's index by `dotnet run eng/gate.cs -- link` |
 | `AGENTS.md`, `REVIEW.md` | this file; what a review finding is, and the questions every review answers |
 | `.mcp.json` | Microsoft Learn and Context7 over HTTP; `.claude/settings.local.json.example` turns them on |
@@ -49,15 +49,18 @@ PowerShell. The `--` after `eng/gate.cs` is needed: without it `dotnet run` take
 | once per clone | `dotnet run eng/gate.cs -- setup` (hooks, `git blame`, skill links) |
 | the library | `dotnet build Tableau.Api/Tableau.Api.csproj`: 0 warnings, and its csproj treats warnings as errors |
 | the gate | `dotnet run eng/gate.cs -- quick` (selftest, build, AGENTS.md, skills, links, hooks, attribution, secrets); `full` adds the offline tests; `text --file -` checks a PR's title and description: no attribution, and the issue named |
-| the live suite | `dotnet test Tableau.Api.Tests --settings <file>.runsettings`, once the test project builds |
+| the live suite | `dotnet test Tableau.Api.Tests --settings <full path outside the clone>.runsettings`, once the test project builds |
 
 - **The solution doesn't build today:** `dotnet build Tableau.Api.sln` fails with NU1201, since the test project's
   netcoreapp2.1 can't reference netstandard2.1. Build the library alone; issue #2 moves the tests on.
 - **No offline tests yet:** gate full says so and passes. The modernization adds them, and their coverage floor.
 - **The live suite** signs in to a Tableau Server or Tableau Cloud site, creates projects and publishes data sources.
-  Run it only on a site you may change. Its settings come from a `.runsettings` file outside git: `Url`, `Version`,
-  `User`, `Password`, `Site`, `NonAdminUser`, `NonAdminPassword`, `NonAdminUserId` (`A01_Prepare.cs`,
-  `A02_Authentication.cs`). `*.runsettings` is git-ignored, and Claude Code may not read one.
+  Run it only on a site you may change. Its settings come from a `.runsettings` file: `Url`, `Version`, `User`,
+  `Password`, `Site`, `NonAdminUser`, `NonAdminPassword`, `NonAdminUserId` (`A01_Prepare.cs`, `A02_Authentication.cs`).
+- **Keep that file outside the clone,** and pass its full path to `--settings`; the solution's `test.runsettings` item
+  is a leftover. Claude Code's Read denies stop a command that names the file (`cat`, `grep`, `head` of it), not one
+  that reaches it without naming it (`grep -r`, `rg --no-ignore`, a glob, `diff -r`), and a folder outside the
+  working directory needs approval. `*.runsettings` stays git-ignored as a backstop.
 - **Hosted CI doesn't exist yet:** a PR says what ran, and on which Tableau version.
 
 ## How a change lands
@@ -93,8 +96,9 @@ The skills in `.claude/skills/` run this loop: `start-work` (1 to 3), `review-pl
 - PRs are squash-merged: the PR title becomes the subject on `main`, its description the body.
 - No tool attribution anywhere: no AI co-author trailers, no "Generated with" lines, no session links, in commits,
   PR titles or PR bodies. `commit-msg` refuses them, and the gate checks every message on the branch.
-- The gate also refuses a commit whose author or committer is a tool: by its address, or by a name a person can't
-  have ("Claude Code", "GitHub Copilot", a model or a version).
+- The gate also refuses a commit whose author or committer is a tool: a tool's address, a bot's other than
+  Dependabot's, GitHub Actions' or Renovate's, or a tool's name with a model or a digit ("Claude Opus 4.6",
+  "gpt-4o") or in full ("Claude Code", "GitHub Copilot", "OpenAI Codex"). "Claude" or "Claude Max" alone passes.
 
 ## One-way doors
 
