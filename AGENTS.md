@@ -100,8 +100,8 @@ The skills in `.claude/skills/` run this loop: `start-work` (1 to 3), `review-pl
 
 ## One-way doors
 
-Users depend on these from 1.2.5 on nuget.org. Change one only in a PR that names it in its title, after the
-maintainers agree in its issue.
+Users depend on these from 1.2.5 on nuget.org. Change one only in a PR that names it in its title, after a
+maintainer agrees in its issue; the other can object on the PR before it merges.
 
 - the NuGet id `Tableau.Api`;
 - the root namespace `Tableau.Api`, and the namespaces under it;
@@ -144,4 +144,4 @@ What this repo's history already paid for:
   it. It would run with every credential there, a runsettings file's Tableau passwords included.
 - Add tool attribution: commits, PR titles, PR bodies.
 - Commit secrets: a runsettings file, passwords, personal access tokens, session tokens. Tests use invented ones.
-- Change a one-way door without the maintainers' agreement.
+- Change a one-way door without a maintainer's agreement in its issue.
