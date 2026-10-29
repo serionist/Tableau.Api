@@ -15,7 +15,7 @@ namespace Tableau.Api.Tests
         public static void Init(TestContext _context)
         {
             Context.RunSettings = new ReadOnlyDictionary<string, object>(_context.Properties);
-            Console.WriteLine("Preparing Azure VM");
+            Console.WriteLine("Run settings read");
 
 
 

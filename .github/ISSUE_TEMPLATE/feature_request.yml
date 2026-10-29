@@ -1,0 +1,41 @@
+name: Feature request
+description: An endpoint or a behaviour Tableau.Api should have.
+labels: [enhancement]
+body:
+  - type: input
+    id: endpoint
+    attributes:
+      label: The endpoint
+      description: The REST API method by its name in Tableau's reference, or the Vizportal call. "None" for a change that is not an endpoint.
+      placeholder: Get Data Source Revision
+    validations:
+      required: true
+  - type: input
+    id: docs
+    attributes:
+      label: Its documentation
+      description: The link to the method in [Tableau's REST API reference](https://help.tableau.com/current/api/rest_api/en-us/REST/rest_api_ref.htm). Vizportal has no public reference, so for a Vizportal call say which Tableau version you saw it on.
+      placeholder: https://help.tableau.com/current/api/rest_api/en-us/REST/rest_api_ref_...
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you are trying to do, and what stops you today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you propose
+      description: The method, its parameters and what it returns, or the behaviour you have in mind.
+  - type: dropdown
+    id: contribute
+    attributes:
+      label: Would you send the PR?
+      description: Every change starts here, a typo included, and a non-trivial one gets a plan a maintainer approves first (CONTRIBUTING.md).
+      options:
+        - "Yes"
+        - "Maybe, with guidance"
+        - "No"

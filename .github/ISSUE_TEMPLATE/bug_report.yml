@@ -1,0 +1,68 @@
+name: Bug report
+description: Something Tableau.Api does wrong.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Never paste a password, a personal access token, a session token or your server's address: anyone can read an issue. A security vulnerability goes through a [private report](https://github.com/serionist/Tableau.Api/security/advisories/new), never an issue.
+  - type: input
+    id: version
+    attributes:
+      label: Tableau.Api version
+      description: The package's version, or the commit if you build it from source.
+      placeholder: 1.2.5
+    validations:
+      required: true
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Tableau Server or Tableau Cloud
+      options:
+        - Tableau Server
+        - Tableau Cloud
+    validations:
+      required: true
+  - type: input
+    id: tableau-version
+    attributes:
+      label: Tableau version
+      description: Tableau Server's version, from About Tableau Server in its help menu. For Tableau Cloud, "Cloud" will do.
+      placeholder: 2024.2.3
+    validations:
+      required: true
+  - type: input
+    id: rest-version
+    attributes:
+      label: REST API version
+      description: The version you give `TableauApiClient`.
+      placeholder: "3.14"
+    validations:
+      required: true
+  - type: input
+    id: runtime
+    attributes:
+      label: .NET and operating system
+      placeholder: .NET Framework 4.8 on Windows Server 2022
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: The call you made, what came back, and what you expected. Include the exception, its message and its stack trace, if any.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: The smallest code that shows it, with placeholders for the server's address, the site, the user name and every password or token.
+      render: csharp
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you submit
+      options:
+        - label: Nothing above holds a password, a personal access token, a session token or my server's address.
+          required: true

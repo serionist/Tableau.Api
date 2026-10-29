@@ -699,9 +699,9 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
 | Step | Line | What | Closes on main | Issue | PR | Status |
 |---|---|---|---|---|---|---|
 | S0 | main | Harness and licence | (the licence part of F25) | #1 | #3 | done |
-| S1 | main | CI and open-source files | F25 | | | todo |
-| S2a | 1.x | The `release/1.x` branch set up: CI, release, backstops, harness, metadata, package validation | none | | | todo |
-| S2b | 1.x | The 1.2.6 fixes, and the release | none on main; the tracker's 1.2.6 column | | | todo |
+| S1 | main | CI and open-source files | F25 | #13 | | in review |
+| S2a | 1.x | The `release/1.x` branch set up: CI, release, backstops, harness, metadata, package validation | none | #14 | | todo |
+| S2b | 1.x | The 1.2.6 fixes, and the release | none on main; the tracker's 1.2.6 column | #15 | | todo |
 | S3 | main | Security on main | F1 F2 F3 F6 F39 | | | todo |
 | S4 | main | Publish the review, after 1.2.6 | none | | | todo |
 | S5 | main | Build and layout for 2.0 | F24 F40 | | | todo |
@@ -1661,6 +1661,7 @@ and start the steps", and on the owner calls they have answered since (Q7 to Q9)
 | 2026-10-29 | plan | Plan review round 2 (Claude Opus 5.5, on `890784c`): needs-fixes, 1 major and 7 minors, all applied, with round 1's four slips corrected (Plan review, Round 2). P15's scenario waits in `.local/review/` until 1.2.6 ships. @serionist answered Q9: for #2 either maintainer's yes counts for a one-way door, and D11 gains a third limit, for a loosened check (P20). Round 3 is next. |
 | 2026-10-29 | plan | Rebased onto `main` with #11 (`8d69856`), which made AGENTS.md's door rule "after a maintainer agrees in its issue; the other can object on the PR before it merges". Plan review round 3 (Claude Opus 5.5, on `f2aba27`): needs-fixes, 2 majors and 3 minors, all applied (Plan review, Round 3). The 1.2.6 path rule now leaves `! ' ( ) * ,` raw and the net48 test covers three targets (P23, P25); D11 and Q9 quote #11 (P24). Round 4 is next. |
 | 2026-10-29 | plan | Plan review round 4 (Claude Opus 5.5, on `f1ce466`): approved, with 4 minors applied (Plan review, Round 4): the 2.0 path rule points at 1.2.6's (P28), the net48 test works out each row's outcome from 1.2.5's own `buildUri` (P29), the session reads a door PR's comments before merging (P30), and filter values on older .NET Framework targets are a known issue (P31). @serionist approved the plan (status `approved`). S1 is next. |
+| 2026-10-29 | S1 | Built on `13-ci-and-oss-files` for #13, with #14 and #15 opened for S2a and S2b: `ci.yml` (`Checks (Linux)`, `Build and pack (Linux)`, `CI`), `pr-text.yml` (`PR text`), `codeql.yml` (C# built by hand, the library alone, and actions), `dependabot.yml`, `dependabot-auto-merge.yml`, `eng/package-check.cs`, the issue forms, SECURITY.md, CONTRIBUTING.md, CHANGELOG.md, README.md, the package metadata, the two strings in the old tests, AGENTS.md. Departures: Dependabot has no `eng/` entry, since its NuGet updater reads no file-based app yet (dependabot/dependabot-core#15187) and eng/'s apps take no packages; the auto-merge job fails unless a ruleset on the base branch requires `CI`, because auto-merge with no required check merges at once; REVIEW.md question 1 and the review-code and finish-work skills drop their "until CI exists" wording, as the rule-file rule asks. The `DocumentationFile` paths that say netstandard2.0 stay: the pack carries the XML docs. Private vulnerability reporting and Dependabot alerts were already on. The PR is next. |
 
 ## For the maintainers
 
@@ -1668,7 +1669,8 @@ What the session cannot do, first what closes a security exposure. Kept current 
 
 **Now:**
 
-- [ ] Turn on private vulnerability reporting (Settings, Code security). SECURITY.md (S1) sends reporters there.
+- [x] Turn on private vulnerability reporting (Settings, Code security). SECURITY.md (S1) sends reporters there. On
+  when S1 was built (2026-10-29).
 - [x] Q6: László Nemes agreed to MIT, recorded on #1 (2026-10-28); serionist confirmed the clearance when the repo went public.
 - [x] Answer Q1 to Q5 on #2: the recommended answers stand (default, 2026-10-28).
 
@@ -1677,7 +1679,8 @@ What the session cannot do, first what closes a security exposure. Kept current 
 - [ ] Join the Tableau Developer Program and get its site; note its renewal date. S2b's live smoke run needs it, with
   a PAT kept in environment variables for a short program outside the clone.
 - [ ] After S1: make `CI` and `PR text` required on the `main` ruleset, or tell the session to apply it through the
-  API. Before S2a's PR: the same rules for `release/1.x` (PRs only, squash, no force push, the two checks).
+  API. Until then `dependabot-auto-merge.yml` fails on Dependabot's PRs and merges none. Before S2a's PR: the same
+  rules for `release/1.x` (PRs only, squash, no force push, the two checks).
 - [ ] Check the `nuget` environment has what `NuGet/login` needs, such as a `NUGET_USER` secret with the nuget.org
   profile name of the owning account (`serionist`).
 - [ ] Approve the `nuget` deployment for `v1.2.6`.

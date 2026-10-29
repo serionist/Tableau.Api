@@ -39,7 +39,7 @@ work feels complete. `main` takes PRs only, and a maintainer squash-merges them 
 6. **Review** with `review-code` until it is `clean`. Commit each round's fixes with gate quick passing, and the
    record in `docs/reviews/`. Put the verdict and the record's path in the body's Review section:
    `gh pr edit <n> --body-file .local/pr-body.md`.
-7. **CI,** once the repo runs it, on the head commit: `gh pr checks <n> --watch`. A red check is fixed, never skipped.
+7. **CI** on the head commit: `gh pr checks <n> --watch`. A red check is fixed, never skipped.
 8. **Ask a maintainer,** as one question with a recommendation: mark it ready (`gh pr ready <n>`), merge it, or
    leave it a draft.
    - If `main` moved: `git fetch origin`, `git rebase origin/main`, `git push --force-with-lease`. A rebase that

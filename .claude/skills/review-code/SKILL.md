@@ -32,8 +32,8 @@ included.
    - a path: `git ls-files -- <paths> > $P/files.txt`; there is no diff;
    - from round 2: `git diff <last reviewed commit>..HEAD > $P/delta.diff`, the fixes since.
 2. **The gate first,** on your own branch: `dotnet run eng/gate.cs -- full`. A review doesn't replace it. For a PR:
-   CI's result on its head. Until the repo runs CI, a PR from outside the maintainers waits for it: its review
-   records question 1 as not verified, and it is not merged before CI has run on its head.
+   CI's result on its head. A PR from outside the maintainers is never run here: until CI has passed on its head,
+   its review records question 1 as not verified, and it is not merged.
 3. **The ground truth** the reviewer reads: `AGENTS.md`, `REVIEW.md`, the issue (`gh issue view <n>`), the plan the
    branch committed in `docs/plans/` if any, then the diff, then the touched files in full.
 4. **Review.** Start one fresh agent, one that has not seen this session, with the pack's path, the ground-truth list
