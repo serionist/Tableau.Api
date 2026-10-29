@@ -27,7 +27,7 @@ Microsoft.Extensions.Logging.
 | `.githooks/` | `commit-msg` refuses attribution, `pre-push` runs gate quick on what the push sends, `post-checkout` and `post-merge` name changed AI setup files |
 | `docs/plans/`, `docs/reviews/` | plans of non-trivial changes, with the template; review records. Dated records, never current truth |
 | `.github/` | `CODEOWNERS`, `pull_request_template.md` |
-| `.claude/` | `CLAUDE.md` (imports this file), `settings.json` (no attribution; allows the normal git, gh and dotnet workflow in Bash and PowerShell; denies reading secrets by name, `--no-verify`, `dotnet nuget push` and the file-reading options of Claude Code's built-in read-only commands; asks only before a live test run; light by design, see `REVIEW.md`, The harness), `settings.local.json.example`, `skills/` (below) |
+| `.claude/` | `CLAUDE.md` (imports this file), `settings.json` (no attribution in commits or PRs, and no permission rules: each developer's own settings decide what Claude Code may run), `settings.local.json.example`, `skills/` (below) |
 | `.agents/skills/` | links to `.claude/skills/<name>` for Codex, written into git's index by `dotnet run eng/gate.cs -- link` |
 | `AGENTS.md`, `REVIEW.md` | this file; what a review finding is, and the questions every review answers |
 | `.mcp.json` | Microsoft Learn and Context7 over HTTP; `.claude/settings.local.json.example` turns them on |
@@ -58,8 +58,7 @@ PowerShell. The `--` after `eng/gate.cs` is needed: without it `dotnet run` take
   Run it only on a site you may change. Its settings come from a `.runsettings` file: `Url`, `Version`, `User`,
   `Password`, `Site`, `NonAdminUser`, `NonAdminPassword`, `NonAdminUserId` (`A01_Prepare.cs`, `A02_Authentication.cs`).
 - **Keep that file outside the clone,** pass its full path to `--settings`; the solution's `test.runsettings` is a
-  leftover. Read denies stop a command naming the file, not one reaching it unnamed (`grep -r`, a glob, `diff -r`);
-  outside the clone, neither reaches it. `*.runsettings` stays git-ignored as a backstop.
+  leftover. A search or a glob in the clone never reaches it there. `*.runsettings` stays git-ignored as a backstop.
 - **Hosted CI doesn't exist yet:** a PR says what ran, and on which Tableau version.
 
 ## How a change lands
