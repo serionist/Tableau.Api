@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Text;
 
 namespace Tableau.Api.Tests.Fakes;
@@ -5,11 +6,13 @@ namespace Tableau.Api.Tests.Fakes;
 /// <summary>What FakeTableauServer answers a request with.</summary>
 internal sealed class FakeResponse
 {
-    private FakeResponse(int status, string? contentType, byte[] body)
+    private FakeResponse(int status, string? contentType, byte[] body,
+        IReadOnlyList<KeyValuePair<string, string>>? headers = null)
     {
         Status = status;
         ContentType = contentType;
         Body = body;
+        Headers = headers ?? [];
     }
 
     public int Status { get; }
@@ -18,7 +21,12 @@ internal sealed class FakeResponse
     {
         200 => "OK",
         201 => "Created",
+        202 => "Accepted",
         204 => "No Content",
+        301 => "Moved Permanently",
+        302 => "Found",
+        307 => "Temporary Redirect",
+        308 => "Permanent Redirect",
         400 => "Bad Request",
         401 => "Unauthorized",
         403 => "Forbidden",
@@ -31,6 +39,13 @@ internal sealed class FakeResponse
     public string? ContentType { get; }
 
     public byte[] Body { get; }
+
+    /// <summary>Header lines besides Content-Type, Content-Length and Connection.</summary>
+    public IReadOnlyList<KeyValuePair<string, string>> Headers { get; }
+
+    /// <summary>A redirect to location, with no body.</summary>
+    public static FakeResponse Redirect(int status, string location) =>
+        new(status, null, [], [new("Location", location)]);
 
     /// <summary>A tsResponse in Tableau's namespace around content, as Tableau answers in XML.</summary>
     public static FakeResponse Xml(int status, string content) =>

@@ -183,6 +183,7 @@ internal sealed class FakeTableauServer : IDisposable
             .Append("HTTP/1.1 ").Append(response.Status.ToString(CultureInfo.InvariantCulture))
             .Append(' ').Append(response.Reason).Append("\r\n");
         if (response.ContentType is { } contentType) head.Append("Content-Type: ").Append(contentType).Append("\r\n");
+        foreach (var header in response.Headers) head.Append(header.Key).Append(": ").Append(header.Value).Append("\r\n");
         head.Append("Content-Length: ").Append(response.Body.Length.ToString(CultureInfo.InvariantCulture))
             .Append("\r\nConnection: close\r\n\r\n");
         var bytes = Encoding.ASCII.GetBytes(head.ToString());

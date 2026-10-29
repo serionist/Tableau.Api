@@ -15,11 +15,16 @@ a release turns that section into its own, dated (docs/releasing.md). The format
   unreserved set is escaped as UTF-8 in upper-case hex, except `:`, `@`, `!`, `'`, `(`, `)`, `*` and `,`, which go
   raw, as 1.2.5 sent them. A value that is empty or only dots throws `ArgumentException` before anything is sent. So
   does a path that the platform's URI parsing would change, which some .NET Framework targets do (Known issues).
+- **Redirects are not followed,** so credentials, the session token and request bodies never go to another address.
+  A 3xx response throws `TableauRequestException` with its status, and its message names the scheme, host and port
+  the redirect pointed to. The session token goes on each request, not on the HTTP client's default headers.
 
 ### Changed
 
 - **Values in paths and queries are escaped,** so a value the caller had already URL-encoded is now encoded twice,
   whether a filter or a path value: a tag, a site name, a content URL.
+- **A redirect fails** with `TableauRequestException`, where 1.2.5 followed it.
+- **Any 2xx status is a success,** where 1.2.5 wanted the one status each call named.
 - **The licence is MIT.**
 - **The package's metadata:** a description that says what it is and ends "Not affiliated with or endorsed by
   Tableau or Salesforce."; the README packed into it; the project and repository links on GitHub; symbols as a
@@ -36,6 +41,8 @@ a release turns that section into its own, dated (docs/releasing.md). The format
 - **View filters apply to view data and view images:** each name gets the `vf_` prefix unless it has it, as on PDFs.
   1.2.5 took the prefix off, so Tableau did not read them as view filters.
 - **`QueryViewPDF` with no filters** sends the request; 1.2.5 threw `ArgumentNullException`.
+- **A call Tableau answers with another 2xx than 1.2.5 expected returns its result,** such as `CreateSubscription` on
+  Tableau Cloud, which answers 200 where Tableau Server answers 201. 1.2.5 threw after the call had succeeded.
 
 ### Known issues
 

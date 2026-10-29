@@ -106,15 +106,15 @@ namespace Tableau.Api
                 throw new TableauOnlineNotSupportedException(methodName);
         }
 
-        private HttpClient buildClient(string AuthToken = null)
+        private HttpClient buildClient()
         {
-            var clientOptions = new HttpClientHandler() { AllowAutoRedirect = true };
+            // A redirect is never followed, so a request, its body and its token go only to the host it was built for.
+            var clientOptions = new HttpClientHandler() { AllowAutoRedirect = false };
             if (IgnoreSSLErrors)
                 clientOptions.ServerCertificateCustomValidationCallback = (message, certificate2, arg3, arg4) => true;
             var c = new HttpClient(clientOptions) { Timeout = Timeout };
             c.DefaultRequestHeaders.Remove("Accept");
             c.DefaultRequestHeaders.Add("Accept", "application/xml");
-            if (!string.IsNullOrEmpty(AuthToken)) c.DefaultRequestHeaders.TryAddWithoutValidation("X-Tableau-Auth", AuthToken);
             return c;
         }
 
@@ -181,6 +181,21 @@ namespace Tableau.Api
             return new TableauRequestException(resp.RequestMessage.RequestUri, resp.StatusCode, det);
         }
 
+        // Names the scheme, host and port the redirect points to, never its user info, path or query.
+        private static TableauRequestException buildRedirectException(HttpResponseMessage resp)
+        {
+            var requestUri = resp.RequestMessage.RequestUri;
+            var location = resp.Headers.Location;
+            string target = null;
+            if (location != null)
+            {
+                var absolute = location.IsAbsoluteUri ? location : new Uri(requestUri, location);
+                target = $"{absolute.Scheme}://{absolute.Host}{(absolute.IsDefaultPort ? "" : $":{absolute.Port}")}";
+            }
+            return new TableauRequestException(requestUri, resp.StatusCode, null,
+                target ?? "an address the response does not name");
+        }
+
         private async Task<HttpContent> apiRequest(Uri fullUri, HttpMethod method, int expectedStatusCode,
             CancellationToken? cancelToken, TableauSession session = null, HttpContent body = null)
         {
@@ -190,14 +205,22 @@ namespace Tableau.Api
                 try
                 {
                     Log?.Log(LogLevel.Information, $"Sending request to Tableau Server. Method: {method}, Url: '{fullUri}'. Expected response code: {expectedStatusCode}");
-                    using (var c = buildClient(session?.Token))
+                    using (var c = buildClient())
                     {
                         var msg = new HttpRequestMessage(method, fullUri);
+                        // On the request, not the client's default headers, so the token goes with this request only.
+                        if (!string.IsNullOrEmpty(session?.Token))
+                            msg.Headers.TryAddWithoutValidation("X-Tableau-Auth", session.Token);
                         if (body != null)
                             msg.Content = body;
 
                         var resp = await c.SendAsync(msg, cancelToken ?? CancellationToken.None);
-                        if ((int)resp.StatusCode != expectedStatusCode)
+                        var status = (int)resp.StatusCode;
+                        if (status >= 300 && status < 400)
+                            throw buildRedirectException(resp);
+                        // Tableau answers some calls with another 2xx than its reference gives, such as Tableau Cloud's
+                        // 200 for a subscription Tableau Server answers with 201.
+                        if (status < 200 || status >= 300)
                             throw await buildException(resp);
                         Log?.Log(LogLevel.Information, "Request successful");
                         return resp.Content;
