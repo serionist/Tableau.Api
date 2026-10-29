@@ -1,0 +1,42 @@
+# The PR's title and description, checked whenever they change: a squash merge makes them the commit on release/1.x,
+# so they carry no tool attribution and name the issue (AGENTS.md, How a change lands). ci.yml's gate checks the
+# branch's commits; this checks the text, in a workflow of its own so that an edit re-runs only this. It runs on every
+# push too, so the PR's head commit always carries it.
+#
+# It runs on pull_request, never pull_request_target: a fork's PR gets a read-only token and no secrets, and this
+# workflow asks for none. The title and description are read from GitHub's event file, never put into the script by an
+# expression, so no text in them can run as shell.
+name: PR text
+
+on:
+  pull_request:
+    branches: [release/1.x]
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-text-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  text:
+    name: PR text
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: No tool attribution, and the issue named
+        run: |
+          jq -r '.pull_request.title, (.pull_request.body // "")' "$GITHUB_EVENT_PATH" \
+            | dotnet run eng/gate.cs -- text --file -

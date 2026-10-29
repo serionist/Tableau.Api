@@ -1,0 +1,158 @@
+# CI for the 1.x line: every pull request into release/1.x, every push to it, and by hand. Each commit on the line, a
+# tagged one included, gets a push run of its own, and release.yml publishes nothing without a green one.
+#
+# - Checks (Linux): the gate's quick lane (its selftest, the library's build, AGENTS.md, the hooks, no tool attribution
+#   in the commits, and gitleaks over them).
+# - Build, test and pack (Linux): the solution in Release, the offline tests on net10.0, the package packed with package
+#   validation against 1.2.5, checked with eng/package-check.cs, and compared with 1.2.5's package by the ApiCompat
+#   tool, so the package keeps 1.2.5's public API.
+# - Build and test (Windows): the offline tests on net10.0 and net48.
+# - CI sums them up; it and pr-text.yml's PR text are the checks the release/1.x ruleset requires.
+name: CI
+
+on:
+  pull_request:
+    branches: [release/1.x]
+  push:
+    branches: [release/1.x]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # One group per ref. A newer push to a PR cancels its older run. Each run on release/1.x keeps its own result: its
+  # group also names the commit, so the next push never cancels a run that a release waits for.
+  group: ci-${{ github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  checks:
+    name: Checks (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The attribution and secret checks read the commits since the base, which a shallow clone doesn't have.
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      # The version .gitleaks.toml names, checked against the SHA-256 its release publishes.
+      - name: Install gitleaks
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/gitleaks.tgz" \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  $RUNNER_TEMP/gitleaks.tgz" | sha256sum -c -
+          sudo tar -xzf "$RUNNER_TEMP/gitleaks.tgz" -C /usr/local/bin gitleaks
+      # The commits checked start after the PR's base, the tip of release/1.x the PR goes into, or after the commit
+      # release/1.x was on before the push. A PR's checkout is the merge of its branch into the base, so that merge is
+      # checked too. A push's before is all zeros for a new branch, and a commit no longer in the history after a force
+      # push; a run by hand has none. Then the head commit alone is checked, since a squash merge is one commit.
+      # GATE_REQUIRE_GITLEAKS makes a missing gitleaks a failure, not a warning.
+      - name: The gate's quick lane
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          GATE_REQUIRE_GITLEAKS: "1"
+        run: |
+          if ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "::notice::${BASE:-no base} is not in the history; checking HEAD~1..HEAD"
+            BASE=HEAD~1
+          fi
+          dotnet run eng/gate.cs -- quick --base "$BASE"
+
+  # What a release would publish, packed and checked on every run. The project turns ContinuousIntegrationBuild on
+  # where GITHUB_ACTIONS is set, so the build and the package hold no path of the runner.
+  linux:
+    name: Build, test and pack (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      # Package validation would read a suppression file and pass what it lists, so none may exist.
+      - name: No API compatibility suppressions
+        run: |
+          found=$(find . -path ./.git -prune -o -iname 'CompatibilitySuppressions.xml' -print)
+          if [ -n "$found" ]; then
+            echo "::error::A suppression file would let the package break 1.2.5's API: $found. Delete it; a break is not taken on this line."
+            exit 1
+          fi
+      - name: Build
+        run: dotnet build Tableau.Api.sln -c Release
+      - name: Test
+        run: dotnet test --solution Tableau.Api.sln --no-build -c Release
+      # Package validation runs in the pack: it compares the package with 1.2.5 on nuget.org.
+      - name: Pack
+        run: dotnet pack Tableau.Api/Tableau.Api.csproj --no-build -c Release -o artifacts/packages
+      - name: Check the package
+        run: dotnet run eng/package-check.cs -- artifacts/packages
+      # The same comparison by the ApiCompat tool, pinned in dotnet-tools.json, against 1.2.5's package checked by the
+      # SHA-512 nuget.org lists for it. The tool reads no project property and gets no suppression file, so a NoWarn or a
+      # suppression in the project can't hide a removed or changed member from it.
+      - name: Compare the API with 1.2.5's package
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/tableau.api.1.2.5.nupkg" \
+            https://api.nuget.org/v3-flatcontainer/tableau.api/1.2.5/tableau.api.1.2.5.nupkg
+          echo "089f5041c181ff4984f798c817a7bc76a0ab06a05ba13c6cdc178d5c2b3fb0fc7bfcbb9ede9a98888a5efe2f195ab7222d79d77e4f6d2a66ead009365258bc50  $RUNNER_TEMP/tableau.api.1.2.5.nupkg" \
+            | sha512sum -c -
+          dotnet tool restore
+          shopt -s nullglob
+          packages=(artifacts/packages/*.nupkg)
+          if [ "${#packages[@]}" -ne 1 ]; then
+            echo "::error::Expected one package in artifacts/packages, found ${#packages[@]}."
+            exit 1
+          fi
+          dotnet apicompat package "${packages[0]}" --baseline-package "$RUNNER_TEMP/tableau.api.1.2.5.nupkg" \
+            --enable-rule-cannot-change-parameter-name
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: packages
+          path: artifacts/packages
+          if-no-files-found: error
+          retention-days: 14
+
+  windows:
+    name: Build and test (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Build
+        run: dotnet build Tableau.Api.sln -c Release
+      # The test project targets net48 on Windows, so both frameworks run here.
+      - name: Test
+        run: dotnet test --solution Tableau.Api.sln --no-build -c Release
+
+  # The check the release/1.x ruleset requires: every job above passed. It runs whatever happened to them, since a
+  # required check that is skipped counts as passed, and it fails when one of them failed, was cancelled or was skipped.
+  ci:
+    name: CI
+    needs: [checks, linux, windows]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every job passed
+        env:
+          CHECKS: ${{ needs.checks.result }}
+          LINUX: ${{ needs.linux.result }}
+          WINDOWS: ${{ needs.windows.result }}
+        run: |
+          echo "Checks (Linux): $CHECKS. Build, test and pack (Linux): $LINUX. Build and test (Windows): $WINDOWS."
+          test "$CHECKS" = success && test "$LINUX" = success && test "$WINDOWS" = success
