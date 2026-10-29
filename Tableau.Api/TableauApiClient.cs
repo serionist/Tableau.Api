@@ -267,7 +267,9 @@ namespace Tableau.Api
 
         }
 
-        private StringContent getObjectAsRequestContent(object o)
+        private StringContent getObjectAsRequestContent(object o) => xmlRequestContent(serializeRequest(o));
+
+        private static string serializeRequest(object o)
         {
             var ser = new XmlSerializer(typeof(tsRequest));
             using (var textWriter = new StringWriter())
@@ -278,12 +280,16 @@ namespace Tableau.Api
                 //remove first (XML schema) tag for compatibility with old versions of API
                 xml = xml.Substring(xml.IndexOf("?>") +2);
                 // remove XML definitions from tsRequest
-                xml = Regex.Replace(xml, @"(?<=<tsRequest )[^>]+", "");
-                var content = new StringContent(xml);
-                content.Headers.ContentType =
-                    new System.Net.Http.Headers.MediaTypeHeaderValue("application/xml");
-                return content;
+                return Regex.Replace(xml, @"(?<=<tsRequest )[^>]+", "");
             }
+        }
+
+        private static StringContent xmlRequestContent(string xml)
+        {
+            var content = new StringContent(xml);
+            content.Headers.ContentType =
+                new System.Net.Http.Headers.MediaTypeHeaderValue("application/xml");
+            return content;
         }
 
         private MultipartContent prepareFileUploadContent(StringContent xmlContent, Stream strm)

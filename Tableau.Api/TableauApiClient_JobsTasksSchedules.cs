@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 using Tableau.Api.Attributes;
 using Tableau.Api.Exceptions;
 using Tableau.Api.Models;
@@ -68,7 +70,8 @@ namespace Tableau.Api
         {
             checkEndpointAvailability();
             checkNullParameters((nameof(session), session), (nameof(taskId), taskId));
-            return (await getResponseAsObject<taskType>(await apiRequest(buildUri($"sites/{session.SiteId}/tasks/{taskId}"),
+            return (await getResponseAsObject<taskType>(await apiRequest(
+                buildUri($"sites/{session.SiteId}/tasks/extractRefreshes/{taskId}"),
                 HttpMethod.Get, 200, cancelToken, session))).Item as taskExtractRefreshType;
 
         }
@@ -77,7 +80,7 @@ namespace Tableau.Api
         /// </summary>
         /// <param name="session"></param>
         /// <param name="cancelToken"></param>
-        /// <returns></returns>
+        /// <returns>The site's tasks by the kind of item each holds; an array is empty, never null, when the site has none.</returns>
         ///  <exception cref="TableauRequestException"></exception>
         /// <exception cref="TableauApiVersionException"></exception>
         /// <exception cref="TableauOnlineNotSupportedException"></exception>
@@ -90,9 +93,11 @@ namespace Tableau.Api
             var resp = (await getResponseAsObject<taskListType>(await apiRequest(
                 buildUri($"sites/{session.SiteId}/tasks/extractRefreshes"),
                 HttpMethod.Get, 200, cancelToken, session)));
-            return (resp.task.Where(e => e.Item is taskExtractRefreshType).Cast<taskExtractRefreshType>().ToArray(),
-                resp.task.Where(e => e.Item is taskRunFlowType).Cast<taskRunFlowType>().ToArray(),
-                resp.task.Where(e => e.Item is scheduleType).Cast<scheduleType>().ToArray());
+            // Each task holds one item; an empty <tasks/> has no task list at all.
+            var items = (resp?.task ?? new taskType[0]).Select(e => e.Item).ToArray();
+            return (items.OfType<taskExtractRefreshType>().ToArray(),
+                items.OfType<taskRunFlowType>().ToArray(),
+                items.OfType<scheduleType>().ToArray());
         }
 
         private async Task<scheduleType> _createSchedule(TableauSession session, string name, int priority,
@@ -102,9 +107,11 @@ namespace Tableau.Api
             checkEndpointAvailability();
             checkNullParameters((nameof(session), session), (nameof(name), name));
             checkParametersBetween((nameof(priority), priority, 1, 100));
+            checkTimeOfDay(nameof(startTime), startTime);
+            if (endTime.HasValue) checkTimeOfDay(nameof(endTime), endTime.Value);
             return await getResponseAsObject<scheduleType>(await apiRequest(buildUri($"schedules"), HttpMethod.Post,
-                200, cancelToken, session,
-                getObjectAsRequestContent(new scheduleType()
+                201, cancelToken, session,
+                getScheduleRequestContent(new scheduleType()
                 {
                     name = name,
                     priority = priority.ToString(),
@@ -114,18 +121,28 @@ namespace Tableau.Api
                     typeSpecified = true,
                     executionOrder = executionOrder,
                     executionOrderSpecified = true,
-                    frequencyDetails = new frequencyDetailsType()
-                    {
-                        start = new DateTime(2000, 1, 1, startTime.Hours, startTime.Minutes, startTime.Seconds),
-                        end = endTime.HasValue
-                            ? new DateTime(2000, 1, 1, endTime.Value.Hours, endTime.Value.Minutes,
-                                endTime.Value.Seconds)
-                            : default(DateTime),
-                        endSpecified = endTime.HasValue,
-                        intervals = intervals
-                    }
-                })));
+                    frequencyDetails = new frequencyDetailsType() { intervals = intervals }
+                }, startTime, endTime)));
 
+        }
+
+        private static void checkTimeOfDay(string name, TimeSpan time)
+        {
+            if (time < TimeSpan.Zero || time >= TimeSpan.FromDays(1))
+                throw new ArgumentOutOfRangeException(name, time,
+                    "A schedule's time is a time of day, from 00:00:00 up to but not including 24:00:00.");
+        }
+
+        // Tableau takes a schedule's times as HH:mm:ss. XmlSerializer would write the model's time-typed DateTime
+        // members with the machine's UTC offset, so only the request is rewritten: the members keep their serialiser
+        // attributes, and a schedules response still fills them.
+        private StringContent getScheduleRequestContent(scheduleType schedule, TimeSpan startTime, TimeSpan? endTime)
+        {
+            var request = XElement.Parse(serializeRequest(schedule));
+            var details = request.Descendants().First(e => e.Name.LocalName == "frequencyDetails");
+            details.SetAttributeValue("start", startTime.ToString(@"hh\:mm\:ss", CultureInfo.InvariantCulture));
+            details.SetAttributeValue("end", endTime?.ToString(@"hh\:mm\:ss", CultureInfo.InvariantCulture));
+            return xmlRequestContent(request.ToString(SaveOptions.DisableFormatting));
         }
 
         /// <summary>
@@ -144,6 +161,7 @@ namespace Tableau.Api
         ///  <exception cref="TableauRequestException"></exception>
         /// <exception cref="TableauApiVersionException"></exception>
         /// <exception cref="TableauOnlineNotSupportedException"></exception>
+        /// <exception cref="ArgumentOutOfRangeException">startTime or endTime is not a time of day, from 00:00:00 up to but not including 24:00:00.</exception>
         [ApiVersion(2, 3)]
         [OnPremiseOnly]
         public async Task<scheduleType> CreateHourlySchedule(TableauSession session, string name, int priority,
@@ -173,6 +191,7 @@ namespace Tableau.Api
         ///  <exception cref="TableauRequestException"></exception>
         /// <exception cref="TableauApiVersionException"></exception>
         /// <exception cref="TableauOnlineNotSupportedException"></exception>
+        /// <exception cref="ArgumentOutOfRangeException">startTime or endTime is not a time of day, from 00:00:00 up to but not including 24:00:00.</exception>
         [ApiVersion(2, 3)]
         [OnPremiseOnly]
         public async Task<scheduleType> CreateHourlySchedule(TableauSession session, string name, int priority,
@@ -199,6 +218,7 @@ namespace Tableau.Api
         ///  <exception cref="TableauRequestException"></exception>
         /// <exception cref="TableauApiVersionException"></exception>
         /// <exception cref="TableauOnlineNotSupportedException"></exception>
+        /// <exception cref="ArgumentOutOfRangeException">startTime is not a time of day, from 00:00:00 up to but not including 24:00:00.</exception>
         [ApiVersion(2, 3)]
         [OnPremiseOnly]
         public async Task<scheduleType> CreateDailySchedule(TableauSession session, string name, int priority,
@@ -224,6 +244,7 @@ namespace Tableau.Api
         ///  <exception cref="TableauRequestException"></exception>
         /// <exception cref="TableauApiVersionException"></exception>
         /// <exception cref="TableauOnlineNotSupportedException"></exception>
+        /// <exception cref="ArgumentOutOfRangeException">startTime is not a time of day, from 00:00:00 up to but not including 24:00:00.</exception>
         [ApiVersion(2, 3)]
         [OnPremiseOnly]
         public async Task<scheduleType> CreateWeeklySchedule(TableauSession session, string name, int priority,
@@ -243,21 +264,24 @@ namespace Tableau.Api
         /// <param name="priority">An integer value between 1 and 100 that determines the default priority of the schedule if multiple tasks are pending in the queue. Higher numbers have higher priority.</param>
         /// <param name="type">Extract to create an extract refresh schedule, or Subscription to create a subscription schedule.</param>
         /// <param name="executionOrder">Parallel to allow jobs associated with this schedule to run at the same time, or Serial to require the jobs to run one after the other.</param>
-        /// <param name="dayToRun">Either the day of the month (1, 2, etc.) or LastDay.</param>
+        /// <param name="dayToRun">Either the day of the month (1, 2, etc.) or LastDay, sent as the interval's monthDay.</param>
         /// <param name="cancelToken"></param>
         /// <returns></returns>
         ///  <exception cref="TableauRequestException"></exception>
         /// <exception cref="TableauApiVersionException"></exception>
         /// <exception cref="TableauOnlineNotSupportedException"></exception>
+        /// <exception cref="ArgumentOutOfRangeException">startTime is not a time of day, from 00:00:00 up to but not including 24:00:00.</exception>
         [ApiVersion(2, 3)]
         [OnPremiseOnly]
         public async Task<scheduleType> CreateMonthlySchedule(TableauSession session, string name, int priority,
             scheduleTypeType type, scheduleTypeExecutionOrder executionOrder,
             TimeSpan startTime, string dayToRun, CancellationToken? cancelToken = null)
         {
-
+            var intervals = string.IsNullOrEmpty(dayToRun)
+                ? new intervalType[0]
+                : new[] { new intervalType() { monthDay = dayToRun } };
             return await _createSchedule(session, name, priority, scheduleTypeFrequency.Monthly, type, executionOrder,
-                startTime, null, new intervalType[0], cancelToken);
+                startTime, null, intervals, cancelToken);
 
         }
         /// <summary>
@@ -336,42 +360,20 @@ namespace Tableau.Api
         }
 
 
-        private async Task<scheduleType> _updateSchedule(TableauSession session, string newName, int newPriority,
+        // Tableau updates a schedule with PUT schedules/{id}, and no UpdateTo*Schedule method takes the id: they posted a
+        // new schedule instead, which any 2xx would now report as a success. So they are refused before sending.
+        private Task<scheduleType> _updateSchedule(TableauSession session, string newName, int newPriority,
             scheduleTypeFrequency frequency, scheduleTypeType type, scheduleTypeExecutionOrder executionOrder,
             TimeSpan startTime, TimeSpan? endTime, intervalType[] intervals, CancellationToken? cancelToken)
         {
-            checkEndpointAvailability();
-            checkNullParameters((nameof(session), session), (nameof(newName), newName));
-            checkParametersBetween((nameof(newPriority), newPriority, 1, 100));
-            return await getResponseAsObject<scheduleType>(await apiRequest(buildUri($"schedules"), HttpMethod.Post,
-                200, cancelToken, session,
-                getObjectAsRequestContent(new scheduleType()
-                {
-                    name = newName,
-                    priority = newPriority.ToString(),
-                    type = type,
-                    frequency = frequency,
-                    frequencySpecified = true,
-                    typeSpecified = true,
-                    executionOrder = executionOrder,
-                    executionOrderSpecified = true,
-                    frequencyDetails = new frequencyDetailsType()
-                    {
-                        start = new DateTime(2000, 1, 1, startTime.Hours, startTime.Minutes, startTime.Seconds),
-                        end = endTime.HasValue
-                            ? new DateTime(2000, 1, 1, endTime.Value.Hours, endTime.Value.Minutes,
-                                endTime.Value.Seconds)
-                            : default(DateTime),
-                        endSpecified = endTime.HasValue,
-                        intervals = intervals
-                    }
-                })));
-
+            throw new NotSupportedException(
+                "Tableau.Api 1.x can't update a schedule: Tableau updates one by its id, which the UpdateTo*Schedule "
+                + "methods don't take, and they created a new schedule instead. Delete the schedule and create it again.");
         }
 
 
         /// <summary>
-        /// Updates a schedule on Tableau Server. Versions 2.3+
+        /// Not supported in Tableau.Api 1.x: throws NotSupportedException before anything is sent. Tableau updates a schedule by its id, which this method does not take, and 1.2.5 created a new schedule instead. Versions 2.3+
         /// </summary>
         /// <param name="session"></param>
         /// <param name="newName">The name to give to the schedule. This name identifies the schedule in the server environment when users select a schedule and manage schedule information.</param>
@@ -386,6 +388,7 @@ namespace Tableau.Api
         ///  <exception cref="TableauRequestException"></exception>
         /// <exception cref="TableauApiVersionException"></exception>
         /// <exception cref="TableauOnlineNotSupportedException"></exception>
+        /// <exception cref="NotSupportedException">Always, before anything is sent.</exception>
         [ApiVersion(2, 3)]
         [OnPremiseOnly]
         public async Task<scheduleType> UpdateToHourlySchedule(TableauSession session, string newName, int newPriority,
@@ -401,7 +404,7 @@ namespace Tableau.Api
 
 
         /// <summary>
-        /// Updates a schedule on Tableau Server. Versions 2.3+
+        /// Not supported in Tableau.Api 1.x: throws NotSupportedException before anything is sent. Tableau updates a schedule by its id, which this method does not take, and 1.2.5 created a new schedule instead. Versions 2.3+
         /// </summary>
         /// <param name="session"></param>
         /// <param name="newName">The name to give to the schedule. This name identifies the schedule in the server environment when users select a schedule and manage schedule information.</param>
@@ -415,6 +418,7 @@ namespace Tableau.Api
         ///  <exception cref="TableauRequestException"></exception>
         /// <exception cref="TableauApiVersionException"></exception>
         /// <exception cref="TableauOnlineNotSupportedException"></exception>
+        /// <exception cref="NotSupportedException">Always, before anything is sent.</exception>
         [ApiVersion(2, 3)]
         [OnPremiseOnly]
         public async Task<scheduleType> UpdateToHourlySchedule(TableauSession session, string newName, int priority,
@@ -428,7 +432,7 @@ namespace Tableau.Api
         }
 
         /// <summary>
-        /// Updates a schedule on Tableau Server. Versions 2.3+
+        /// Not supported in Tableau.Api 1.x: throws NotSupportedException before anything is sent. Tableau updates a schedule by its id, which this method does not take, and 1.2.5 created a new schedule instead. Versions 2.3+
         /// </summary>
         /// <param name="session"></param>
         /// <param name="newName">The name to give to the schedule. This name identifies the schedule in the server environment when users select a schedule and manage schedule information.</param>
@@ -441,6 +445,7 @@ namespace Tableau.Api
         ///  <exception cref="TableauRequestException"></exception>
         /// <exception cref="TableauApiVersionException"></exception>
         /// <exception cref="TableauOnlineNotSupportedException"></exception>
+        /// <exception cref="NotSupportedException">Always, before anything is sent.</exception>
         [ApiVersion(2, 3)]
         [OnPremiseOnly]
         public async Task<scheduleType> UpdateToDailySchedule(TableauSession session, string newName, int newPriority,
@@ -453,7 +458,7 @@ namespace Tableau.Api
 
         }
         /// <summary>
-        /// Updates a schedule on Tableau Server. Versions 2.3+
+        /// Not supported in Tableau.Api 1.x: throws NotSupportedException before anything is sent. Tableau updates a schedule by its id, which this method does not take, and 1.2.5 created a new schedule instead. Versions 2.3+
         /// </summary>
         /// <param name="session"></param>
         /// <param name="newName">The name to give to the schedule. This name identifies the schedule in the server environment when users select a schedule and manage schedule information.</param>
@@ -466,6 +471,7 @@ namespace Tableau.Api
         ///  <exception cref="TableauRequestException"></exception>
         /// <exception cref="TableauApiVersionException"></exception>
         /// <exception cref="TableauOnlineNotSupportedException"></exception>
+        /// <exception cref="NotSupportedException">Always, before anything is sent.</exception>
         [ApiVersion(2, 3)]
         [OnPremiseOnly]
         public async Task<scheduleType> UpdateToWeeklySchedule(TableauSession session, string newName, int newPriority,
@@ -478,7 +484,7 @@ namespace Tableau.Api
 
         }
         /// <summary>
-        /// Updates a schedule on Tableau Server. Versions 2.3+
+        /// Not supported in Tableau.Api 1.x: throws NotSupportedException before anything is sent. Tableau updates a schedule by its id, which this method does not take, and 1.2.5 created a new schedule instead. Versions 2.3+
         /// </summary>
         /// <param name="session"></param>
         /// <param name="newName">The name to give to the schedule. This name identifies the schedule in the server environment when users select a schedule and manage schedule information.</param>
@@ -491,6 +497,7 @@ namespace Tableau.Api
         ///  <exception cref="TableauRequestException"></exception>
         /// <exception cref="TableauApiVersionException"></exception>
         /// <exception cref="TableauOnlineNotSupportedException"></exception>
+        /// <exception cref="NotSupportedException">Always, before anything is sent.</exception>
         [ApiVersion(2, 3)]
         [OnPremiseOnly]
         public async Task<scheduleType> UpdateToMonthlySchedule(TableauSession session, string newName, int newPriority,

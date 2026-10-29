@@ -25,6 +25,11 @@ a release turns that section into its own, dated (docs/releasing.md). The format
   whether a filter or a path value: a tag, a site name, a content URL.
 - **A redirect fails** with `TableauRequestException`, where 1.2.5 followed it.
 - **Any 2xx status is a success,** where 1.2.5 wanted the one status each call named.
+- **A schedule time outside a day throws `ArgumentOutOfRangeException`** before anything is sent: a start or end time
+  runs from 00:00:00 up to but not including 24:00:00. 1.2.5 wrapped 25:00 round to 01:00.
+- **The `UpdateTo*Schedule` methods throw `NotSupportedException`** before anything is sent. Tableau updates a
+  schedule by its id, which they don't take, and 1.2.5 created a second schedule instead. Delete the schedule and
+  create it again; updating one comes in 2.0.
 - **The licence is MIT.**
 - **The package's metadata:** a description that says what it is and ends "Not affiliated with or endorsed by
   Tableau or Salesforce."; the README packed into it; the project and repository links on GitHub; symbols as a
@@ -43,6 +48,15 @@ a release turns that section into its own, dated (docs/releasing.md). The format
 - **`QueryViewPDF` with no filters** sends the request; 1.2.5 threw `ArgumentNullException`.
 - **A call Tableau answers with another 2xx than 1.2.5 expected returns its result,** such as `CreateSubscription` on
   Tableau Cloud, which answers 200 where Tableau Server answers 201. 1.2.5 threw after the call had succeeded.
+- **Creating a schedule returns it** on the 201 Tableau answers with, where 1.2.5 threw after Tableau had created it.
+  Its start and end times go as `HH:mm:ss` with no UTC offset, and a monthly schedule sends its day from `dayToRun`,
+  which 1.2.5 ignored.
+- **`GetExtractRefreshTasks` returns the site's tasks,** each by the kind of item it holds, and empty arrays for a site
+  with none. 1.2.5 threw in both cases.
+- **`GetExtractRefreshTask` calls `tasks/extractRefreshes/{id}`,** the path Tableau documents; 1.2.5 called
+  `tasks/{id}`.
+- **`GetDataSourceRevisions` and `GetWorkbookRevisions` send `pageSize` and `pageNumber`,** which 1.2.5 checked and
+  then left out, so every call returned the first page.
 
 ### Known issues
 

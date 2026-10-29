@@ -30,13 +30,18 @@ public sealed class EveryMethodPathTests
         var session = Fixtures.Session();
         var failures = new List<string>();
         var silent = new List<string>();
+        var refused = new List<string>();
         var pathParameters = new List<string>();
 
         foreach (var method in PublicMethods())
         {
             var before = server.Requests.Count;
-            await InvokeAsync(client, session, method, null, null);
-            if (server.Requests.Count == before) silent.Add(Name(method));
+            var plain = await InvokeAsync(client, session, method, null, null);
+            if (server.Requests.Count == before)
+            {
+                if (plain is NotSupportedException) refused.Add(method.Name);
+                else silent.Add(Name(method));
+            }
 
             foreach (var parameter in method.GetParameters().Where(parameter => parameter.ParameterType == typeof(string)))
             {
@@ -70,8 +75,13 @@ public sealed class EveryMethodPathTests
         }
 
         Assert.IsEmpty(failures, string.Join("\n", failures));
-        // Every method sends a request with plain values, so none is skipped unseen.
+        // Every method sends a request with plain values, so none is skipped unseen, except the schedule updates, which
+        // are refused before sending.
         Assert.IsEmpty(silent, "methods that sent nothing: " + string.Join(", ", silent));
+        CollectionAssert.AreEquivalent(
+            new[] { "UpdateToDailySchedule", "UpdateToHourlySchedule", "UpdateToHourlySchedule", "UpdateToMonthlySchedule",
+                "UpdateToWeeklySchedule" },
+            refused);
         // 1.2.5's methods put this many string parameters in request paths; fewer would mean some went unseen.
         Assert.HasCount(122, pathParameters, string.Join("\n", pathParameters));
     }

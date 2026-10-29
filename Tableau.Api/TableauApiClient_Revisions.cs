@@ -36,7 +36,8 @@ namespace Tableau.Api
             checkNullParameters((nameof(session), session), (nameof(datasourceId), datasourceId));
             checkParametersBetween((nameof(pageSize), pageSize, 1, 1000), (nameof(pageNumber), pageNumber, 1, int.MaxValue));
             var r = await getResponseAsObject<paginationType, revisionListType>(
-                await apiRequest(buildUri($"sites/{session.SiteId}/datasources/{datasourceId}/revisions"),
+                await apiRequest(buildUri($"sites/{session.SiteId}/datasources/{datasourceId}/revisions",
+                        ("pageSize", pageSize.ToString()), ("pageNumber", pageNumber.ToString())),
                     HttpMethod.Get, 200, cancelToken, session));
             return (r.Item1, r.Item2.revision);
         }
@@ -62,7 +63,8 @@ namespace Tableau.Api
             checkNullParameters((nameof(session), session), (nameof(workbookId), workbookId));
             checkParametersBetween((nameof(pageSize), pageSize, 1, 1000), (nameof(pageNumber), pageNumber, 1, int.MaxValue));
             var r = await getResponseAsObject<paginationType, revisionListType>(
-                await apiRequest(buildUri($"sites/{session.SiteId}/workbooks/{workbookId}/revisions"),
+                await apiRequest(buildUri($"sites/{session.SiteId}/workbooks/{workbookId}/revisions",
+                        ("pageSize", pageSize.ToString()), ("pageNumber", pageNumber.ToString())),
                     HttpMethod.Get, 200, cancelToken, session));
             return (r.Item1, r.Item2.revision);
         }
