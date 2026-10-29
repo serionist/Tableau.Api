@@ -22,15 +22,15 @@ at the end of every step.
   tests on every PR and a live suite every night.
 - **Every finding F1 to F50 has exactly one step** (Finding tracker). None is "won't fix". Every research decision and
   feature has a step or a follow-up issue (Research tracker).
-- **Every owner call has its answer** (Owner calls). Plan review round 1 is applied; round 2 reads the edits.
+- **Every owner call has its answer** (Owner calls). Plan review rounds 1 and 2 are applied; round 3 reads the edits.
 
 **Sources:** the codebase review (findings F1 to F50) and the research (its decisions, called RD1 to RD9 here, and its
 22 ranked features), both of 2026-10-28. Until 1.2.6 is on nuget.org both stay in `.local/review/`, which git ignores.
 S4 publishes them as `docs/reviews/2026-10-28-codebase.md` and `docs/reviews/2026-10-28-research.md`.
 
 **Approval:** draft. @serionist took D1 to D10 on 2026-10-28 and D11 on 2026-10-29, and every owner call has its
-answer. Plan review round 1 came back needs-fixes, and its findings are applied; the plan waits for round 2 and a
-maintainer's approval on #2.
+answer. Plan review rounds 1 and 2 came back needs-fixes, and their findings are applied; the plan waits for round 3
+and a maintainer's approval on #2.
 
 ## Goal
 
@@ -64,7 +64,7 @@ Taken by @serionist: D1 to D10 on 2026-10-28, D11 on 2026-10-29.
 | # | Decision | Detail | Steps |
 |---|----------|--------|-------|
 | D1 | A 1.2.6 security patch ships first | For the users of 1.2.5. Built on `release/1.x` from the commit 1.2.5 was built from: `b23503e` on today's `main` (2021-10-13, "Updated Tableau.Api.csproj"; `b11a150` before the history was rewritten). It keeps netstandard2.0 and the 1.2.5 signatures. It holds the fixes for F2 and F3, and the cheap fixes that change no signature and exist in the 1.2.5 code, each checked against that code. F1 is not in 1.2.5 (Vizportal came later) and is fixed on main. It has offline tests with a fake server. It is released from a tag by a `release.yml` workflow through the `nuget` environment. nuget.org trusted publishing is set up for workflow `release.yml` and environment `nuget` on serionist/Tableau.Api, so both names are fixed; the environment allows `v*` tags only and needs a maintainer's approval. | S2a, S2b |
-| D2 | 2.0.0, SemVer, MinVer | Prereleases are `-rc.N`. Package validation runs against the 1.2.5 baseline; every break is suppressed deliberately and listed in the migration guide. | S5, S18, S19 |
+| D2 | 2.0.0, SemVer, MinVer | Prereleases are `-rc.N`. Every break against 1.2.5 is suppressed deliberately and listed in the migration guide. Package validation runs against the 1.2.5 baseline, but across the change of target it reports only the dropped framework, so ApiCompat in assembly mode against 1.2.5's DLL carries the breaks, in its own suppression file (Design, Build and layout). | S5, S18, S19 |
 | D3 | Vizportal stays in the main package, fixed | The research's "drop it" is overruled. The fix covers F1 (TLS), F29, F41, F49, cancellation, paging, the shared HTTP core and the same exception and logging rules. The docs say it wraps Tableau's undocumented internal API, may break with any Tableau release, and name the Tableau versions it was tested on. | S3, S16 |
 | D4 | MIT | "the Tableau.Api contributors". The LICENSE lands with the harness PR (#1). | S0 |
 | D5 | The package id stays `Tableau.Api` | With a "not affiliated with or endorsed by Tableau or Salesforce" disclaimer in the README and the package description. No new `Tableau.*` ids. | S1, S2a, S5 |
@@ -73,7 +73,7 @@ Taken by @serionist: D1 to D10 on 2026-10-28, D11 on 2026-10-29.
 | D8 | A modern client | DI registration with options and IHttpClientFactory typed clients. One session manager for every sign-in Tableau has now: PAT, connected-app JWT (direct trust and OAuth 2.0 trust), unified access tokens (Cloud), password with impersonation (Server); one sign-in at a time, sign in again on expiry, thread-safe. The client is bound to its session, with an explicit session API kept for multi-site work. `IAsyncEnumerable` paging and a typed filter and sort builder. A `CancellationToken` last on every method, `ConfigureAwait(false)`, nullable annotations, consistent `...Async` names and return shapes. Resilience: retry only idempotent calls, honour 429 and `Retry-After`, long timeouts for downloads and publishing, streamed downloads. No cross-host redirects with credentials; TLS validation always on unless explicitly turned off. One exception type with the details. Server-vs-Cloud and API-version gates that work, with the version read from Server Info. The Cloud schedule model from API 3.20. The supported floor: the maintained Server versions (about 2024.2, REST 3.23) and Cloud, older versions on opt-in (RD8). | S9 to S15 |
 | D9 | Tests | Offline tests with a fake server or `HttpMessageHandler` on every PR, with a coverage floor enforced in CI (WriteableFileProviders' `eng/coverage-gate.cs` is the model). A live suite, nightly and on dispatch, against a free Tableau Developer Program site, signed in through a direct-trust connected app from a reviewed GitHub environment; never on PRs from forks. Server-only features are tested by hand, and the PR says so. The old live tests' coverage is kept or replaced. | S2a, S2b, S7, S11, S12 to S17 |
 | D10 | New endpoints | The high-value ones from the research's ranked list in 2.0.0, the rest as follow-up issues. The four NuGet_Prod metadata methods (F44) are in 2.0.0. | S11 to S17, Research tracker |
-| D11 | Standing approval to merge, with limits | The session squash-merges each step's PR once CI is green and `review-code` is clean, without waiting for a maintainer. Two things still need a maintainer: a change to a one-way door needs a maintainer's yes on its issue first, and a release tag's publish is approved by a maintainer in the `nuget` environment. This is an exception, for the steps of #2, to AGENTS.md's "a maintainer squash-merges" (Q8, 2026-10-29). | every step |
+| D11 | Standing approval to merge, with limits | The session squash-merges each step's PR once CI is green and `review-code` is clean, without waiting for a maintainer. Three things still need a maintainer: a change to a one-way door needs a maintainer's yes on its issue first, and either maintainer's yes counts (Q9); a release tag's publish is approved by a maintainer in the `nuget` environment; and a PR whose review records a loosened check (REVIEW.md, The harness), a `wontfix` blocker or an added ignore among them, waits for a maintainer's agreement in that PR. László Nemes can still object on any PR. This is an exception, for the steps of #2, to AGENTS.md's "a maintainer squash-merges" and to its rule that the maintainers agree on a door (Q8, Q9, 2026-10-29). | every step |
 
 ## How the work runs
 
@@ -93,12 +93,15 @@ rules from `.claude/settings.json`, and #4 was closed as not needed.
 - `review-code` runs in fresh agents, round after round, until no blocker or major is open. Each round is recorded in
   `docs/reviews/`, except where the security rule below says `.local/review/`.
 - **Merging (D11):** once CI is green and `review-code` is clean, the session squash-merges, without waiting for a
-  maintainer. Two things still wait for one: a one-way door (next bullet), and the `nuget` deployment of a release tag,
-  which a maintainer approves.
-- **One-way doors,** as AGENTS.md states the rule: the change goes in a PR that names the door in its title, after the
-  maintainers agree in its issue; either maintainer's yes counts. For this plan the doors are a name, the public API
-  shape, the version and the supported Tableau floor. Each step lists its doors; "a maintainer's yes" in a step means
-  this rule.
+  maintainer. Three things still wait for one:
+  - a one-way door (next bullet);
+  - the `nuget` deployment of a release tag, which a maintainer approves;
+  - a PR whose review records a loosened check (REVIEW.md, The harness), a `wontfix` blocker or an added ignore among
+    them, which waits for a maintainer's agreement in that PR.
+- **One-way doors:** the change goes in a PR that names the door in its title, after a maintainer's yes in its issue.
+  For #2 either maintainer's yes counts: that is the maintainers' decision for this plan (Q9, D11), and László Nemes
+  can still object on any PR. For this plan the doors are a name, the public API shape, the version and the supported
+  Tableau floor. Each step lists its doors; "a maintainer's yes" in a step means this rule.
 - **Cloud is not Server:** a PR whose change reaches Server-only behaviour, such as schedules, says what the live site
   (Tableau Cloud) could not show, and whether the `ServerOnly` suite ran.
 
@@ -110,6 +113,8 @@ rules from `.claude/settings.json`, and #4 was closed as not needed.
 - **The reformat lands alone** (S6), so `.git-blame-ignore-revs` can list its commit. The next PR (S7) adds that file.
 - **The 2.0 steps leave `main` building:** each port step deletes the old methods it replaces, and an old file when it
   empties.
+- **Each step from S8 to S16 adds its new public types** to the AOT app's root list, which S9's conventions test also
+  reads (Design, Models, AOT).
 
 **Security text:** until 1.2.6 is on nuget.org, nothing public carries exploit detail.
 
@@ -125,10 +130,11 @@ rules from `.claude/settings.json`, and #4 was closed as not needed.
 
 | Step | What it updates |
 |---|---|
-| S1 | AGENTS.md: hosted CI now exists |
+| S1 | AGENTS.md: hosted CI now exists; "Where things are" gets what S1 adds: the top-level files (README.md, SECURITY.md, CONTRIBUTING.md, CHANGELOG.md), the `.github/` workflows and issue forms, `eng/package-check.cs` |
 | S3 | AGENTS.md: offline tests exist, in `tests/Tableau.Api.Tests/`; the review-code lens's tests section; start-work's test path; finish-work's gate run with tests |
+| S4 | AGENTS.md: "last release 1.2.5" becomes 1.2.6, once 1.2.6 is on nuget.org |
 | S5 | AGENTS.md: what this is (net10.0), where things are, the build commands, the one-way doors on the target and the version; REVIEW.md Q7 (the build it asks about); the target-framework lines of both lens files (review-code and review-plan) |
-| S7 | AGENTS.md: the test categories and the coverage gate, the old live suite gone; finish-work's live suite; start-work's test path |
+| S7 | AGENTS.md: the test categories and the coverage gate, the old live suite gone, `.git-blame-ignore-revs` in "Where things are"; finish-work's live suite; start-work's test path |
 | S8 | AGENTS.md: the generator replaces `how_to_generate_schema.txt` (Where things are, Writing, the hand-added enum value in Traps) |
 | S9 | REVIEW.md's line on `CancellationToken?` and `[ApiVersion]`; AGENTS.md's door on the Tableau versions claimed; the lens files' compatibility questions |
 | S11 | finish-work's live suite: `live.yml` and the `TABLEAU_LIVE_*` settings |
@@ -137,7 +143,15 @@ rules from `.claude/settings.json`, and #4 was closed as not needed.
 | S18 | every rule file, a final pass |
 
 AGENTS.md holds 147 of its 150 lines. A step that adds to it removes as much, by moving detail to `docs/guide/` or a
-skill.
+skill. S1, the first to add, keeps it at 147:
+
+- the `LICENSE` row becomes one row for the top-level files: LICENSE, README.md, SECURITY.md, CONTRIBUTING.md and
+  CHANGELOG.md;
+- the `.github/` row gains the workflows and the issue forms, and the `eng/` row `package-check.cs`, in their own
+  cells;
+- the "Hosted CI doesn't exist yet" bullet becomes one line on what CI runs.
+
+S7 puts `.git-blame-ignore-revs` into the `.editorconfig`, `.gitattributes`, `.gitignore` row the same way.
 
 **Ids:** no plan or review id (F, D, RD, P, Q, R, S numbers) appears in code, comments or contributor docs. Only
 `docs/plans/` and `docs/reviews/` cite them. A PR names its step and links this plan.
@@ -168,7 +182,7 @@ candidate the review named was checked against `b23503e`, and all of them are th
 
 | Finding | What 1.2.6 changes | What checking 1.2.5's code showed |
 |---|---|---|
-| F2 | Every path segment (ids, tag names, site names and content URLs) is validated and escaped: an empty or dot-only segment is refused, and every character outside RFC 3986's unreserved set is escaped, except `:` and `@`, which stay as they are (upload session ids contain `:` and are not LUIDs). | Present; every area file builds its paths. |
+| F2 | Every path segment (ids, tag names, site names and content URLs) is validated and escaped: an empty or dot-only segment is refused, and every character outside RFC 3986's unreserved set is escaped, except `:` and `@`, which stay as they are (upload session ids contain `:` and are not LUIDs). Then, once the request URI is built, its escaped path must equal the path the handler wrote, or the call throws before anything is sent. | Present; every area file builds its paths. |
 | F3 | Redirects are not followed: a 3xx fails with the status and the host it pointed to. The token goes on each request message. | Present, in the shared request code. |
 | F5 | View filters get the `vf_` prefix on view data and view image, as on PDF; one helper builds them; ordinal comparison. | 1.2.5 strips the prefix on both data and image (main fixed image in 2024). The same helper stops `QueryViewPDF` failing when no filters are passed, a 1.2.5-only defect. |
 | F6 | Every query key and value is escaped. In `filter` and `sort` the parts between `:` and `,` are escaped and the separators kept. | Filter and sort values, and every key, are sent raw. |
@@ -177,39 +191,44 @@ candidate the review named was checked against `b23503e`, and all of them are th
 | F10 | Schedule create accepts 201 (through F15). The start and end times go as `HH:mm:ss` with no offset, and a time outside `[00:00, 24:00)` throws. Monthly schedules send `monthDay` from the existing `dayToRun` parameter. Only the request is rewritten: the public `DateTime` members of the schedule model keep their serialiser attributes, with no `[XmlIgnore]` shadow, so a schedules response still fills `start` and `end`. | 1.2.5 still has `dayToRun` (main removed it), and its schema has `monthDay`, so this needs no new signature. |
 | F11 | Extract refresh task lists select the task items by type and treat an empty list as empty. | The cast bug and the null list are both there. |
 | F12 | Get Extract Refresh Task calls `tasks/extractRefreshes/{id}`. | Calls `tasks/{id}`. |
-| F14 | Enum values added: `OpenID` and `TableauIDWithMFA` for the user auth setting, and every value the 3.29 xsd lists that 1.2.5's enums lack. | 1.2.5 knows only `ServerDefault` and `SAML`. The values are added to the generated file by hand, which is acceptable on a branch that only takes fixes. |
+| F14 | Enum values added: `OpenID` and `TableauIDWithMFA` for the user auth setting, and every value the 3.29 xsd lists that 1.2.5's enums lack, each appended after the existing members, so no existing member's value moves (package validation reports a moved value as CP0011). | 1.2.5 knows only `ServerDefault` and `SAML`. The values are added to the generated file by hand, which is acceptable on a branch that only takes fixes. |
 | F15 | Any 2xx is success. | One exact status per call. |
 | F27 | `TableauSession.UserName` holds what each sign-in meant it to: the user name, the token name for a PAT, the old name after Switch Site. | Always null. |
 | F39 | The base URL's path is kept, so a server behind a path prefix is reachable. | Rebuilt from scheme, host and port. |
 
 - **How F2 is built:** an interpolated-string handler for paths escapes and validates every hole, so each call site
-  changes only by its wrapper. It needs C# 10 or later, so the project sets `LangVersion` (netstandard2.0 defaults to
-  7.3), and the compiler attribute it needs is declared internally for netstandard2.0.
+  changes only by its wrapper. It needs C# 10, so the project sets `LangVersion` to 10, not `latest`
+  (netstandard2.0 defaults to 7.3), and the compiler attribute it needs is declared internally for netstandard2.0.
 - **What stays as in 1.2.5,** because fixing it changes a signature or makes working calls throw: the dead version
   gates (F4), null lists (F20), buffered downloads (F17), the nullable token (F21), and the rest.
 - **Considered and left out** (Q5): F17's Content-Type null check, F28 and F32 also qualify. They stay for 2.0 to keep
   the patch small.
 - **The package:**
   - in the project: `<Version>1.2.6</Version>`; `AssemblyVersion` and `FileVersion` 1.0.2.6, after 1.2.5's 1.0.2.5;
-    `LangVersion`; a true description ending in the disclaimer (D5); a README packed into the package; `snupkg`; no
+    `LangVersion` 10; a true description ending in the disclaimer (D5); a README packed into the package; `snupkg`; no
     `IncludeSource`; `ContinuousIntegrationBuild` in CI;
   - the licence expression and the GitHub URLs only in the branch's `Directory.Build.props`, as on `main`;
   - the same single dependency, `Microsoft.Extensions.Logging` 2.1.1.
-- **Package validation proves the API is 1.2.5's:** `EnablePackageValidation` with `PackageValidationBaselineVersion`
-  1.2.5, and no suppression file allowed: CI fails when a `CompatibilitySuppressions.xml` exists on the branch. Adding
-  enum members (F14) is not a break, so it passes.
+- **Two checks prove the API is 1.2.5's:**
+  - `EnablePackageValidation` with `PackageValidationBaselineVersion` 1.2.5, and no suppression file allowed: CI fails
+    when a `CompatibilitySuppressions.xml` exists on the branch;
+  - since a `NoWarn` in the project would also silence package validation's errors, CI also runs the ApiCompat tool's
+    `package` mode on the packed nupkg against the 1.2.5 nupkg from nuget.org, with no suppression input. The tool
+    reads no project property, so nothing in the project can quiet it;
+  - enum members appended after the existing ones (F14) are not a break, so both pass.
 - **The branch gets main's backstops:**
   - the secrets and local blocks of main's `.gitignore` (`.local/`, `.claude/worktrees/`, `.claude/settings.local.json`,
     `.env`, `testsettings.json`, `*.runsettings`), main's `.gitattributes`, `.githooks/`, `.gitleaks.toml`;
   - `eng/gate.cs`. CI runs `dotnet run eng/gate.cs -- quick --base origin/release/1.x` with `GATE_REQUIRE_GITLEAKS=1`,
-    so a secret fails it. The skills checks pass over zero skills; the tests check runs `dotnet test`, as on main from
-    S3;
+    so a secret fails it; the skills checks pass over zero skills. The tests check is in the gate's `full` lane, not
+    `quick`: there it runs `dotnet test`, as on main from S3, with the net48 tests on Windows only;
   - `global.json` with the SDK and `"test": {"runner": "Microsoft.Testing.Platform"}`, `nuget.config`, LICENSE, and a
     short AGENTS.md for the branch's limits.
 - **Its workflows** (S2a writes them, modelled on WriteableFileProviders' and adapted):
   - `ci.yml` on PRs to `release/1.x` and on every push to it: the gate, build, the tests on Linux (net10.0) and Windows
-    (net10.0 and net48), pack with package validation, and WriteableFileProviders' `eng/package-check.cs`, adapted to
-    one package (a `.nupkg` and a `.snupkg` at the version, nothing else, a version nuget.org accepts); `CI` last;
+    (net10.0 and net48), pack with package validation, ApiCompat's `package` mode against the 1.2.5 nupkg, and
+    WriteableFileProviders' `eng/package-check.cs`, adapted to one package (a `.nupkg` and a `.snupkg` at the
+    version, nothing else, a version nuget.org accepts); `CI` last;
   - `pr-text.yml`, `codeql.yml`;
   - `release.yml`, the line's first: its CI job waits for a green push run of `ci.yml` on `release/1.x` for the tagged
     commit (`gh run list --workflow ci.yml --branch release/1.x --event push --commit <sha>`), never `--branch main`
@@ -243,7 +262,8 @@ main is unreleased, but public. S3 makes it safe before the rebuild replaces the
 - **Tests:** S2b's request-building tests, adapted to main's signatures, start `tests/Tableau.Api.Tests`, plus an F1
   test against a TLS fake with an untrusted certificate.
 - **The gate runs them:** `CheckTests` in `eng/gate.cs`, which today passes with "no offline tests yet", runs
-  `dotnet test`; `global.json` gains `"test": {"runner": "Microsoft.Testing.Platform"}`, which `main` lacks.
+  `dotnet test` on the new test project by name, since the solution keeps the old netcoreapp2.1 project until S7;
+  `global.json` gains `"test": {"runner": "Microsoft.Testing.Platform"}`, which `main` lacks.
 
 ### Build and layout for 2.0 (S5)
 
@@ -508,9 +528,12 @@ internal sealed record Endpoint(string Name, HttpMethod Method, string Template,
 - **Requests and responses share the model types,** as the xsd does. Each area builds its requests from options
   records.
 - **AOT:** `IsAotCompatible` is on from S8. Old files are exempt through the legacy section until they are ported.
-  - `tests/Tableau.Api.Aot` is published with native AOT in CI. Any warning fails it. Until S17 deletes the old client,
-    it roots only the 2.0 namespaces, since the old `XmlSerializer` and Newtonsoft.Json code can never pass; from S17
-    it roots every member of the library.
+  - `tests/Tableau.Api.Aot` is published with native AOT in CI. Any warning fails it.
+  - **What it roots until S17:** 2.0 keeps the root namespace `Tableau.Api`, so rooting a namespace would root the old
+    client too, whose `XmlSerializer` and Newtonsoft.Json code can never pass. Instead a `TrimmerRootDescriptor`
+    (`tests/Tableau.Api.Aot/roots.xml`) lists the 2.0 types by name. S8 starts it, each later step adds the types it
+    brings, and S9's conventions test reads the same list, so the two cover the same types.
+  - From S17, with the old client gone, the app roots every member of the library and the list goes.
   - `VerifyReferenceAotCompatibility` turns on in S17, the first step after Newtonsoft.Json leaves (S16).
   - It then runs against an injected fake handler serving fixtures. S8 starts it with parsing; each later step adds
     its path (sign-in, paging, a download, a publish, an error, a Vizportal call).
@@ -547,8 +570,9 @@ internal sealed record Endpoint(string Name, HttpMethod Method, string Template,
   and has `[EnumeratorCancellation]` (F41). Model enums are tolerant. Ids are `int` everywhere. The paging helpers
   become internal.
 - **Cookies:** with `UseCookies` off on the shared handler (S9), each Vizportal request carries its own session's
-  `workgroup_session_id` cookie and its XSRF cookie and header, so two sessions on one client never mix. The session
-  cookie is `Secure` exactly when the base URL is https.
+  `workgroup_session_id` cookie and its XSRF cookie and `X-Xsrf-Token` header, so two sessions on one client never
+  mix. A request's `Cookie` header has no `Secure` attribute, so the rule is set by where they go: only to the base
+  URL's scheme, host and port, and a Vizportal call follows no redirect.
 - **Cloud:** S16's live tests check whether a REST token opens a Vizportal session on Tableau Cloud (unverified). If it
   does not, every Vizportal descriptor is Server only, and the docs say so.
 - **Docs:** it wraps Tableau's undocumented internal API, may break with any Tableau release, and was tested on the
@@ -745,13 +769,13 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
 - **Scope:**
   - **The branch:** `release/1.x` pushed at `b23503e`; this PR's branch is cut from it, and the PR targets it.
   - **Backstops and harness from `main`:** the `.gitignore` blocks, `.gitattributes`, `.githooks/`, `.gitleaks.toml`,
-    `eng/gate.cs` with its tests check running `dotnet test`, `global.json` with the test runner, `nuget.config`,
-    LICENSE, a short AGENTS.md (the 1.2.6 patch, under Design).
+    `eng/gate.cs` (its `full` lane runs `dotnet test`, the net48 tests on Windows only), `global.json` with the test
+    runner, `nuget.config`, LICENSE, a short AGENTS.md (the 1.2.6 patch, under Design).
   - **Workflows:** `ci.yml` on PRs and pushes, `pr-text.yml`, `codeql.yml`, and the line's first `release.yml` (CI and
     release).
   - **Build:** the branch's `Directory.Build.props` with the licence and the URLs; in `Tableau.Api.csproj` the version,
-    `AssemblyVersion`, `FileVersion`, `LangVersion` and the package metadata; package validation against 1.2.5 with no
-    suppression file; `eng/package-check.cs`.
+    `AssemblyVersion`, `FileVersion`, `LangVersion` 10 and the package metadata; package validation against 1.2.5 with
+    no suppression file; ApiCompat's `package` mode against the 1.2.5 nupkg; `eng/package-check.cs`.
   - **Tests:** the old live test project deleted; `Tableau.Api.Tests/` becomes the offline project (MSTest 4 on
     Microsoft.Testing.Platform, net10.0 and net48) with `FakeTableauServer`, and tests of today's behaviour that fix
     nothing: a sign-in, a list, a chunked publish. The solution updated.
@@ -761,9 +785,12 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
   - CI green on the PR, and on the push run after the merge;
   - gate quick with `--base origin/release/1.x` and `GATE_REQUIRE_GITLEAKS=1`;
   - package validation against 1.2.5 passes with no suppressions, and CI fails when a suppression file is added;
+  - ApiCompat's `package` mode passes against the 1.2.5 nupkg with no suppression input, and fails on a removed
+    member even with a `NoWarn` in the project;
   - `eng/package-check.cs` passes on the pack;
   - the harness tests pass on net10.0 and net48.
-- **One-way doors:** none. The API and the target stay 1.2.5's, which package validation proves.
+- **One-way doors:** the version 1.2.6 (D1) and the package description with its disclaimer (D5), both decided. The
+  API and the target stay 1.2.5's, which the two API checks prove.
 - **Done when:** merged into `release/1.x`, with the push run green and the branch's ruleset requiring `CI` and
   `PR text`.
 
@@ -786,6 +813,9 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
   - **Paths:** for every method that takes an id or a name, rows generated over every ASCII character, alone and inside
     a segment, plus empty and dot-only segments and an upload id with `:`. Each either throws `ArgumentException`
     before any request, or sends exactly the escaped request line.
+  - **Paths on .NET Framework:** a net48 test runs the same rows under the older URI parsing an app gets when it
+    targets .NET Framework 4.0. Each row still either throws before sending or sends exactly the escaped path, and a
+    built URI whose path differs from the one the handler wrote throws before sending.
   - **Redirects:** 301, 302, 307 and 308 to a second fake server on another port. The call fails and that server
     records nothing, sign-in included.
   - **Queries:** `R&D`, `C++`, `#` and `%` in filter, sort and view-filter names, escaped.
@@ -802,8 +832,9 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
     - `UserName` after each sign-in;
     - a base URL with `/tableau/`.
   - **Logs:** the suite's log lines hold no password, token or PAT secret.
-  - **Package validation** still passes against 1.2.5 with no suppressions.
-- **One-way doors:** the version 1.2.6 (D1, decided). The behaviour changes are written in the CHANGELOG.
+  - **The API checks:** package validation and ApiCompat's `package` mode still pass against 1.2.5 with no suppressions.
+- **One-way doors:** none of its own; S2a holds the version and the description. The behaviour changes are written in
+  the CHANGELOG.
 - **Done when:**
   - merged into `release/1.x` with CI green and `review-code` clean, its records in `.local/review/`, and the push run
     green;
@@ -823,7 +854,8 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
 - **Scope:**
   - `Tableau.Api/VizPortal/VizPortalClient.cs`, `Tableau.Api/TableauApiClient.cs` and the area files' call sites;
   - a new `tests/Tableau.Api.Tests/` (net10.0) with S2b's request-building tests adapted to main;
-  - the gate: `CheckTests` in `eng/gate.cs` runs `dotnet test`; `global.json` gains the test runner;
+  - the gate: `CheckTests` in `eng/gate.cs` runs `dotnet test` on the new test project by name; `global.json` gains the
+    test runner;
   - `ci.yml` runs the tests, and gains the weekly NuGet audit of `release/1.x`;
   - the rule files that offline tests outdate (How the work runs, Rule files).
 - **Findings:** F1, F2, F3, F6, F39.
@@ -842,7 +874,8 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
 - **Scope:**
   - `.local/review/` becomes `docs/reviews/2026-10-28-codebase.md`, `docs/reviews/2026-10-28-research.md` and S2b's
     and S3's review-code records, with local paths replaced by a note;
-  - the private note of this plan's review round 1 (P3's scenario) goes with them;
+  - the private notes of this plan's review rounds 1 and 2 (the scenarios of P3 and P15) go with them;
+  - AGENTS.md's "last release 1.2.5" becomes 1.2.6;
   - this plan's source links;
   - main's CHANGELOG gets the 1.2.6 entry.
 - **Findings:** none.
@@ -932,7 +965,7 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
   - `eng/schema/` and `eng/generate-models.cs`;
   - `src/Tableau.Api/Models/Generated/`, `TableauJsonContext` and the generated converters;
   - `IsAotCompatible` (`VerifyReferenceAotCompatibility` waits for S17);
-  - `tests/Tableau.Api.Aot/`, rooting only the 2.0 namespaces, and its CI job;
+  - `tests/Tableau.Api.Aot/` with its `TrimmerRootDescriptor` listing the 2.0 types (Models, AOT), and its CI job;
   - the gate's generator check;
   - synthetic fixtures for credentials, server info, error, pagination, site, user, project and workbook.
 - **Findings:** F14, F23, F50.
@@ -959,8 +992,9 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
   - `TableauException`; the logging;
   - `client.Server.GetInfoAsync` as the first ported call, with its old method deleted;
   - the dependency changes;
-  - a conventions test over every public method of the 2.0 namespaces (the old client keeps its shape until it goes):
-    the `Async` suffix, the token last, the return shapes;
+  - a conventions test over every public method of the 2.0 types, read from the AOT app's root list, since 2.0 shares
+    the root namespace with the old client, which keeps its shape until it goes: the `Async` suffix, the token last,
+    the return shapes;
   - the rule files on tokens, gates and versions (How the work runs, Rule files).
 - **Findings:** F4, F16, F18, F20, F21, F22, F35, F36, F37, F38, F46, F47, F48. S3's tests for F2, F3, F6 and F39 move
   onto the new pipeline.
@@ -1127,7 +1161,8 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
   - paging by items returned, with the caller's query unchanged and two concurrent enumerations independent;
   - the token stops paging; unknown enum values parse;
   - two sessions calling at once on one client each send their own session token and XSRF value;
-  - the cookie is `Secure` on https only;
+  - the session cookie and the `X-Xsrf-Token` header reach only the base URL's scheme, host and port: a redirect to
+    another port, or from https to http, is not followed, and the second fake server records nothing;
   - TLS and redirect rows on the Vizportal path;
   - live on Cloud if the token opens a session there, else `ServerOnly` by hand. The versions tested go into the docs.
 - **One-way doors:** the Vizportal surface: a maintainer's yes.
@@ -1142,8 +1177,9 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
   - the bounded chunk reader;
   - the old Publishing partial, `TableauApiClient`, `PartialStream`, `XmlSchema.cs`, `SchemaExtensions` and the 1.x
     enums, exceptions and attributes deleted;
-  - the AOT app's publish path; the app roots every member of the library from here, and
-    `VerifyReferenceAotCompatibility` turns on, Newtonsoft.Json having left in S16;
+  - the AOT app's publish path; the app roots every member of the library from here, its root list goes, the
+    conventions test covers the whole library, and `VerifyReferenceAotCompatibility` turns on, Newtonsoft.Json having
+    left in S16;
   - AGENTS.md's Traps rows whose guards were the deleted code (How the work runs, Rule files).
 - **Findings:** F30, F43, F45 (its endpoint list goes to the steps and follow-ups in the Research tracker).
 - **Tests:**
@@ -1199,6 +1235,8 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
 | Suite | Runs | Where |
 |---|---|---|
 | 1.x offline | PRs to and pushes on `release/1.x`, from S2a | Linux (net10.0), Windows (net10.0 and net48) |
+| 1.x paths on .NET Framework | the same runs, from S2b | Windows, net48, under the older URI parsing an app gets when it targets .NET Framework 4.0 |
+| 1.x API checks | the same runs, from S2a | package validation and ApiCompat's `package` mode against 1.2.5, no suppressions |
 | 1.x NuGet audit | weekly, from S3, a job in main's `ci.yml` on `release/1.x` | Linux |
 | Offline unit (`FakeTableauHandler`) | every PR, `main`, daily | Linux and Windows |
 | Pipeline (`FakeTableauServer`, with TLS) | every PR | Linux and Windows |
@@ -1241,10 +1279,10 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
 
 ## Owner calls
 
-Q1 to Q6 are the plan's own; Q7 and Q8 came from plan review round 1. @serionist was told the recommended answers to
-Q1 to Q5 on 2026-10-28 and did not object, so each stands as its recommendation. The round's report was not passed to
-the plan's author, so for Q7 and Q8 the Recommendation column gives the reason for the answer, not the reviewer's
-words.
+Q1 to Q6 are the plan's own; Q7 and Q8 came from plan review round 1, and Q9 from round 2. @serionist was told the
+recommended answers to Q1 to Q5 on 2026-10-28 and did not object, so each stands as its recommendation. The rounds'
+reports were not passed to the plan's author, so for Q7 to Q9 the Recommendation column gives the reason for the
+answer, not the reviewer's words.
 
 | # | Question | Recommendation | Answer |
 |---|---|---|---|
@@ -1256,6 +1294,7 @@ words.
 | Q6 | Starschema (named as Company in 1.2.5, co-owner on nuget.org) and László Nemes (most of Vizportal) hold rights in the code now licensed MIT | Get their agreement in writing, recorded on #1, before 1.2.6 ships under MIT | László Nemes agreed to MIT, recorded on #1; serionist confirmed the code is cleared for release as open source when the repo went public (2026-10-28) |
 | Q7 | Split S2 into two PRs: one that sets `release/1.x` up and reveals nothing, and one with the fixes? | Yes: only the fixes' PR is public before the release | Yes (2026-10-29): S2a and S2b |
 | Q8 | Does the session's standing approval to merge have limits? | Merge on green CI and a clean review; keep the one-way doors and the release's publish with the maintainers | Yes, with those two limits (2026-10-29): D11 |
+| Q9 | AGENTS.md has the maintainers agree on a one-way door. For #2, does either maintainer's yes count? | Yes, so one maintainer's answer unblocks a step, with the other free to object on the PR | Yes (2026-10-29): either maintainer's yes counts for #2, and László Nemes can still object on any PR; recorded in D11 |
 
 ## Later
 
@@ -1327,7 +1366,7 @@ Status: `todo`, `done` (with the PR) or `wontfix` (with the reason). No finding 
 | F46 | Immutable options and session; sub-clients made once | S9 | no | todo |
 | F47 | Versions parsed as major.minor and compared whole; true messages | S9 | no | todo |
 | F48 | No rewriting of response bodies | S9 | no | todo |
-| F49 | Vizportal tags quoted by the serialiser, the cookie `Secure` by scheme, compact JSON | S16 | n/a | todo |
+| F49 | Vizportal tags quoted by the serialiser, the session cookie sent only to the base URL's origin, compact JSON | S16 | n/a | todo |
 | F50 | Source-generated serialisation; `IsAotCompatible` with the AOT smoke test | S8 | no | todo |
 
 ## Research tracker
@@ -1414,19 +1453,19 @@ Status: `todo`, `done` (with the PR) or `wontfix` (with the reason). No finding 
 | # | Sev | Finding | Status |
 |---|---|---|---|
 | P1 | major | The 1.2.6 release could not find a CI run on its tagged commit: `release/1.x`'s `ci.yml` ran on PRs only, and a release modelled on WriteableFileProviders' looks for a push run on `main` | fixed: the branch's `ci.yml` also runs on every push to it; its `release.yml` waits for a green push run of `ci.yml` on `release/1.x` for the tagged commit; S2a writes that first `release.yml`, modelled on WriteableFileProviders' and adapted, and a short `docs/releasing.md` for the line (Design, CI and release; S2a) |
-| P2 | major | `release/1.x` lacked main's secret backstops: 1.2.5's `.gitignore` ignores none of `.local/`, `.env`, `testsettings.json` or `*.runsettings`, and its CI ran only the gate's text lane, so a secret could be committed there and pass | fixed: main's `.gitignore` blocks, `.gitattributes` and `.githooks/` on the branch; its CI runs `dotnet run eng/gate.cs -- quick --base origin/release/1.x` with `GATE_REQUIRE_GITLEAKS=1`; the skills checks pass over zero skills (the 1.2.6 patch; S2a) |
+| P2 | major | `release/1.x` lacked main's secret backstops: 1.2.5's `.gitignore` ignores none of `.local/`, `.env` or `testsettings.json` (it does ignore `*.runsettings`), and its CI ran only the gate's text lane, so a secret could be committed there and pass | fixed: main's `.gitignore` blocks, `.gitattributes` and `.githooks/` on the branch; its CI runs `dotnet run eng/gate.cs -- quick --base origin/release/1.x` with `GATE_REQUIRE_GITLEAKS=1`; the skills checks pass over zero skills, and the tests check runs in the gate's `full` lane, not `quick` (the 1.2.6 patch; S2a) |
 | P3 | major | The 1.2.6 path rule needs widening. Its scenario stays private until 1.2.6 is on nuget.org | fixed: every character outside RFC 3986's unreserved set is escaped except `:` and `@`; empty and dot-only segments are refused; the test rows are generated over all of ASCII (the 1.2.6 table; S2b, S3) |
-| P4 | major | Nothing proved that 1.2.6 keeps every 1.2.5 signature, so a slip would reach .NET Framework users as a missing method at run time | fixed: package validation against 1.2.5 on the branch, and CI fails when a suppression file appears (the 1.2.6 patch; S2a, S2b) |
-| P5 | major | From S8 the AOT app rooted every member and `VerifyReferenceAotCompatibility` was on, while the old `XmlSerializer` and Newtonsoft.Json code was still in the library, so the AOT job could not pass from S8 to S17 | fixed: the app roots only the 2.0 namespaces until S17 deletes the old client; `VerifyReferenceAotCompatibility` turns on in S17, after Newtonsoft.Json leaves in S16 (Models; S8, S17) |
+| P4 | major | Nothing proved that 1.2.6 keeps every 1.2.5 signature, so a slip would reach .NET Framework users as a missing method at run time | fixed: package validation against 1.2.5 on the branch, and CI fails when a suppression file appears (the 1.2.6 patch; S2a, S2b). Round 2 closed a gap: P16 |
+| P5 | major | From S8 the AOT app rooted every member and `VerifyReferenceAotCompatibility` was on, while the old `XmlSerializer` and Newtonsoft.Json code was still in the library, so the AOT job could not pass from S8 to S17 | fixed: the app roots only the 2.0 namespaces until S17 deletes the old client; `VerifyReferenceAotCompatibility` turns on in S17, after Newtonsoft.Json leaves in S16 (Models; S8, S17). Round 2 gave "the 2.0 namespaces" a mechanism: P17 |
 | P6 | major | Package validation across netstandard2.0 to net10.0 reports only the dropped framework (PKV006), so the planned ledger of breaks would hold one line | fixed: S5 also runs ApiCompat in assembly mode between 1.2.5's netstandard2.0 DLL and the net10.0 build, with its own suppression file as the ledger; S5's first `dotnet pack` confirms the PKV006 behaviour (Build and layout; S5) |
-| P7 | major | The shared primary handler keeps one cookie container, so a cookie one response sets rides on later requests, another session's included | fixed: S9 turns `UseCookies` off on the primary handler; S16 sets Vizportal's session cookie and XSRF header on each request, with a test that two concurrent sessions each send their own token (HTTP rules, Vizportal; S9, S16) |
+| P7 | major | The shared primary handler keeps one cookie container, so a cookie one response sets rides on later requests, another session's included | fixed: S9 turns `UseCookies` off on the primary handler; S16 sets Vizportal's session cookie and XSRF header on each request, with a test that two concurrent sessions each send their own token (HTTP rules, Vizportal; S9, S16). Round 2 closed a gap: P18 |
 | P8 | minor | Once any 2xx is success, 1.2.6's `UpdateTo*Schedule` would create a second schedule and report success | fixed: refused with `NotSupportedException` before sending, said in the CHANGELOG, with a test that nothing is sent (the 1.2.6 table; S2b) |
 | P9 | minor | A shadow property for F10's time on the public model would stop schedules responses filling `start` and `end` | fixed: only the request is rewritten, with no `[XmlIgnore]` shadow on the public `DateTime`; a test that a response still fills both (S2b) |
 | P10 | minor | 1.2.6's path handler needs C# 10, and netstandard2.0 defaults to 7.3; the assembly and file versions would stay 1.0.2.5; the layout credited `global.json`'s test runner to S0, which `main` lacks | fixed: S2a sets `LangVersion`, `AssemblyVersion` and `FileVersion`; S2a and S3 add the test runner to `global.json`; the layout says what each step adds |
 | P11 | minor | The gate did not move with the code: its tests check passes with "no offline tests yet" whatever exists, its library path breaks with S5's move, and the coverage gate was outside it | fixed: S3 wires `dotnet test` into `CheckTests`, S5 updates `Repo.Library`, S7 adds the coverage gate to the full lane |
-| P12 | minor | Steps outdated rule files without updating them: REVIEW.md Q7 and its `CancellationToken` line, both lens files, start-work's test path, finish-work's live suite, AGENTS.md's Traps and doors; and AGENTS.md holds 147 of its 150 lines | fixed: a table under How the work runs names the step that updates each, and a step that adds to AGENTS.md removes as much |
-| P13 | minor | The plan's one-way-door rule ("the maintainer's yes on the issue") was not AGENTS.md's | fixed: stated as AGENTS.md writes it: a PR that names the door in its title, after the maintainers agree in its issue; either maintainer's yes counts |
-| P14 | minor | S2's smoke run needs the Developer Program site, which the plan set up only before S11; where its PAT lives, and what Cloud cannot show, went unsaid | fixed: joining the site moved to "For S1 and S2"; the smoke program lives outside the clone with the PAT in environment variables; each PR says what Server-only behaviour, such as schedules, Cloud could not show |
+| P12 | minor | Steps outdated rule files without updating them: REVIEW.md Q7 and its `CancellationToken` line, both lens files, start-work's test path, finish-work's live suite, AGENTS.md's Traps and doors; and AGENTS.md holds 147 of its 150 lines | fixed: a table under How the work runs names the step that updates each, and a step that adds to AGENTS.md removes as much. Round 2 completed the table: P21 |
+| P13 | minor | The plan's one-way-door rule ("the maintainer's yes on the issue") was not AGENTS.md's | fixed: stated as AGENTS.md writes it: a PR that names the door in its title, after the maintainers agree in its issue; either maintainer's yes counts. Round 2 found that is not what AGENTS.md says: P19, Q9 |
+| P14 | minor | S2's smoke run needs the Developer Program site, which the plan set up only before S11; where its PAT lives, and what Cloud cannot show, went unsaid | fixed: joining the site moved to "For S1, S2a and S2b"; the smoke program lives outside the clone with the PAT in environment variables; each PR says what Server-only behaviour, such as schedules, Cloud could not show |
 
 **Refuted:**
 - *Exploit-level text in the plan:* none. The security rows say what changes, the vulnerable code is already public, and no attack example appears.
@@ -1454,11 +1493,59 @@ Status: `todo`, `done` (with the PR) or `wontfix` (with the reason). No finding 
 |---|---|
 | Reuse WriteableFileProviders' `eng/package-check.cs` in both lines' CI and release | taken: S1 on `main`, S2a on `release/1.x`, and both `release.yml` |
 | Name the check behind S6's "public API dump" | taken: ApiCompat in strict mode between the builds of the PR's base and head |
-| Limit S9's conventions test to the 2.0 namespaces | taken |
+| Limit S9's conventions test to the 2.0 namespaces | taken; round 2 made it the 2.0 types of the AOT app's root list (P17) |
 | Let a large step land as several PRs, each with its own issue, under the step | taken (How the work runs) |
 | A weekly NuGet audit of `release/1.x` | taken: a weekly job in main's `ci.yml` from S3, since GitHub runs schedules only on the default branch |
 | The licence and URLs only in `Directory.Build.props` | taken: S1, S2a |
 | The package icon | later: S18's presentation |
+
+### Round 2
+
+- **How:** a fresh reviewer agent (Claude Opus 5.5), with review-plan's method and lenses, on `890784c`, 2026-10-29. It
+  read round 1's edits and the findings left open.
+- **Verdict:** needs-fixes: 1 major, 7 minors and 1 owner call.
+- **Round 1's findings:** P1, P2, P3, P6, P8, P9, P10, P11 and P14 are confirmed fixed. P4, P5, P7, P12 and P13 left
+  gaps, recorded as P16 to P22. Four slips are corrected: round 1's P2 row named `*.runsettings`, which 1.2.5's
+  `.gitignore` does ignore (line 9 at `b23503e`); P14's status named "For S1 and S2"; the 1.2.6 design put the gate's
+  tests check in `quick`, where it is in `full`; D2 still had package validation carry the breaks, which ApiCompat
+  carries.
+- **Now:** every finding below is fixed in the plan, the owner call is answered, and every improvement is taken. The
+  round had a major, so round 3 reads these edits.
+
+| # | Sev | Finding | Status |
+|---|---|---|---|
+| P15 | major | The 1.2.6 escaping alone is not enough on some .NET Framework configurations. The scenario stays private until 1.2.6 is on nuget.org. Not sent to a separate refuter: the fix is cheap and leaves the design as it is | fixed: once the request URI is built, its escaped path must equal the path the handler wrote, or the call throws before sending; a net48 test runs the path rows under the older URI parsing an app gets when it targets .NET Framework 4.0 (the 1.2.6 table; S2b; Tests). S4 publishes this round's private note with round 1's |
+| P16 | minor | From P4: a `NoWarn` in the project also silences package validation's errors, so 1.2.6 could drop a signature and still pass | fixed: 1.x CI also runs ApiCompat's `package` mode on the packed nupkg against the 1.2.5 nupkg, with no suppression input; the tool reads no project property (the 1.2.6 patch; S2a, S2b) |
+| P17 | minor | From P5: "the 2.0 namespaces" had no mechanism, and 2.0 keeps the root namespace `Tableau.Api`, so rooting a namespace would root the old client and fail the AOT job | fixed: a `TrimmerRootDescriptor` lists the 2.0 types, each step from S8 adds its own, and S9's conventions test reads the same list; from S17 the whole library is rooted (Models, AOT; S8, S9, S17) |
+| P18 | minor | From P7: with `UseCookies` off, "the cookie is `Secure` on https only" cannot be built, since a request's `Cookie` header carries no `Secure` attribute | fixed: the session cookie and the `X-Xsrf-Token` header go only to the base URL's scheme, host and port, with no redirect followed, and a test shows a redirect target records nothing (Vizportal; S16; F49's row) |
+| P19 | minor | From P13: "either maintainer's yes counts" is not what AGENTS.md says, which has the maintainers agree | fixed: owner call Q9, answered: for #2 either maintainer's yes counts, recorded in D11 as the maintainers' decision for this plan, with László Nemes free to object on any PR; "as AGENTS.md states the rule" is gone (How the work runs) |
+| P20 | minor | D11 let the session merge a PR whose review records a loosened check, such as a `wontfix` blocker or an added ignore, with no maintainer seeing it | fixed: D11's third limit: such a PR waits for a maintainer's agreement in that PR (REVIEW.md, The harness) |
+| P21 | minor | From P12: the Rule files table missed AGENTS.md's "Where things are" rows for what S1 adds, S7's `.git-blame-ignore-revs`, and "last release 1.2.5" once 1.2.6 ships; and S1 had no plan to stay within 150 lines | fixed: the rows added to S1, S4 and S7; S1 folds `LICENSE`'s row into one for the top-level files, extends the `.github/` and `eng/` cells, and rewrites the hosted-CI bullet, so AGENTS.md stays at 147 lines (How the work runs, Rule files) |
+| P22 | minor | S2a listed no one-way doors, though it sets the version 1.2.6 and the package description | fixed: S2a lists both, decided (D1, D5); S2b no longer lists the version |
+
+**Refuted:**
+- *P10's assembly binding risk:* the assembly is not strong-named, so a new `AssemblyVersion` breaks no binding.
+- *P2's "the gate cannot run on the branch":* it can.
+- *P1's "no push run, or the wrong lookup":* a squash merge starts the push run, and neither the tag rule nor trusted
+  publishing checks the branch.
+- *F14's enum additions breaking binaries:* a moved value is CP0011, and with no suppressions allowed CI would fail.
+- *D11 contradicting AGENTS.md:* it is an exception a maintainer answered, and #2 says "merged once CI is green".
+- *ApiCompat across target frameworks:* it works, given the references of both sides.
+
+**Owner calls:**
+
+| # | Question | Recommendation | Answer |
+|---|---|---|---|
+| Q9 | For #2, does either maintainer's yes count for a one-way door, where AGENTS.md has the maintainers agree? | Yes, so one maintainer's answer unblocks a step, with the other free to object on the PR | Yes, by @serionist (2026-10-29): either maintainer's yes counts for #2, László Nemes can still object on any PR; recorded in D11 |
+
+**Improvements:**
+
+| Improvement | Answer |
+|---|---|
+| `LangVersion` 10, not `latest` | taken (the 1.2.6 patch; S2a) |
+| F14's enum values appended after the existing members, since CP0011 catches a moved value | taken (the 1.2.6 table) |
+| S3's `CheckTests` names the new test project, since the solution keeps the old netcoreapp2.1 project until S7 | taken (Security on main; S3) |
+| On the branch, gate full runs the net48 tests only on Windows | taken (the 1.2.6 patch; S2a) |
 
 ## Progress log
 
@@ -1474,6 +1561,7 @@ Status: `todo`, `done` (with the PR) or `wontfix` (with the reason). No finding 
 | 2026-10-29 | plan | The plan committed as the first commit of `2-modernization-plan`, with S0 marked done; the review and research are in `.local/review/codebase/`. |
 | 2026-10-28 | plan | This plan written as a draft for #2, to be committed as `docs/plans/2026-10-28-modernization.md`. 1.2.5's commit on today's `main` is `b23503e`, and every 1.2.6 candidate was checked against it. It also showed: `QueryViewImage` strips the filter prefix too; `CreateMonthlySchedule` still has its `dayToRun` parameter and the schema has `monthDay`; the user auth-setting enum lacks `OpenID` and `TableauIDWithMFA`; `QueryViewPDF` fails when no filters are passed. |
 | 2026-10-29 | plan | Plan review round 1 (a fresh reviewer, on `6fbec9e`): needs-fixes, 7 majors and 7 minors, all applied (Plan review, Round 1). @serionist answered its owner calls: S2 splits into S2a and S2b (Q7), and the standing approval to merge has two limits (Q8, recorded as D11). Q1 to Q5 stand as recommended, unopposed since 2026-10-28. Round 2 is next. |
+| 2026-10-29 | plan | Plan review round 2 (Claude Opus 5.5, on `890784c`): needs-fixes, 1 major and 7 minors, all applied, with round 1's four slips corrected (Plan review, Round 2). P15's scenario waits in `.local/review/` until 1.2.6 ships. @serionist answered Q9: for #2 either maintainer's yes counts for a one-way door, and D11 gains a third limit, for a loosened check (P20). Round 3 is next. |
 
 ## For the maintainers
 
