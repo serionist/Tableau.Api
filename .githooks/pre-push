@@ -1,0 +1,10 @@
+#!/bin/sh
+# Runs the gate's quick lane on what the push sends, read from git on stdin. Turned on by
+# `dotnet run eng/gate.cs -- setup`.
+cd "$(git rev-parse --show-toplevel)" || exit 1
+if ! command -v dotnet >/dev/null 2>&1; then
+    echo "pre-push: dotnet not found, hook skipped: the gate did not run (https://dotnet.microsoft.com/download)" >&2
+    exit 0
+fi
+[ -f eng/gate.cs ] || exit 0
+exec dotnet run eng/gate.cs -- pre-push "$@"

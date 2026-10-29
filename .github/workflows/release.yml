@@ -1,0 +1,198 @@
+# The 1.x release: pushing a tag v1.<minor>.<patch> on release/1.x checks the tag, the version and the changelog, packs
+# the package (package validation against 1.2.5 runs in the pack), checks it, waits for ci.yml to have concluded
+# success on the tagged commit's push run, pushes the package to nuget.org once a maintainer approves the nuget
+# environment, and creates the GitHub release with the packages attached and the version's section of CHANGELOG.md as
+# its notes. docs/releasing.md is the runbook.
+#
+# No long-lived API key exists anywhere: NuGet/login trades the job's OIDC token for a key that lives one hour. The
+# trusted publishing policy on nuget.org names this file, release.yml, and the environment nuget, so neither name may
+# change.
+name: Release
+
+on:
+  push:
+    tags: ["v1.*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  build:
+    name: Check and pack
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # release/1.x must be there for the check below.
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check the tag is on release/1.x
+        run: |
+          if ! git merge-base --is-ancestor HEAD origin/release/1.x; then
+            echo "::error::$GITHUB_REF_NAME is not on release/1.x. A 1.x release is tagged on a commit of release/1.x."
+            exit 1
+          fi
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      # The project's <Version> is the package's version on this line; the tag names the same one.
+      - name: Check the version is the tag's
+        run: |
+          set -euo pipefail
+          version=$(dotnet msbuild Tableau.Api/Tableau.Api.csproj -getProperty:Version)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tableau.Api.csproj says version $version, but the tag is $GITHUB_REF_NAME. Tag v$version, or change the version in a PR first."
+            exit 1
+          fi
+          echo "The version is $version."
+      # The release's notes are its CHANGELOG.md section (the github-release job), so the version needs one, dated:
+      # "## [<version>] - <yyyy-mm-dd>", with something under it. It is checked here, before the approval, so nothing
+      # is pushed without it.
+      - name: Check the changelog has a dated section for the version
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          heading=$(awk -v version="$version" '
+            /^## / { h = $2; gsub(/[][]/, "", h); if (h == version) { print; exit } }
+          ' CHANGELOG.md)
+          body=$(awk -v version="$version" '
+            /^## / { if (found) exit; h = $2; gsub(/[][]/, "", h); if (h == version) { found = 1; next } }
+            found { print }
+          ' CHANGELOG.md)
+          if [ -z "$heading" ] || ! grep -q '[^[:space:]]' <<<"$body"; then
+            echo "::error::CHANGELOG.md has no section for $version. Add one, dated, before tagging (docs/releasing.md)."
+            exit 1
+          fi
+          if ! grep -Eq '^## \[[^]]+\] - [0-9]{4}-[0-9]{2}-[0-9]{2}$' <<<"$heading"; then
+            echo "::error::CHANGELOG.md's heading for $version is not dated: '$heading'. Write '## [$version] - <yyyy-mm-dd>'."
+            exit 1
+          fi
+          echo "CHANGELOG.md has a section for $version: $heading"
+      - name: Build
+        run: dotnet build Tableau.Api/Tableau.Api.csproj -c Release
+      - name: Pack
+        run: dotnet pack Tableau.Api/Tableau.Api.csproj --no-build -c Release -o artifacts/packages
+      - name: Check the package
+        run: dotnet run eng/package-check.cs -- artifacts/packages "${GITHUB_REF_NAME#v}"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: packages
+          path: artifacts/packages
+          if-no-files-found: error
+
+  ci:
+    name: CI passed on the tagged commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      # Reads the ci.yml runs of the tagged commit.
+      actions: read
+    steps:
+      # ci.yml runs on every push to release/1.x, so the tagged commit has a push run of its own: it must have concluded
+      # success, its tests, its API comparison with 1.2.5 and its Windows job included, before anything is pushed. A
+      # run still going (a tag pushed right after the merge) is waited for; a run that failed, or none at all, stops the
+      # release. Re-run this workflow once CI is green.
+      - name: Require a successful ci.yml push run on release/1.x
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          deadline=$((SECONDS + 50 * 60))
+          while :; do
+            counts=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$GITHUB_SHA" \
+              --branch release/1.x --event push --limit 20 --json status,conclusion \
+              --jq '"\([.[] | select(.conclusion == "success")] | length) \([.[] | select(.status != "completed")] | length) \(length)"')
+            read -r succeeded running total <<<"$counts"
+            if [ "$succeeded" -gt 0 ]; then
+              echo "ci.yml concluded success on $GITHUB_SHA."
+              exit 0
+            fi
+            if [ "$total" -gt 0 ] && [ "$running" -eq 0 ]; then
+              echo "::error::ci.yml did not conclude success on $GITHUB_SHA. Fix release/1.x and tag a new commit, or re-run CI and then this workflow."
+              exit 1
+            fi
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "::error::No successful ci.yml push run on $GITHUB_SHA within 50 minutes ($total found, $running still running). Re-run this workflow once CI is green."
+              exit 1
+            fi
+            echo "Waiting for ci.yml on $GITHUB_SHA ($total found, $running still running)..."
+            sleep 30
+          done
+
+  publish:
+    name: Push to nuget.org
+    needs: [build, ci]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # A maintainer approves here: the environment's required reviewers, and the policy names this environment.
+    environment: nuget
+    permissions:
+      # Trusted publishing: the OIDC token that NuGet/login trades for a short-lived API key.
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: packages
+          path: artifacts/packages
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+      - uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+        id: login
+        with:
+          user: ${{ secrets.NUGET_USER }}
+      # The .nupkg and the .snupkg go in two pushes: with --skip-duplicate, a .nupkg already on nuget.org makes NuGet
+      # skip its symbols, so a re-run after a partial failure would leave them off. Each push skips what is there.
+      - name: Push
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        run: |
+          dotnet nuget push "artifacts/packages/*.nupkg" --api-key "$NUGET_API_KEY"             --source https://api.nuget.org/v3/index.json --skip-duplicate --no-symbols
+          dotnet nuget push "artifacts/packages/*.snupkg" --api-key "$NUGET_API_KEY"             --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+  github-release:
+    name: GitHub release
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # Creates the release and uploads the packages to it.
+      contents: write
+    steps:
+      # Only CHANGELOG.md, for the notes.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: CHANGELOG.md
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: packages
+          path: artifacts/packages
+      # The notes are the section of CHANGELOG.md headed with this version, up to the next ## heading; the build job
+      # checked it exists. Once a 2.x release exists, a 1.x patch is not marked the latest release: that stays 2.x's.
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          awk -v version="$version" '
+            /^## / { if (found) exit; heading = $2; gsub(/[][]/, "", heading); if (heading == version) { found = 1; next } }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          # A 1.x release is never marked Latest once a stable 2.x release exists; a draft or a prerelease doesn't count.
+          latest=()
+          newer=$(gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --exclude-pre-releases --limit 1000             --json tagName --jq 'any(.[]; .tagName | test("^v([2-9]|[1-9][0-9])[.]"))')
+          if [ "$newer" = true ]; then latest=(--latest=false); fi
+          gh release create "$GITHUB_REF_NAME" artifacts/packages/*.nupkg artifacts/packages/*.snupkg \
+            --repo "$GITHUB_REPOSITORY" --verify-tag --title "Tableau.Api $version" --notes-file release-notes.md "${latest[@]}"
