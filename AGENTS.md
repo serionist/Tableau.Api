@@ -23,10 +23,10 @@ Microsoft.Extensions.Logging.
 | `Tableau.Api/` | the library: `TableauApiClient.cs` (requests, `buildUri`, versions), `TableauApiClient_*.cs` (endpoints by area), `VizPortal/` (the Vizportal client and its `Models/`), `Models/` (`XmlSchema.cs`, generated; `how_to_generate_schema.txt`, the steps; `SchemaExtensions.cs`, `TableauSession.cs`), `Attributes/` (`ApiVersion`, `OnPremiseOnly`), `Enums/`, `Exceptions/`, `PartialStream.cs`, `Tableau.Api.csproj` |
 | `Tableau.Api.Tests/` | MSTest, live only: ordered classes `A01_Prepare` to `A06_DataSources`, `Base/` (the shared context, prerequisites), `Resources/sample.tde` |
 | `Tableau.Api.sln` | the solution |
-| `eng/` | `gate.cs`, the gate, the hooks' entry points and the setup, as one .NET file-based app |
+| `eng/` | `gate.cs`, the gate, the hooks' entry points and the setup, as one .NET file-based app; `package-check.cs`, what a packed package must hold (`dotnet run eng/package-check.cs -- <folder> [<version>]`) |
 | `.githooks/` | `commit-msg` refuses attribution, `pre-push` runs gate quick on what the push sends, `post-checkout` and `post-merge` name changed AI setup files |
 | `docs/plans/`, `docs/reviews/` | plans of non-trivial changes, with the template; review records. Dated records, never current truth |
-| `.github/` | `CODEOWNERS`, `pull_request_template.md` |
+| `.github/` | `CODEOWNERS`, `pull_request_template.md`; `workflows/`: `ci.yml` (gate quick, then build, pack and the package check, summed up by `CI`), `pr-text.yml` (`PR text`, gate text on the PR), `codeql.yml`, `dependabot-auto-merge.yml` (minor and patch updates, once CI is required); `dependabot.yml`; `ISSUE_TEMPLATE/` (the bug and feature forms; security reports go to private reporting) |
 | `.claude/` | `CLAUDE.md` (imports this file), `settings.json` (no attribution in commits or PRs, and no permission rules: each developer's own settings decide what Claude Code may run), `settings.local.json.example`, `skills/` (below) |
 | `.agents/skills/` | links to `.claude/skills/<name>` for Codex, written into git's index by `dotnet run eng/gate.cs -- link` |
 | `AGENTS.md`, `REVIEW.md` | this file; what a review finding is, and the questions every review answers |
@@ -35,7 +35,7 @@ Microsoft.Extensions.Logging.
 | `global.json`, `nuget.config` | the .NET 10 SDK; nuget.org as the only package source |
 | `.gitleaks.toml` | the secret scan: gitleaks' own rules, and any exception with its reason |
 | `.editorconfig`, `.gitattributes`, `.gitignore` | the target code style; LF everywhere; what git ignores, secrets first |
-| `LICENSE` | MIT |
+| `LICENSE`, `README.md`, `SECURITY.md`, `CONTRIBUTING.md`, `CHANGELOG.md` | MIT; what users read first, also packed into the package; how to report a vulnerability, and the supported versions; the short path for a contributor; what changed, under Unreleased until a release |
 
 A new top-level file or folder adds its row in the same change.
 
@@ -59,7 +59,7 @@ PowerShell. The `--` after `eng/gate.cs` is needed: without it `dotnet run` take
   `Password`, `Site`, `NonAdminUser`, `NonAdminPassword`, `NonAdminUserId` (`A01_Prepare.cs`, `A02_Authentication.cs`).
 - **Keep that file outside the clone,** pass its full path to `--settings`; the solution's `test.runsettings` is a
   leftover. A search or a glob in the clone never reaches it there. `*.runsettings` stays git-ignored as a backstop.
-- **Hosted CI doesn't exist yet:** a PR says what ran, and on which Tableau version.
+- **CI** runs gate quick and the package check, never on a Tableau site: a PR says what ran there, and on which version.
 
 ## How a change lands
 

@@ -1,0 +1,83 @@
+# Dependabot's minor and patch updates merge themselves once the required checks pass. This job only turns on GitHub's
+# auto-merge when Dependabot opens or updates a PR; GitHub then waits for CI and PR text, the checks the main ruleset
+# requires, and squash-merges. A major update waits for a maintainer: it is where a dependency changes what the library
+# does, or what its users must run.
+#
+# Auto-merge waits only for the checks a ruleset requires. With none, GitHub merges at once, before CI has run, so the
+# job turns auto-merge on only where a ruleset on the PR's base branch requires CI, and fails otherwise.
+#
+# The squash commit gets the PR's title and a short body of its own, never the description: Dependabot's description
+# quotes other projects' release notes, which may say anything, and pr-text.yml skips Dependabot's PRs for that reason.
+# The body names what moved and ends with a Refs line naming the PR, as every commit on main names its issue (AGENTS.md,
+# Commits and PRs).
+#
+# GitHub records the merge as github-actions[bot], since the workflow's token turned auto-merge on, and a push made with
+# that token starts no workflow: CI and CodeQL don't run on main for it. ci.yml's daily run and CodeQL's weekly one
+# check main afterwards instead.
+#
+# To hold an update, convert its PR to draft: nobody can merge a draft, and this job skips one; marking it ready for
+# review turns auto-merge on again. Turning auto-merge off by hand holds it only until Dependabot next pushes to the PR.
+#
+# It runs on pull_request for Dependabot's own PRs on this repository only. Such a run gets a read-only token unless
+# the workflow asks for more, so the job asks for the two permissions turning on auto-merge needs. Nothing is checked
+# out and no PR code runs. The PR's title and the update's metadata reach the script through env, never an expression,
+# so no text in them can run as shell.
+name: Dependabot auto-merge
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependabot-auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  auto-merge:
+    name: Auto-merge
+    if: >-
+      github.event.pull_request.user.login == 'dependabot[bot]' && !github.event.pull_request.draft &&
+      github.repository == 'serionist/Tableau.Api'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write # the squash merge, once the checks pass
+      pull-requests: write # turning on auto-merge
+    steps:
+      - name: Read the update's type
+        id: metadata
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # An SDK bump in global.json raises the SDK every developer needs, and CI installs the newest 10.0 SDK either
+      # way, so a maintainer merges it.
+      - name: Turn on auto-merge for a minor or patch update
+        if: >-
+          steps.metadata.outputs.package-ecosystem != 'dotnet-sdk' &&
+          (steps.metadata.outputs.update-type == 'version-update:semver-minor' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-patch')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
+          UPDATED: ${{ steps.metadata.outputs.updated-dependencies-json }}
+        run: |
+          required=$(gh api "repos/$GITHUB_REPOSITORY/rules/branches/$BASE_REF" \
+            --jq '[.[] | select(.type == "required_status_checks") | .parameters.required_status_checks[].context]')
+          if ! jq -e 'any(.[]; . == "CI")' <<<"$required" >/dev/null; then
+            echo "::error::No ruleset on $BASE_REF requires the CI check, so auto-merge would merge before CI ran. Require CI and PR text there first."
+            exit 1
+          fi
+          # A grouped PR's title only counts what moved; the body names each, with versions when Dependabot gave them.
+          bumps=$(jq -r 'map(.dependencyName + (if (.prevVersion // "") != "" and (.newVersion // "") != ""
+            then " from " + .prevVersion + " to " + .newVersion else "" end)) | join(", ")' <<<"$UPDATED")
+          body=$(printf 'Bumps %s, a %s update. The release notes are on the PR.\n\nRefs #%s' \
+            "$bumps" "${UPDATE_TYPE#version-update:semver-}" "$PR_NUMBER")
+          gh pr merge --auto --squash "$PR_URL" --subject "$PR_TITLE (#$PR_NUMBER)" --body "$body"
