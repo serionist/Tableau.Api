@@ -79,8 +79,8 @@ Taken by @serionist on 2026-10-28.
 a maintainer's approval); the nuget.org trusted publishing policy names `release.yml` and `nuget`.
 
 **S0, done 2026-10-29:** the harness and licence, PR #3 (squash `262223d`), closing #1. Its review took eight rounds,
-recorded in `docs/reviews/2026-10-28-dev-harness-code.md`. #4 keeps the permission-rule derivation and its engine check
-in the repo.
+recorded in `docs/reviews/2026-10-28-dev-harness-code.md`. At the maintainer's request #9 then removed the permission
+rules from `.claude/settings.json`, and #4 was closed as not needed.
 
 **Every later step:**
 
