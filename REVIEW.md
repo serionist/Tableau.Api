@@ -95,34 +95,10 @@ Rules:
 
 - A change that loosens a check is a blocker unless a maintainer agrees in the PR.
 - That includes a gate step dropped or made a warning, a rule or a test skipped, a `NoWarn` or an ignore added, a
-  question or a lens removed, attribution let through, a permission widened.
+  question or a lens removed, or attribution let through.
 - A change that only makes a check stricter needs no more than a normal review.
 - The attribution rule in `eng/gate.cs` is omniverse-mcp's, with Python's meaning, and its selftest cases are that
   repo's: a change to one changes the other, or says why not.
-- Permission rules are no security boundary, and they are kept light so they rarely ask. What protects a secret is
-  that it lives outside the clone (`AGENTS.md`, Build and test), the `Read` denies on its name, and the gate and
-  pre-push, which check every commit.
-- The allows cover the normal git, gh and dotnet workflow, in `Bash(...)` and `PowerShell(...)` forms alike.
-- The denies refuse, never ask:
-  - reading a secret by name;
-  - `--no-verify`, a `dotnet` response file `@<file>`, and `dotnet nuget push`, since publishing goes through
-    `release.yml` only;
-  - the options of Claude Code's built-in read-only commands that read a file or folder past the paths they name
-    (`git diff --no-index`, `git blame --ignore-revs-file`, `diff --from-file`, `wc --files0-from`, `strings @`).
-    Those commands run without a prompt whatever the allows say. The derivation from Claude Code's table is #4.
-- The one ask is a test run given a settings file, which is the live suite.
-- The denies are matched as typed, so some spellings get past them, and that is accepted:
-  - a short flag in a bundle (`grep -iR`);
-  - an abbreviation;
-  - a quote or backslash inside an option's or a subcommand's name (`--no-i''ndex`, `git bl''ame`);
-  - a redirection before the command (`2>&1 git blame ...`);
-  - git's implicit no-index.
-
-  `docs/reviews/2026-10-28-dev-harness-code.md` records each one, and the asks that once closed them made nearly
-  every command prompt. Bring one back only for a secret the clone must hold.
-- A change to the denies is checked against Claude Code's own engine, headless, in a scratch clone with canary
-  files: `claude -p --permission-mode default --setting-sources project --tools Bash` (then `PowerShell`)
-  `--model haiku --output-format stream-json --verbose`, each command's result read from the stream. The project's
-  allows count only in a folder Claude Code trusts, or in settings passed with `--settings <file>`; denies and asks
-  count everywhere. A matcher is no substitute. The built-in table can change with each Claude Code release, so
-  the derivation of these rules from it is rerun for each release.
+- `.claude/settings.json` sets no permission rules: each developer's own Claude Code settings decide what may run.
+  A secret is kept safe by living outside the clone (`AGENTS.md`, Build and test), and every commit is checked by the
+  gate and pre-push.

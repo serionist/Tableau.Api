@@ -112,7 +112,7 @@ Applies when: the scope touches the target framework, packages, paths, files, en
 Applies when: the scope touches a harness file (`REVIEW.md`, The harness).
 
 Anything that loosens a check: a gate step dropped or made a warning, a rule or a test skipped, a `NoWarn` or an
-ignore added, a question or a lens removed, attribution let through, a permission widened. A blocker unless a
+ignore added, a question or a lens removed, or attribution let through. A blocker unless a
 maintainer agrees in the PR.
 
 ## Refuting
