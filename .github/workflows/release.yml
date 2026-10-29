@@ -150,14 +150,14 @@ jobs:
         id: login
         with:
           user: ${{ secrets.NUGET_USER }}
-      # The .snupkg is pushed to the symbol server with the .nupkg beside it. --skip-duplicate makes a re-run after a
-      # partial failure push only what is missing.
+      # The .nupkg and the .snupkg go in two pushes: with --skip-duplicate, a .nupkg already on nuget.org makes NuGet
+      # skip its symbols, so a re-run after a partial failure would leave them off. Each push skips what is there.
       - name: Push
         env:
           NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
-        run: >-
-          dotnet nuget push "artifacts/packages/*.nupkg" --api-key "$NUGET_API_KEY"
-          --source https://api.nuget.org/v3/index.json --skip-duplicate
+        run: |
+          dotnet nuget push "artifacts/packages/*.nupkg" --api-key "$NUGET_API_KEY"             --source https://api.nuget.org/v3/index.json --skip-duplicate --no-symbols
+          dotnet nuget push "artifacts/packages/*.snupkg" --api-key "$NUGET_API_KEY"             --source https://api.nuget.org/v3/index.json --skip-duplicate
 
   github-release:
     name: GitHub release
@@ -190,9 +190,9 @@ jobs:
             /^## / { if (found) exit; heading = $2; gsub(/[][]/, "", heading); if (heading == version) { found = 1; next } }
             found { print }
           ' CHANGELOG.md > release-notes.md
+          # A 1.x release is never marked Latest once a stable 2.x release exists; a draft or a prerelease doesn't count.
           latest=()
-          if gh release list --repo "$GITHUB_REPOSITORY" --limit 1000 --json tagName --jq '.[].tagName' | grep -Eq '^v([2-9]|[1-9][0-9])\.'; then
-            latest=(--latest=false)
-          fi
+          newer=$(gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --exclude-pre-releases --limit 1000             --json tagName --jq 'any(.[]; .tagName | test("^v([2-9]|[1-9][0-9])[.]"))')
+          if [ "$newer" = true ]; then latest=(--latest=false); fi
           gh release create "$GITHUB_REF_NAME" artifacts/packages/*.nupkg artifacts/packages/*.snupkg \
             --repo "$GITHUB_REPOSITORY" --verify-tag --title "Tableau.Api $version" --notes-file release-notes.md "${latest[@]}"

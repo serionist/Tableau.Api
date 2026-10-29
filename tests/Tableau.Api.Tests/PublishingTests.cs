@@ -37,8 +37,11 @@ public sealed class PublishingTests
         var upload = await client.InitiateFileUpload(session);
         using (var source = new MemoryStream(file))
         {
-            while (source.Position < source.Length)
+            // Ten bytes in reads of four take three appends; a fixed count fails, rather than hangs, if an append stops
+            // moving the stream on.
+            for (var i = 0; i < 3; i++)
                 await client.AppendToFileUpload(session, upload.uploadSessionId, source, maxBytesToRead: 4);
+            Assert.AreEqual(source.Length, source.Position, "three appends read the whole file");
         }
         var datasource = await client.PublishDatasource(session, upload.uploadSessionId, "Sales extract",
             DatasourceFileType.tde, ProjectId);

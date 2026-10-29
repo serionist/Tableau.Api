@@ -962,7 +962,7 @@ internal static class Lanes
     }
 
     // The offline tests. Their project targets net48 only on Windows, so dotnet test runs them on net10.0 everywhere and
-    // on net48 there too. The old live suite in Tableau.Api.Tests/ never runs here: it needs a Tableau site.
+    // on net48 there too.
     private static Result CheckTests(Scope _)
     {
         var dotnet = Proc.Which("dotnet");
@@ -2062,7 +2062,7 @@ internal static class SelfTest
 
         foreach (var (path, expected) in new[]
                  {
-                     ("AGENTS.md", true), ("Tableau.Api.Tests/CLAUDE.md", true), ("REVIEW.md", true), (".mcp.json", true),
+                     ("AGENTS.md", true), ("tests/Tableau.Api.Tests/CLAUDE.md", true), ("REVIEW.md", true), (".mcp.json", true),
                      (".claude/skills/start-work/SKILL.md", true), (".agents/skills/start-work", true),
                      ("Tableau.Api/TableauApiClient.cs", false), ("docs/.mcp.json.example", false), ("docs/plans/README.md", false),
                  })

@@ -18,7 +18,6 @@ repo's rules (`git show origin/main:AGENTS.md`); where the two differ, on this b
 |---|---|
 | `Tableau.Api/` | the library, as 1.2.5 had it; its project holds the version and the package settings |
 | `tests/Tableau.Api.Tests/` | the offline tests (MSTest on Microsoft.Testing.Platform, net10.0, and net48 on Windows), against `Fakes/FakeTableauServer`, an HTTP server on a loopback port that records each request as sent |
-| `Tableau.Api.Tests/` | the old live suite: netcoreapp2.1, needs a Tableau site, not in the solution, never built or run |
 | `Tableau.Api.sln` | the library and the offline tests |
 | `eng/` | `gate.cs`, the gate, the hooks' entry points and the setup; `package-check.cs`, what a pack must hold |
 | `.githooks/` | `commit-msg` refuses attribution, `pre-push` runs gate quick on what the push sends, `post-checkout` and `post-merge` name changed AI setup files |
@@ -45,7 +44,7 @@ PowerShell.
 | the package | `dotnet pack Tableau.Api/Tableau.Api.csproj -c Release -o artifacts/packages`, then `dotnet run eng/package-check.cs -- artifacts/packages` |
 | the API against 1.2.5 | `dotnet tool restore`, then `dotnet apicompat package artifacts/packages/Tableau.Api.<version>.nupkg --baseline-package <1.2.5's .nupkg> --enable-rule-cannot-change-parameter-name` |
 
-- **The library builds with the doc-comment warnings 1.2.5 had** (CS1570 to CS1591). A change adds no other.
+- **The library builds with the doc-comment warnings 1.2.5 had** (CS1570 to CS1591); any other warning is an error.
 - **1.2.5's `.nupkg`:** a pack puts it in NuGet's global packages folder, under `tableau.api/1.2.5/`
   (`dotnet nuget locals global-packages --list` names the folder). CI downloads it and checks its SHA-512.
 - **CI** runs the gate, the offline tests on Linux and Windows, the pack, the package check and both API checks on
@@ -55,7 +54,8 @@ PowerShell.
 
 - **A fix that is in 1.2.5's code,** small, and changes no public signature.
 - **1.2.5's public API, unchanged:** package validation against 1.2.5 in every pack, and the ApiCompat tool on the
-  package in CI, both with no suppressions. CI fails when a `CompatibilitySuppressions.xml` exists; no `NoWarn` for a
+  package in CI, both with no suppressions. They fail on a removed or changed member, not on an added one, which a
+  review looks for. CI fails when a `CompatibilitySuppressions.xml` exists; no `NoWarn` for a
   `CP` rule. A new enum member goes after the existing ones, so no value moves.
 - **netstandard2.0, `LangVersion` 10,** and no new dependency.
 - **A security fix is described by what it changes** until the fixed package is on nuget.org: its issue, PR,

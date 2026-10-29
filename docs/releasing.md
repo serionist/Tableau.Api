@@ -25,8 +25,14 @@ A 1.2.x release is a tag on `release/1.x`; `.github/workflows/release.yml` does 
    concluded success on the tagged commit's push run; it has packed the package and checked it. Then it pushes the
    `.nupkg` and the `.snupkg` to nuget.org and creates the GitHub release, with the changelog section as its notes.
 
-If the run fails before the approval, nothing was published: fix `release/1.x` in a PR and tag the new commit. If the
-push fails partway, re-run the failed jobs; what is already on nuget.org is skipped.
+If the run fails before the approval, nothing was published: fix `release/1.x` in a PR and tag the new commit. When
+the fix keeps the version, delete the tag first (`git push origin :refs/tags/v1.2.7`, which only a maintainer may do),
+since `git tag -a` refuses a tag that exists. If the push fails partway, re-run the failed jobs; the package and its
+symbols are pushed apart, and each skips what is already on nuget.org.
+
+**Setup it relies on:** the "Release tags" ruleset lets only the maintainers create, move or delete a `v*` tag; the
+`nuget` environment takes `v*` tags only, needs a maintainer's approval, and holds `NUGET_USER`; nuget.org's trusted
+publishing policy names `release.yml` and `nuget`.
 
 ## Setup
 

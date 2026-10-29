@@ -5,6 +5,9 @@
     <TargetFramework>netstandard2.0</TargetFramework>
     <!-- netstandard2.0 defaults to C# 7.3. A fixed version, not latest, so a newer SDK never changes what compiles. -->
     <LangVersion>10</LangVersion>
+    <!-- A new warning fails the build; the doc-comment ones 1.2.5 already had stay warnings. -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);CS1570;CS1572;CS1573;CS1591</WarningsNotAsErrors>
     <Description>A .NET client for the Tableau REST API, on Tableau Server and Tableau Cloud. Not affiliated with or endorsed by Tableau or Salesforce.</Description>
     <PackageTags>Tableau, Tableau API, Tableau C#</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -18,9 +21,10 @@
     <Version>1.2.6</Version>
   </PropertyGroup>
 
-  <!-- Every pack compares the package with 1.2.5 on nuget.org and fails on any change to its public API. No suppression
-       file is allowed (CI fails when one exists), and CI also runs the ApiCompat tool on the package, which reads no
-       property of this project, so nothing here can quiet it. -->
+  <!-- Every pack compares the package with 1.2.5 on nuget.org and fails when a member 1.2.5 has is removed or changed.
+       An added public member passes, so a review looks for one. No suppression file is allowed (CI fails when one
+       exists), and CI also runs the ApiCompat tool on the package, which reads no property of this project, so
+       nothing here can quiet it. -->
   <PropertyGroup>
     <EnablePackageValidation>true</EnablePackageValidation>
     <PackageValidationBaselineVersion>1.2.5</PackageValidationBaselineVersion>
