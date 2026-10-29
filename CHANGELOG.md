@@ -57,6 +57,12 @@ a release turns that section into its own, dated (docs/releasing.md). The format
   `tasks/{id}`.
 - **`GetDataSourceRevisions` and `GetWorkbookRevisions` send `pageSize` and `pageNumber`,** which 1.2.5 checked and
   then left out, so every call returned the first page.
+- **Responses with values Tableau has added since 1.2.5's schema parse:** `OpenID` and `TableauIDWithMFA` as a user's
+  auth setting, and the values Tableau's REST API 3.29 schema lists for site roles, schedule types, project content
+  permissions, job types and capability names. 1.2.5 failed the whole response on one of them. Each is added after
+  the existing members, so no member's value changes.
+- **`TableauSession.UserName` holds the name the session signed in with:** the user name, the token's name for a
+  personal access token, and after `SwitchSite` the name of the session it switched from. 1.2.5 left it null.
 
 ### Known issues
 

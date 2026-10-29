@@ -93,13 +93,13 @@ public sealed class RedirectTests
         server.Map("GET", ProjectsPath, FakeResponse.Xml(200, NoProjects));
         server.Map("POST", SignInPath, Fixtures.SignedIn());
         var other = Fixtures.Session();
-        other.Token = "another-invented-token";
+        other.Token = Fixtures.OtherSessionToken;
 
         await client.QueryProjects(Fixtures.Session());
         await client.QueryProjects(other);
         await client.SignIn(Fixtures.UserName, Fixtures.Password, Fixtures.SiteContentUrl);
 
-        CollectionAssert.AreEqual(new[] { Fixtures.SessionToken, "another-invented-token", null },
+        CollectionAssert.AreEqual(new[] { Fixtures.SessionToken, Fixtures.OtherSessionToken, null },
             server.Requests.Select(request => request.Header("X-Tableau-Auth")).ToArray());
     }
 }
