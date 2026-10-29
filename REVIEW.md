@@ -48,8 +48,8 @@ Each is a yes or no; a "no" is a finding.
    change name the one it breaks?
 7. Does the library still build alone on netstandard2.1 with 0 warnings?
 8. Do paths, encodings, line endings and processes work on Windows and Linux?
-9. Does it leave the one-way doors in `AGENTS.md` alone, or name the one it changes and link the maintainers'
-   agreement?
+9. Does it leave the one-way doors in `AGENTS.md` alone, or name the one it changes and link a maintainer's
+   agreement in its issue?
 10. Did the docs move with it (XML doc comments, `how_to_generate_schema.txt`, `AGENTS.md`), written the way
     `AGENTS.md` asks?
 11. Is each new package needed, from nuget.org, under a licence compatible with MIT, and free of known advisories

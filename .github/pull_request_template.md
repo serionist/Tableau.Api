@@ -20,7 +20,7 @@
 
 ## One-way doors
 
-<!-- "None", or the one this changes (AGENTS.md, One-way doors) and the issue where the maintainers agreed. -->
+<!-- "None", or the one this changes (AGENTS.md, One-way doors) and the issue where a maintainer agreed. -->
 
 <!-- Closes #<n> when this finishes the issue; Refs #<n> when it is one step of it. -->
 Closes #
