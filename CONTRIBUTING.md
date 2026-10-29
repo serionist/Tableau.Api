@@ -24,3 +24,7 @@ The maintainers read a contributor's PR. They never check it out, build or run i
 run next to their credentials, Tableau passwords included (AGENTS.md, Never). CI builds and checks it on GitHub's
 runners, and CodeQL scans it; nothing in CI reaches a Tableau site, so say in the PR what you ran against one, and on
 which Tableau version. Your PR is ready for review when CI is green. A maintainer squash-merges it.
+
+A maintainer merging a Dependabot PR that waits for them, a major or a .NET SDK update, replaces the squash body
+with the update's line ("Bumps X from a to b.") and `Refs #<the PR's number>`: Dependabot's own description quotes
+other projects' release notes, which `PR text` doesn't check.

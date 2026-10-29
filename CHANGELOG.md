@@ -6,9 +6,9 @@ same PR. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1
 
 ## [Unreleased]
 
-2.0.0 is in progress on `main`: a rebuild for .NET 10, not for use yet. The changes on `main` since 1.2.5, the
-Vizportal client and netstandard2.1 among them, reach users in 2.0.0, and its migration guide will list every change
-from 1.2.5.
+2.0.0 is in progress on `main`: a rebuild for .NET 10, not for use yet. It targets net10.0 only; .NET Framework and
+older .NET stay on 1.2.x. The changes on `main` since 1.2.5, the Vizportal client among them, reach users in 2.0.0,
+and its migration guide will list every change from 1.2.5.
 
 ### Changed
 

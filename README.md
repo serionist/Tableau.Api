@@ -5,8 +5,8 @@
 [![CI](https://github.com/serionist/Tableau.Api/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/serionist/Tableau.Api/actions/workflows/ci.yml)
 [![NuGet](https://img.shields.io/nuget/v/Tableau.Api)](https://www.nuget.org/packages/Tableau.Api)
 
-A .NET client for the Tableau REST API, on Tableau Server and Tableau Cloud, and for Vizportal, the undocumented API
-behind Tableau's web client.
+A .NET client for the Tableau REST API, on Tableau Server and Tableau Cloud. 2.0 adds a client for Vizportal, the
+undocumented API behind Tableau's web client, which is on `main` and was never in a 1.x release.
 
 ## Status
 
