@@ -1,0 +1,21 @@
+<Project>
+
+  <!-- What every project on the 1.x line shares lives here, once, never per .csproj: the package metadata main also
+       has, and NuGet audit. The library's own settings stay in its project, as 1.2.5 had them. -->
+
+  <PropertyGroup Label="Package metadata">
+    <Authors>Soma Osvay, László Nemes</Authors>
+    <PackageProjectUrl>https://github.com/serionist/Tableau.Api</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/serionist/Tableau.Api</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Package advisories">
+    <!-- Every package with a known advisory, direct or transitive, shows in the build. -->
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>low</NuGetAuditLevel>
+  </PropertyGroup>
+
+</Project>

@@ -16,7 +16,7 @@ namespace Tableau.Api.Tests
         public async Task A04_1_CreateProject()
         {
             Context.CreatedProjectName = Guid.NewGuid().ToString("N");
-            Context.CreatedProjectId = (await Context.Client.CreateProject(Context.AdminSession, Context.CreatedProjectName, "anyad")).id;
+            Context.CreatedProjectId = (await Context.Client.CreateProject(Context.AdminSession, Context.CreatedProjectName, "A project the live tests create")).id;
 
         }
     }
