@@ -38,7 +38,7 @@ namespace Tableau.Api
         {
             checkEndpointAvailability();
             checkNullParameters((nameof(session), session), (nameof(name), name), (nameof(contentUrl), contentUrl));
-            return await getResponseAsObject<siteType>(await apiRequest(buildUri("sites"),
+            return await getResponseAsObject<siteType>(await apiRequest(buildUri($"sites"),
                 HttpMethod.Post, 201, cancelToken, session,
                 getObjectAsRequestContent(new siteType()
                 {
@@ -135,7 +135,7 @@ namespace Tableau.Api
             checkNullParameters((nameof(session), session));
             checkParametersBetween((nameof(pageSize), pageSize, 1, 1000), (nameof(pageNumber), pageNumber, 1, int.MaxValue));
             return await getResponseAsObject<paginationType, siteListType>(await apiRequest(
-                buildUri("sites", ("pageSize", pageSize.ToString()), ("pageNumber", pageNumber.ToString())),
+                buildUri($"sites", ("pageSize", pageSize.ToString()), ("pageNumber", pageNumber.ToString())),
                 HttpMethod.Get, 200,
                 cancelToken, session));
 

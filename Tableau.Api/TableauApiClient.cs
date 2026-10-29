@@ -118,13 +118,29 @@ namespace Tableau.Api
             if (!string.IsNullOrEmpty(AuthToken)) c.DefaultRequestHeaders.TryAddWithoutValidation("X-Tableau-Auth", AuthToken);
             return c;
         }
-        private Uri buildUri(string relativePath, params (string, string)[] urlParams)
+
+        /// <summary>
+        /// The request URI: the base URL with its path, the API version, the path with its values escaped, and the
+        /// query. Throws ArgumentException, before anything is sent, when this platform's URI parsing would send
+        /// another path than the one written.
+        /// </summary>
+        private Uri buildUri(RequestPath relativePath, params (string, string)[] urlParams)
         {
-            var url = $"{BaseUrl.Scheme}://{BaseUrl.Host}:{BaseUrl.Port}/api/{ApiVersion}/{(relativePath.StartsWith("/") ? relativePath.Substring(1) : relativePath)}";
+            var basePath = BaseUrl.AbsolutePath.EndsWith("/", StringComparison.Ordinal)
+                ? BaseUrl.AbsolutePath
+                : BaseUrl.AbsolutePath + "/";
+            var path = $"{basePath}api/{ApiVersion}/{relativePath.ToEscapedPath()}";
+            var url = $"{BaseUrl.Scheme}://{BaseUrl.Host}:{BaseUrl.Port}{path}";
             if (urlParams.Any())
                 url += $"?{string.Join("&", urlParams.Select(e => $"{e.Item1}={(e.Item1 == "filter" || e.Item1 == "sort" ? e.Item2 : HttpUtility.UrlEncode(e.Item2))}"))}";
-            return new Uri(url);
-
+            var uri = new Uri(url);
+            // Some .NET Framework targets' URI parsing changes a path after it is escaped, so the path it would send is
+            // checked against the one written.
+            if (!string.Equals(uri.AbsolutePath, path, StringComparison.Ordinal))
+                throw new ArgumentException(
+                    $"The request path '{path}' would be sent as '{uri.AbsolutePath}' by this platform's URI parsing, so it "
+                    + "is not sent. A value in it holds characters that this .NET Framework target rewrites.");
+            return uri;
         }
 
       

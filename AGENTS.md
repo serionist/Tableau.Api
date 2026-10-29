@@ -16,8 +16,8 @@ repo's rules (`git show origin/main:AGENTS.md`); where the two differ, on this b
 
 | Path | What |
 |---|---|
-| `Tableau.Api/` | the library, as 1.2.5 had it; its project holds the version and the package settings |
-| `tests/Tableau.Api.Tests/` | the offline tests (MSTest on Microsoft.Testing.Platform, net10.0, and net48 on Windows), against `Fakes/FakeTableauServer`, an HTTP server on a loopback port that records each request as sent |
+| `Tableau.Api/` | the library: 1.2.5's code with the line's fixes, every request path built by `RequestPath.cs`; its project holds the version and the package settings |
+| `tests/Tableau.Api.Tests/` | the offline tests (MSTest on Microsoft.Testing.Platform, net10.0, and net48 on Windows), against `Fakes/FakeTableauServer`, an HTTP server on a loopback port that records each request as sent; on net48 they also run in AppDomains that target older .NET Framework versions, beside 1.2.5's own assembly, which the project downloads |
 | `Tableau.Api.sln` | the library and the offline tests |
 | `eng/` | `gate.cs`, the gate, the hooks' entry points and the setup; `package-check.cs`, what a pack must hold |
 | `.githooks/` | `commit-msg` refuses attribution, `pre-push` runs gate quick on what the push sends, `post-checkout` and `post-merge` name changed AI setup files |

@@ -27,4 +27,13 @@
     <ProjectReference Include="..\..\Tableau.Api\Tableau.Api.csproj" />
   </ItemGroup>
 
+  <!-- 1.2.5's own assembly, for the net48 tests that work out what 1.2.5 sent on each .NET Framework target. It is
+       downloaded, not referenced, and copied beside the tests in a folder of its own, so nothing else loads it. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+    <PackageDownload Include="Tableau.Api" Version="[1.2.5]" />
+    <None Include="$([MSBuild]::EnsureTrailingSlash('$(NuGetPackageRoot)'))tableau.api/1.2.5/lib/netstandard2.0/Tableau.Api.dll"
+          Link="v1.2.5/Tableau.Api.dll"
+          CopyToOutputDirectory="PreserveNewest" Visible="false" />
+  </ItemGroup>
+
 </Project>

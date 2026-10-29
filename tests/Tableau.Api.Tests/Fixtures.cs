@@ -28,6 +28,10 @@ internal static class Fixtures
         FakeResponse.Xml(200, $"<credentials token=\"{SessionToken}\">"
             + $"<site id=\"{SiteId}\" contentUrl=\"{SiteContentUrl}\"/><user id=\"{UserId}\"/></credentials>");
 
+    /// <summary>The session a sign-in returns, for tests whose server need not see the sign-in.</summary>
+    public static TableauSession Session() =>
+        new() { SiteId = SiteId, UserId = UserId, Token = SessionToken, UserName = UserName };
+
     /// <summary>Map the sign-in on the server and sign in; the tests of other calls start here.</summary>
     public static async Task<TableauSession> SignInAsync(FakeTableauServer server, TableauApiClient client)
     {
