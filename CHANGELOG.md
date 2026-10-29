@@ -18,8 +18,8 @@ a release turns that section into its own, dated (docs/releasing.md). The format
 
 ### Changed
 
-- **A value in a path is escaped,** so a value the caller had already URL-encoded, such as a tag, a site name or a
-  content URL, is now encoded twice.
+- **Values in paths and queries are escaped,** so a value the caller had already URL-encoded is now encoded twice,
+  whether a filter or a path value: a tag, a site name, a content URL.
 - **The licence is MIT.**
 - **The package's metadata:** a description that says what it is and ends "Not affiliated with or endorsed by
   Tableau or Salesforce."; the README packed into it; the project and repository links on GitHub; symbols as a
@@ -30,6 +30,12 @@ a release turns that section into its own, dated (docs/releasing.md). The format
 
 - **The base URL's path is kept,** so a Tableau Server behind a path prefix, such as `https://example.com/tableau/`,
   is reachable. 1.2.5 sent every request to the host's root.
+- **Every query key and value is escaped,** so `&`, `#`, `+` and `%` in a filter, a sort or a view filter reach
+  Tableau as written. In `filter` and `sort` expressions, `:` and `,` stay as the separators, and the parts between
+  them are escaped.
+- **View filters apply to view data and view images:** each name gets the `vf_` prefix unless it has it, as on PDFs.
+  1.2.5 took the prefix off, so Tableau did not read them as view filters.
+- **`QueryViewPDF` with no filters** sends the request; 1.2.5 threw `ArgumentNullException`.
 
 ### Known issues
 
@@ -37,6 +43,10 @@ a release turns that section into its own, dated (docs/releasing.md). The format
   parsing changes some paths after they are escaped, so a call whose path would change throws `ArgumentException`
   before anything is sent. Such a call did not reach the resource it named in 1.2.5 either. Apps that target 4.7.2 or
   later, and .NET Core and .NET 5 or later, are not affected.
+- **On .NET Framework, apps that target 4.5 to 4.7.1 send an escaped colon in a query unescaped** when the request URI
+  holds a non-ASCII character, as 1.2.5 did. The same goes for `!`, `'`, `(`, `)` and `*`; commas stay escaped. So a
+  colon in a view filter's value reaches Tableau as a plain colon when the URI also holds an accented letter. Apps
+  that target 4.0, or 4.7.2 or later, and .NET Core and .NET 5 or later, are not affected.
 
 ## [1.2.5] - 2021-10-13
 

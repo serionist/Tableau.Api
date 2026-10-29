@@ -84,6 +84,31 @@ public sealed class NetFrameworkTargetTests
         Assert.IsEmpty(failures, $"{failures.Count} of {rows} rows:\n" + string.Join("\n", failures));
     }
 
+    // Query values as each target sends them: a view filter value with a colon and a comma, and a filter expression,
+    // each beside a non-ASCII character. The path check covers paths, not queries, so each target's outcome is recorded
+    // here; the changelog lists what targets before 4.7.2 do as a known issue.
+    [TestMethod]
+    [DataRow("4.0", "vf_R%C3%A9gion=C%C3%B4te%3A%20Nord%2C%20Sud", "name:eq:%C3%89quipe%20%28Nord%29")]
+    [DataRow("4.6.1", "vf_R%C3%A9gion=C%C3%B4te:%20Nord%2C%20Sud", "name:eq:%C3%89quipe%20(Nord)")]
+    [DataRow("4.8", "vf_R%C3%A9gion=C%C3%B4te%3A%20Nord%2C%20Sud", "name:eq:%C3%89quipe%20%28Nord%29")]
+    public void QueryValuesBesideNonAsciiAreSentAsEachTargetParsesThem(string target, string viewFilter, string filter)
+    {
+        using var server = FakeTableauServer.Start();
+        using var domain = new TargetDomain(target);
+        var runner = domain.Runner;
+        runner.Start(server.BaseUrl, Fixtures.ApiVersion, Fixtures.SiteId, Fixtures.SessionToken);
+        var sitePath = "/api/" + Fixtures.ApiVersion + "/sites/" + Fixtures.SiteId;
+        server.Map("GET", sitePath + "/views/v1/data", FakeResponse.Text(200, "Region,Sales\n"));
+        server.Map("GET", sitePath + "/datasources", FakeResponse.Xml(200,
+            "<pagination pageNumber=\"1\" pageSize=\"100\" totalAvailable=\"0\"/><datasources/>"));
+
+        Assert.IsNull(runner.QueryViewData("v1", "Région", "Côte: Nord, Sud"));
+        Assert.IsNull(runner.QueryDataSources("name:eq:Équipe (Nord)"));
+
+        CollectionAssert.AreEqual(new[] { viewFilter, "pageSize=100&pageNumber=1&filter=" + filter },
+            server.Requests.Select(request => request.Query).ToArray());
+    }
+
     /// <summary>An AppDomain whose target is the .NET Framework version named, with a runner in it.</summary>
     private sealed class TargetDomain : IDisposable
     {
@@ -152,6 +177,14 @@ public sealed class TargetRunner : MarshalByRefObject
 
     /// <summary>Query Data Source with value as its id: null when it returned, else the exception's kind.</summary>
     public string? QueryDataSource(string value) => Outcome(() => _client!.QueryDataSource(_session!, value).GetAwaiter().GetResult());
+
+    /// <summary>Query View Data with one view filter: null when it returned, else the exception's kind.</summary>
+    public string? QueryViewData(string viewId, string name, string value) =>
+        Outcome(() => _client!.QueryViewData(_session!, viewId, null, (name, value)).GetAwaiter().GetResult().Dispose());
+
+    /// <summary>Query Data Sources with a filter expression: null when it returned, else the exception's kind.</summary>
+    public string? QueryDataSources(string filter) =>
+        Outcome(() => _client!.QueryDataSources(_session!, filterExpression: filter).GetAwaiter().GetResult());
 
     private static string? Outcome(Action call)
     {

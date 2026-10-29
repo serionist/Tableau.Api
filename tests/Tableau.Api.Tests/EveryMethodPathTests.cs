@@ -12,17 +12,18 @@ namespace Tableau.Api.Tests;
 
 /// <summary>
 /// Every public method of the client, driven with each of its string parameters set to a marker: wherever the marker
-/// reaches a request path, it is one whole segment, and the same parameter set to ".." is refused before sending.
-/// The methods and their path parameters are found by calling them, so a new one is covered without a list.
+/// reaches a request path, it is one whole segment, and the same parameter set to ".." is refused before sending;
+/// wherever it reaches the query, it is one whole value. The methods and their path parameters are found by calling
+/// them, so a new one is covered without a list.
 /// </summary>
 [TestClass]
 public sealed class EveryMethodPathTests
 {
-    // Characters a path must escape, a non-ASCII one, and no : or , so a filter keeps it whole.
+    // Characters a URI must escape, a non-ASCII one, and no : or , so a filter keeps it whole.
     private const string Marker = "Mk/?#%\\ é;&=+$[]";
 
     [TestMethod]
-    public async Task EveryValueInARequestPathIsOneSegmentAndDotsAreRefused()
+    public async Task EveryValueIsSentWholeAndDotsInAPathAreRefused()
     {
         using var server = FakeTableauServer.Start();
         var client = Fixtures.Client(server);
@@ -50,6 +51,11 @@ public sealed class EveryMethodPathTests
                     {
                         if (segment == Marker) inPath = true;
                         else failures.Add($"{Name(method)}({parameter.Name}): the value is split in {request.RequestLine}");
+                    }
+                    foreach (var part in request.QueryParameters.SelectMany(pair => new[] { pair.Key, pair.Value }))
+                    {
+                        if (part.Contains("Mk") && part != Marker)
+                            failures.Add($"{Name(method)}({parameter.Name}): the value is split in the query of {request.RequestLine}");
                     }
                 }
                 if (!inPath) continue;
