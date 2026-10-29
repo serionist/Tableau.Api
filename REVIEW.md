@@ -99,42 +99,29 @@ Rules:
 - A change that only makes a check stricter needs no more than a normal review.
 - The attribution rule in `eng/gate.cs` is omniverse-mcp's, with Python's meaning, and its selftest cases are that
   repo's: a change to one changes the other, or says why not.
-- Permission rules are no security boundary, and the `Read` denies in `.claude/settings.json` don't cover a shell: a
-  command that may take any option can print any file, through an option that reads one (`git blame --contents`, a
-  `dotnet` response file `@<file>`), a short flag bundled with others (`git blame -wS <file>`), an abbreviated long
-  option (`--ignore-revs-f`), a quote or backslash inside an option's or a git subcommand's name (`--no-i''ndex`,
-  `-\-no-index`, `git bl''ame`), a redirection before the command's name (`<f git grep ...`), or git's implicit
-  no-index (`git diff` of two paths, one outside the repo).
-- So an allow is an exact command, or has a `*` only where nothing after it can be an option or a path that reads
-  a file; for `git diff` not even after `--`, where two paths still switch it to no-index. A new allow is checked
-  option by option against `git help <command>` or the gh docs.
-- Claude Code's built-in read-only commands run without a prompt whatever the allows say, and only a deny or ask rule
-  stops one. Some it takes flag by flag, by their full spelling (git, gh, `grep`, `rg`, `tree`). Others it takes
-  with any flag in any abbreviation, by name (`cat`, `diff`, `wc`, `du`, `strings`) or by a pattern (`jq`, `find`),
-  and checks only their positional paths: `diff --fr=<file>` and `strings @<file>` read past every Read deny.
-- So each of their options whose value or effect reads a file or a folder past the named paths has a deny: by its
-  full spelling for the first kind, by its shortest unique prefix for the second (`diff *--fr*`), in both `Bash(...)`
-  and `PowerShell(...)` forms. A short one (`-f`, `-X`) has a Bash deny, and an ask in both shells for any dash-word
-  holding its letter, which is what stops a bundle (`grep -iR`): those asks are load-bearing, and every new short
-  deny gets one.
-- PowerShell rules ignore case, asks as well as denies: a short-flag deny there would also refuse `-r` for `-R`, so
-  PowerShell has the asks alone, and they ask for `grep -rn` too.
-- A rule matches the command's text, quotes included, but the read-only check reads its words after bash removes
-  quotes and backslashes: `--no-i''ndex` passes the deny on `--no-index` and runs, and so does `git bl''ame`, whose
-  subcommand the deny on `git blame` never sees. So every command with a deny asks, in Bash, for a `'`, a `"` or a
-  `\` anywhere in it, and every `git` command does, whatever its subcommand. A quoted pattern (`grep -n "a b"`,
-  `git log --format='%h'`, `git commit -m "..."`, which `git commit -F <file>` avoids) asks too: that is the cost.
-  The backslash rule holds four backslashes (eight in the JSON), as Claude Code unescapes a rule twice; one or two
-  match nothing. PowerShell denies or asks for the quoted spellings already, and passes a backslash on to the tool,
-  which refuses the option.
-- Claude Code checks none of the paths of `du`, `tree`, `fd` and `fdfind`, so each asks with any argument.
-- A rule matches from the command's first character, and bash takes redirections before the name, which the
-  read-only check skips: `2>&1 git blame --ignore-revs-file <file>` matches no rule. So Bash asks for a command that
-  starts with `<`, `>`, `&` or a digit. PowerShell refuses a leading redirection.
-- A recursive read inside the clone (`grep -r`, a glob) has no deny, which is why a runsettings file lives outside it
-  (`AGENTS.md`, Build and test).
-- A change to the permission rules is checked against Claude Code's own engine, headless, in a scratch clone with
-  canary files: `claude -p --permission-mode default --setting-sources project --tools Bash` (then `PowerShell`)
+- Permission rules are no security boundary, and they are kept light so they rarely ask. What protects a secret is
+  that it lives outside the clone (`AGENTS.md`, Build and test), the `Read` denies on its name, and the gate and
+  pre-push, which check every commit.
+- The allows cover the normal git, gh and dotnet workflow, in `Bash(...)` and `PowerShell(...)` forms alike.
+- The denies refuse, never ask:
+  - reading a secret by name;
+  - `--no-verify`, a `dotnet` response file `@<file>`, and `dotnet nuget push`, since publishing goes through
+    `release.yml` only;
+  - the options of Claude Code's built-in read-only commands that read a file or folder past the paths they name
+    (`git diff --no-index`, `git blame --ignore-revs-file`, `diff --from-file`, `wc --files0-from`, `strings @`).
+    Those commands run without a prompt whatever the allows say. The derivation from Claude Code's table is #4.
+- The one ask is a test run given a settings file, which is the live suite.
+- The denies are matched as typed, so some spellings get past them, and that is accepted:
+  - a short flag in a bundle (`grep -iR`);
+  - an abbreviation;
+  - a quote or backslash inside an option's or a subcommand's name (`--no-i''ndex`, `git bl''ame`);
+  - a redirection before the command (`2>&1 git blame ...`);
+  - git's implicit no-index.
+
+  `docs/reviews/2026-10-28-dev-harness-code.md` records each one, and the asks that once closed them made nearly
+  every command prompt. Bring one back only for a secret the clone must hold.
+- A change to the denies is checked against Claude Code's own engine, headless, in a scratch clone with canary
+  files: `claude -p --permission-mode default --setting-sources project --tools Bash` (then `PowerShell`)
   `--model haiku --output-format stream-json --verbose`, each command's result read from the stream. The project's
   allows count only in a folder Claude Code trusts, or in settings passed with `--settings <file>`; denies and asks
   count everywhere. A matcher is no substitute. The built-in table can change with each Claude Code release, so

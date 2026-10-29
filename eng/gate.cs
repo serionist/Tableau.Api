@@ -126,12 +126,15 @@ internal static class Proc
     }
 
     /// <summary>git in cwd (the repo when null); the caller reads the exit code and the output.</summary>
-    public static Done Git(IEnumerable<string> args, string? cwd = null, string? stdin = null)
-    {
-        var elsewhere = cwd is not null && !SamePath(cwd, Repo.Root);
-        var env = elsewhere ? RepoVariables.ToDictionary(name => name, _ => (string?)null) : null;
-        return Run(Which("git") ?? "git", args, cwd, stdin, env);
-    }
+    public static Done Git(IEnumerable<string> args, string? cwd = null, string? stdin = null) =>
+        Run(Which("git") ?? "git", args, cwd, stdin, EnvFor(cwd));
+
+    /// <summary>
+    /// The environment for a program that runs git in cwd: without the repo variables when cwd is another folder.
+    /// gitleaks runs git log under it, so it needs this as much as a git command does.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string?>? EnvFor(string? cwd) =>
+        cwd is not null && !SamePath(cwd, Repo.Root) ? RepoVariables.ToDictionary(name => name, _ => (string?)null) : null;
 
     public static bool SamePath(string a, string b) => string.Equals(
         Path.GetFullPath(a).TrimEnd('/', '\\'), Path.GetFullPath(b).TrimEnd('/', '\\'),
@@ -816,7 +819,7 @@ internal static class Lanes
         [
             "git", "--config", config, "--log-opts", $"{GitleaksPlainLog} {range}",
             "--redact", "--no-banner", "--no-color", "--ignore-gitleaks-allow", "--exit-code", "1", "-v", root,
-        ], cwd: root);
+        ], cwd: root, env: Proc.EnvFor(root));
         var output = Py.Strip(done.Stdout + done.Stderr);
         if (done.ExitCode != 0) return new Result("gitleaks", "FAIL", $"secrets found in {rev}, or the scan failed", output);
         return Rules.GitleaksProblem(output) is { } problem ? new Result("gitleaks", "FAIL", $"{rev}: {problem}", output) : null;
@@ -2203,7 +2206,8 @@ internal static class SelfTest
         var exe = Proc.Which("gitleaks");
         var config = Path.Combine(Repo.Root, Repo.GitleaksConfig);
         string[] names = ["a commit that only deletes", "a commit that only renames", "a commit that only changes a mode",
-            "a commit that adds an empty file", "a blobless clone whose remote is gone"];
+            "a commit that adds an empty file", "a blobless clone whose remote is gone",
+            "a scratch repo with a hook's GIT_DIR set"];
         if (exe is null || !File.Exists(config))
         {
             foreach (var name in names) t.Skip($"gitleaks on {name}", exe is null ? "gitleaks is not installed" : $"no {Repo.GitleaksConfig}");
@@ -2226,6 +2230,22 @@ internal static class SelfTest
             git(["commit", "-q", "-m", $"Change: {name}"]);
             var failed = Lanes.Gitleaks(exe, repo, config, "HEAD~1..HEAD");
             t.Equal($"gitleaks on {name} passes", "pass", failed is null ? "pass" : $"{failed.Detail}: {failed.Output}");
+        }
+
+        // A hook in a worktree runs with GIT_DIR set to this repo's git folder; gitleaks on a scratch repo must not
+        // inherit it, or its git log reads this repo and refuses the scratch repo's range.
+        var hookGitDir = Py.Strip(Proc.Git(["rev-parse", "--absolute-git-dir"]).Stdout);
+        var before = Environment.GetEnvironmentVariable("GIT_DIR");
+        Environment.SetEnvironmentVariable("GIT_DIR", hookGitDir);
+        try
+        {
+            var underHook = Lanes.Gitleaks(exe, repo, config, "HEAD~1..HEAD");
+            t.Equal($"gitleaks on {names[5]} passes", "pass",
+                underHook is null ? "pass" : $"{underHook.Detail}: {underHook.Output}");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GIT_DIR", before);
         }
 
         git(["config", "uploadpack.allowFilter", "true"]);
