@@ -8,6 +8,8 @@ a release turns that section into its own, dated (docs/releasing.md). The format
 
 ## [Unreleased]
 
+## [1.2.6] - 2026-10-29
+
 ### Security
 
 - **Path segments are escaped and checked before sending.** Every value a method puts in a request path, ids, tag
@@ -74,6 +76,9 @@ a release turns that section into its own, dated (docs/releasing.md). The format
   holds a non-ASCII character, as 1.2.5 did. The same goes for `!`, `'`, `(`, `)` and `*`; commas stay escaped. So a
   colon in a view filter's value reaches Tableau as a plain colon when the URI also holds an accented letter. Apps
   that target 4.0, or 4.7.2 or later, and .NET Core and .NET 5 or later, are not affected.
+- **Left for 2.0, since each fix needs a new signature:** `UpdateGroupFromActiveDirectory` and
+  `UpdateGroupFromActiveDirectoryAsJob` take no group id and send their update to the group list, not to a group;
+  `AddWorkbookToSchedule` returns null; `QueryDatabases` and `QueryTables` return the first page only.
 
 ## [1.2.5] - 2021-10-13
 
@@ -81,4 +86,5 @@ The last release before this changelog was kept. Its changes, and those of every
 history up to 1.2.5's commit, `b23503e`.
 
 [Unreleased]: https://github.com/serionist/Tableau.Api/commits/release/1.x
+[1.2.6]: https://www.nuget.org/packages/Tableau.Api/1.2.6
 [1.2.5]: https://www.nuget.org/packages/Tableau.Api/1.2.5
