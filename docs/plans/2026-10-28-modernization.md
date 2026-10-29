@@ -1406,7 +1406,7 @@ Status: `todo`, `done` (with the PR) or `wontfix` (with the reason). No finding 
 
 ### Round 1
 
-- **How:** a fresh reviewer agent, with review-plan's method and lenses, on `6fbec9e`, 2026-10-29.
+- **How:** a fresh reviewer agent (Claude Opus 5.5), with review-plan's method and lenses, on `6fbec9e`, 2026-10-29.
 - **Verdict:** needs-fixes: 7 majors, 7 minors and 2 owner calls.
 - **Now:** every finding below is fixed in the plan, the owner calls are answered, and every improvement has its
   answer. The round had majors, so round 2 reads these edits.
@@ -1428,8 +1428,18 @@ Status: `todo`, `done` (with the PR) or `wontfix` (with the reason). No finding 
 | P13 | minor | The plan's one-way-door rule ("the maintainer's yes on the issue") was not AGENTS.md's | fixed: stated as AGENTS.md writes it: a PR that names the door in its title, after the maintainers agree in its issue; either maintainer's yes counts |
 | P14 | minor | S2's smoke run needs the Developer Program site, which the plan set up only before S11; where its PAT lives, and what Cloud cannot show, went unsaid | fixed: joining the site moved to "For S1 and S2"; the smoke program lives outside the clone with the PAT in environment variables; each PR says what Server-only behaviour, such as schedules, Cloud could not show |
 
-**Refuted:** the round's report lists them, but it was not passed to the plan's author with the findings. They are
-added here from the report before round 2.
+**Refuted:**
+- *Exploit-level text in the plan:* none. The security rows say what changes, the vulnerable code is already public, and no attack example appears.
+- *1.2.6 can't ship before `main` has CI and `release.yml`:* it can, apart from P1.
+  - Tag-triggered workflows run from the tagged commit, and `pull_request` workflows from the PR's merge commit, so S2's PRs report both required checks.
+  - The trusted-publishing policy has no branch filter, and `v1.2.6` matches the `nuget` environment's `v*` rule.
+- *A 1.2.6 fix changes a public signature:* none, checked against `b23503e`. The changed request code is private, `dayToRun` and `intervalType.monthDay` exist, and the auth-setting enum holds only `ServerDefault` and `SAML`. P4 is about the missing check.
+- *The mappings:* F1 to F50 each appear exactly once, and RD1 to RD9 and the 22 features are all mapped. Only the package icon was unmapped; it is an improvement now.
+- *MinVer on `main` picking up `v1.*` tags:* no. Those tags aren't ancestors of `main`, and the minimum is 2.0.
+- *Following no redirects in 1.2.6 breaks users:* it is deliberate, recorded under Not chosen and in the CHANGELOG.
+- *Plan text that depends on the removed permission rules:* none, apart from the progress log's history rows.
+- *The live suite's secrets reaching forks:* no. It never runs on PRs and is limited to `main`.
+- *S5's legacy section loosens a check:* no. Overall it is stricter than today's `NoWarn` list.
 
 **Owner calls:**
 
