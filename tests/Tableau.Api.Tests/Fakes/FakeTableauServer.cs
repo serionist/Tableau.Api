@@ -89,8 +89,11 @@ internal sealed class FakeTableauServer : IDisposable
 
     private async Task ServeAsync(TcpClient client)
     {
+        // Taken once: TcpClient.Client is null once the client is closed. Stopping the server resets a connection as
+        // its end does, so no stop leaves one in TIME_WAIT either.
+        var socket = client.Client;
         using (client)
-        using (_stop.Token.Register(client.Close))
+        using (_stop.Token.Register(() => Reset(socket)))
         {
             try
             {
@@ -104,17 +107,29 @@ internal sealed class FakeTableauServer : IDisposable
                 }
                 var response = respond is null ? FakeResponse.NoRoute(request) : Respond(respond, request);
                 await WriteAsync(stream, response).ConfigureAwait(false);
-                // A side that closes gracefully after the other waits in TIME_WAIT, so the client closes first, as
-                // Connection: close asks, and the server then resets the connection, which ends it on both sides. The
-                // socket is closed here: disposing the TcpClient would shut it down gracefully first.
+                // The side that closes first waits in TIME_WAIT, so the server waits for the client to close, as
+                // Connection: close asks, and answers with a reset, which leaves neither side waiting. The socket is
+                // closed here: disposing the TcpClient would shut it down gracefully first.
                 await WaitForCloseAsync(stream).ConfigureAwait(false);
-                client.Client.LingerState = new LingerOption(true, 0);
-                client.Client.Close();
+                Reset(socket);
             }
             catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException)
             {
                 // The client went away, or the server is stopping: there is no one to answer.
             }
+        }
+    }
+
+    private static void Reset(Socket socket)
+    {
+        try
+        {
+            socket.LingerState = new LingerOption(true, 0);
+            socket.Close();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Already closed, by the connection's end or the server's stop.
         }
     }
 
