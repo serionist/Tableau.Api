@@ -1,8 +1,28 @@
 <Project>
 
-  <!-- What every project shares lives here, once, never per .csproj. The modernization adds the target framework and
-       the strictness settings (Nullable, TreatWarningsAsErrors, EnforceCodeStyleInBuild) here when the code is ready
-       for them. -->
+  <!-- What every project shares lives here, once, never per .csproj: the target, the strictness, the package metadata
+       and the restore rules. Packaging lives in src/Directory.Build.props, the test projects' settings in
+       tests/Directory.Build.props, and every package version in Directory.Packages.props. The file-based apps in eng/
+       read this file too; the gate holds its own build as it is with #:property lines, which win over these. -->
+
+  <!-- net10.0 only: .NET Framework and older .NET stay on 1.2.x. The language version is the target's default, so a
+       newer SDK never changes what compiles. -->
+  <PropertyGroup Label="Language">
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <!-- Every warning fails the build, the .NET analyzers run at latest-recommended and the .editorconfig style is
+       enforced in the build. No project sets NoWarn: a rule is relaxed in .editorconfig, for the files named there with
+       the reason, and the old code's rules in its TableauLegacy section, which only shrinks. The level and the mode are
+       set apart, as latest-recommended is, so the gate's own AnalysisMode wins for it. -->
+  <PropertyGroup Label="Strictness">
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <AnalysisMode>Recommended</AnalysisMode>
+  </PropertyGroup>
 
   <PropertyGroup Label="Package metadata">
     <Authors>Soma Osvay, László Nemes</Authors>
@@ -12,11 +32,21 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
 
-  <PropertyGroup Label="Package advisories">
-    <!-- Every package with a known advisory, direct or transitive, shows in the build. -->
+  <PropertyGroup Label="Restore">
+    <!-- Every package with a known advisory, direct or transitive, shows in the build, and fails it. -->
     <NuGetAudit>true</NuGetAudit>
     <NuGetAuditMode>all</NuGetAuditMode>
     <NuGetAuditLevel>low</NuGetAuditLevel>
+    <!-- Lock files make every restore resolve the same graph, each package checked by its hash; CI restores in locked
+         mode and fails on drift. -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RestoreLockedMode Condition="'$(CI)' == 'true'">true</RestoreLockedMode>
+  </PropertyGroup>
+
+  <!-- On GitHub's runners the build writes no path of the runner into the assembly or its symbols, so the same commit
+       builds the same files wherever it runs. -->
+  <PropertyGroup Label="CI" Condition="'$(GITHUB_ACTIONS)' == 'true'">
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
   </PropertyGroup>
 
 </Project>

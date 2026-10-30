@@ -25,7 +25,7 @@ public sealed class ProjectsTests
 
         var (pagination, projects) = await client.QueryProjects(session);
 
-        var request = server.Requests.Last();
+        var request = server.Requests[^1];
         Assert.AreEqual($"GET {ProjectsPath}?pageSize=100&pageNumber=1 HTTP/1.1", request.RequestLine);
         Assert.AreEqual(Fixtures.SessionToken, request.Header("X-Tableau-Auth"));
         Assert.AreEqual("application/xml", request.Header("Accept"));

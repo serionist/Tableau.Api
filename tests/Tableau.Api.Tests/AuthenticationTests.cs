@@ -43,7 +43,7 @@ public sealed class AuthenticationTests
 
         await client.SignOut(session);
 
-        var request = server.Requests.Last();
+        var request = server.Requests[^1];
         Assert.AreEqual($"POST /api/{Fixtures.ApiVersion}/auth/signout HTTP/1.1", request.RequestLine);
         Assert.AreEqual(Fixtures.SessionToken, request.Header("X-Tableau-Auth"));
     }

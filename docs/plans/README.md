@@ -52,7 +52,7 @@ suite (by hand, against which Tableau Server version or Tableau Cloud), and what
 
 ## Docs
 
-The docs that change with it: XML doc comments, `Tableau.Api/Models/how_to_generate_schema.txt`, `AGENTS.md`.
+The docs that change with it: XML doc comments, `src/Tableau.Api/Models/how_to_generate_schema.txt`, `AGENTS.md`.
 
 ## Risks
 

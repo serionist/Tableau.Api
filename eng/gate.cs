@@ -64,7 +64,7 @@ internal static class Repo
     public const string GitleaksConfig = ".gitleaks.toml";
     public const string GitleaksIgnore = ".gitleaksignore";
     public const string BlameIgnoreRevs = ".git-blame-ignore-revs";
-    public const string Library = "Tableau.Api/Tableau.Api.csproj";
+    public const string Library = "src/Tableau.Api/Tableau.Api.csproj";
     public const string Tests = "tests/Tableau.Api.Tests/Tableau.Api.Tests.csproj";
 
     /// <summary>The folder above eng/, wherever the command runs from.</summary>
@@ -966,8 +966,8 @@ internal static class Lanes
         return new Result("gitleaks", "pass", $"{scope.Commits.Count} commits");
     }
 
-    // The offline tests, by their project's path: the solution also holds the old live suite, Tableau.Api.Tests/, which
-    // doesn't build and needs a Tableau site (AGENTS.md, Build and test).
+    // The offline tests, by their project's path, so the count the check reports is theirs alone. The old live suite,
+    // Tableau.Api.Tests/, is in no solution: it doesn't build and needs a Tableau site (AGENTS.md, Build and test).
     private static Result CheckTests(Scope _)
     {
         var dotnet = Proc.Which("dotnet");
@@ -1752,6 +1752,7 @@ internal static class SelfTest
             TextLaneCases(t, scratch);
             Flags(t);
             TestsCases(t);
+            StrictnessCases(t, scratch);
             Files(t);
             CommitMsgCases(t, scratch);
             PushCases(t);
@@ -1906,6 +1907,41 @@ internal static class SelfTest
         t.Equal("gate full fails when a test fails", 1, code);
         t.Contains("it names the tests check", stdout.ToString(), "gate full FAILED: tests");
         t.Contains("it shows what dotnet test printed", stdout.ToString(), "failed PathTests.EveryAsciiCharacterIsSentEscaped");
+    }
+
+    // A cast that can never succeed, which CA2021 finds, in a new file beside the library's old code.
+    private const string CastProbe = "using System.Collections.Generic;\nusing System.Linq;\n\nnamespace Tableau.Api;\n\n"
+        + "internal static class GateProbe\n{\n"
+        + "    internal static IEnumerable<string> Strings(IEnumerable<int> numbers) => numbers.Cast<string>();\n}\n";
+
+    // The library's strictness, built for real: the repo's build settings and .editorconfig, copied into a scratch
+    // folder with a project in the library's place, so nothing is written into the repo. The TableauLegacy section of
+    // .editorconfig relaxes CA2021 only for the old files it lists, so the new file must fail the build, with CA2021
+    // alone: any other error would mean the probe, not the rule, failed it.
+    private static void StrictnessCases(Tally t, string scratch)
+    {
+        const string Name = "a CA2021 cast fails the build outside the legacy section";
+        var dotnet = Proc.Which("dotnet");
+        if (dotnet is null)
+        {
+            t.Skip(Name, "dotnet not found");
+            return;
+        }
+        var probe = Path.Combine(scratch, "strictness");
+        var library = Path.Combine(probe, Path.GetDirectoryName(Repo.Library)!);
+        Directory.CreateDirectory(library);
+        foreach (var file in new[] { ".editorconfig", "Directory.Build.props", "Directory.Packages.props", "global.json", "nuget.config" })
+            File.Copy(Path.Combine(Repo.Root, file), Path.Combine(probe, file));
+        File.WriteAllText(Path.Combine(probe, Repo.Library), "<Project Sdk=\"Microsoft.NET.Sdk\" />\n", new UTF8Encoding(false));
+        File.WriteAllText(Path.Combine(library, "GateProbe.cs"), CastProbe, new UTF8Encoding(false));
+        // No lock file is kept for the probe, so a CI run's locked mode is turned off for it.
+        var done = Proc.Run(dotnet, ["build", Repo.Library, "-nologo", "-tl:off", "-nodeReuse:false", "-p:RestoreLockedMode=false"],
+            cwd: probe, env: new Dictionary<string, string?> { ["DOTNET_CLI_UI_LANGUAGE"] = "en" });
+        var output = Py.Strip(done.Stdout + done.Stderr);
+        var errors = Regex.Matches(output, @"GateProbe\.cs\(\d+,\d+\): error (\w+)", RegexOptions.CultureInvariant)
+            .Select(match => match.Groups[1].Value).Distinct(StringComparer.Ordinal).ToList();
+        t.True(Name, done.ExitCode != 0 && errors.SequenceEqual(["CA2021"]),
+            $"exit {done.ExitCode}, errors in the probe [{string.Join(", ", errors)}]: {Rules.LastLine(output)}");
     }
 
     private static void Flags(Tally t)
@@ -2119,9 +2155,9 @@ internal static class SelfTest
 
         foreach (var (path, expected) in new[]
                  {
-                     ("AGENTS.md", true), ("Tableau.Api.Tests/CLAUDE.md", true), ("REVIEW.md", true), (".mcp.json", true),
+                     ("AGENTS.md", true), ("tests/Tableau.Api.Tests/CLAUDE.md", true), ("REVIEW.md", true), (".mcp.json", true),
                      (".claude/skills/start-work/SKILL.md", true), (".agents/skills/start-work", true),
-                     ("Tableau.Api/TableauApiClient.cs", false), ("docs/.mcp.json.example", false), ("docs/plans/README.md", false),
+                     ("src/Tableau.Api/TableauApiClient.cs", false), ("docs/.mcp.json.example", false), ("docs/plans/README.md", false),
                  })
             t.Equal($"agent setup: {path}", expected, Hooks.IsAgentSetup(path));
         foreach (var (old, @new, branch, why) in new[]

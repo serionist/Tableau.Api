@@ -1,0 +1,15 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The target, the strictness and the version are in the Directory.Build.props files, the package versions in
+       Directory.Packages.props. -->
+  <PropertyGroup>
+    <Description>A .NET client for the Tableau REST API, on Tableau Server and Tableau Cloud, and for Vizportal, the undocumented API behind Tableau's web client. Not affiliated with or endorsed by Tableau or Salesforce.</Description>
+    <PackageTags>Tableau, Tableau API, Tableau C#</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+    <PackageReference Include="Newtonsoft.Json" />
+  </ItemGroup>
+
+</Project>

@@ -69,7 +69,7 @@ Applies when: the scope touches a public member of `TableauApiClient`, `VizPorta
 
 ## vizportal
 
-Applies when: the scope touches `Tableau.Api/VizPortal/`.
+Applies when: the scope touches `src/Tableau.Api/VizPortal/`.
 
 - The API is internal and unversioned: does the PR name the Tableau version it was checked on, and does a failure
   reach the caller as an error it can act on, not as a null?
@@ -105,8 +105,8 @@ scenario (the two copies already disagree).
 
 Applies when: the scope touches the target framework, packages, paths, files, encodings or processes.
 
-- The target framework: an API or a package that raises it. 1.2.5 ships netstandard2.0, which .NET Framework loads;
-  `main` targets netstandard2.1, which it can't. A change to the target is a one-way door (`AGENTS.md`).
+- The target framework: `main` targets net10.0 only; .NET Framework users stay on 1.2.x, on netstandard2.0. A change
+  to the target, a second one included, is a one-way door (`AGENTS.md`).
 - Tableau Server and Tableau Cloud, and every REST API version the client claims.
 - Windows and Linux: path separators, `\r\n`, text read and written as UTF-8 explicitly, a tool assumed on PATH.
 
@@ -115,8 +115,9 @@ Applies when: the scope touches the target framework, packages, paths, files, en
 Applies when: the scope touches a harness file (`REVIEW.md`, The harness).
 
 Anything that loosens a check: a gate step dropped or made a warning, a rule or a test skipped, a `NoWarn` or an
-ignore added, a question or a lens removed, or attribution let through. A blocker unless a
-maintainer agrees in the PR.
+ignore added, a file added to the TableauLegacy section of `.editorconfig` or a rule the build already enforced
+relaxed there, a package validation suppression added, a question or a lens removed, or attribution let through. A
+blocker unless a maintainer agrees in the PR.
 
 ## Refuting
 

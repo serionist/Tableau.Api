@@ -29,7 +29,7 @@ internal sealed class FakeTableauServer : IDisposable
     private readonly CancellationTokenSource _stop = new();
     private readonly Dictionary<string, Func<RecordedRequest, FakeResponse>> _routes = new(StringComparer.Ordinal);
     private readonly List<RecordedRequest> _requests = [];
-    private readonly object _lock = new();
+    private readonly Lock _lock = new();
     private readonly X509Certificate2? _certificate;
 
     private FakeTableauServer(X509Certificate2? certificate)
@@ -132,9 +132,11 @@ internal sealed class FakeTableauServer : IDisposable
             try
             {
                 Stream stream = client.GetStream();
-                if (_certificate is not null)
+                // Disposed however the connection ends: a refused certificate, an answered request, or the server
+                // stopping during the handshake.
+                await using var tls = _certificate is null ? null : new SslStream(stream, leaveInnerStreamOpen: false);
+                if (tls is not null)
                 {
-                    var tls = new SslStream(stream, leaveInnerStreamOpen: false);
                     try
                     {
                         await tls.AuthenticateAsServerAsync(
@@ -144,7 +146,6 @@ internal sealed class FakeTableauServer : IDisposable
                     catch (Exception ex) when (ex is AuthenticationException or IOException)
                     {
                         // The client refused the certificate, so no request came.
-                        await tls.DisposeAsync().ConfigureAwait(false);
                         return;
                     }
                     stream = tls;
@@ -223,14 +224,14 @@ internal sealed class FakeTableauServer : IDisposable
         {
             var colon = line.IndexOf(':');
             if (colon <= 0) throw new IOException($"Not a header line: {line}");
-            headers.Add(new(line.Substring(0, colon).Trim(), line.Substring(colon + 1).Trim()));
+            headers.Add(new(line[..colon].Trim(), line[(colon + 1)..].Trim()));
         }
 
         // .NET Framework sends Expect: 100-continue with a body and waits for this before sending it.
         if (IsHeader(headers, "Expect", "100-continue"))
         {
             var proceed = Encoding.ASCII.GetBytes("HTTP/1.1 100 Continue\r\n\r\n");
-            await stream.WriteAsync(proceed, 0, proceed.Length).ConfigureAwait(false);
+            await stream.WriteAsync(proceed).ConfigureAwait(false);
         }
 
         byte[] body;
@@ -254,7 +255,7 @@ internal sealed class FakeTableauServer : IDisposable
         {
             var sizeLine = await reader.ReadLineAsync().ConfigureAwait(false);
             var semicolon = sizeLine.IndexOf(';');
-            var size = int.Parse(semicolon < 0 ? sizeLine : sizeLine.Substring(0, semicolon),
+            var size = int.Parse(semicolon < 0 ? sizeLine : sizeLine[..semicolon],
                 NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture);
             if (size == 0) break;
             var chunk = await reader.ReadBytesAsync(size).ConfigureAwait(false);
@@ -279,8 +280,8 @@ internal sealed class FakeTableauServer : IDisposable
         head.Append("Content-Length: ").Append(response.Body.Length.ToString(CultureInfo.InvariantCulture))
             .Append("\r\nConnection: close\r\n\r\n");
         var bytes = Encoding.ASCII.GetBytes(head.ToString());
-        await stream.WriteAsync(bytes, 0, bytes.Length).ConfigureAwait(false);
-        await stream.WriteAsync(response.Body, 0, response.Body.Length).ConfigureAwait(false);
+        await stream.WriteAsync(bytes).ConfigureAwait(false);
+        await stream.WriteAsync(response.Body).ConfigureAwait(false);
         await stream.FlushAsync().ConfigureAwait(false);
     }
 
@@ -302,7 +303,7 @@ internal sealed class FakeTableauServer : IDisposable
                 var b = _buffer[_start++];
                 if (b == '\n')
                 {
-                    if (line.Length > 0 && line[line.Length - 1] == '\r') line.Length--;
+                    if (line.Length > 0 && line[^1] == '\r') line.Length--;
                     return line.ToString();
                 }
                 line.Append((char)b);
@@ -328,7 +329,7 @@ internal sealed class FakeTableauServer : IDisposable
         private async Task<bool> FillAsync()
         {
             _start = 0;
-            _end = await stream.ReadAsync(_buffer, 0, _buffer.Length).ConfigureAwait(false);
+            _end = await stream.ReadAsync(_buffer).ConfigureAwait(false);
             return _end > 0;
         }
     }

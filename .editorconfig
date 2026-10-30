@@ -1,8 +1,8 @@
-# Code style: one line per rule, with its reason where it isn't obvious. This is the target the code moves to: the
-# existing code predates it, and the modernization brings it over in one pass, then turns on EnforceCodeStyleInBuild and
-# TreatWarningsAsErrors for every project so the build fails every `warning` here. Until then the IDE rules warn in the
-# editor only, and the analyzer rules a build runs (CA, SYSLIB) are `suggestion`, marked `-> warning`, so no build's
-# output changes. The library's build runs no analyzers today (netstandard2.1); eng/gate.cs, on net10.0, runs them.
+# Code style: one line per rule, with its reason where it isn't obvious. Every project under src/ and tests/ builds with
+# EnforceCodeStyleInBuild and TreatWarningsAsErrors (Directory.Build.props), so every `warning` here fails its build, and
+# so does every `error`. The analyzer rules (CA, SYSLIB) are set for src/ and tests/ alone: eng/'s file-based apps hold
+# their own build, and the gate, which the hooks run, keeps the defaults. The code from before 2.0 builds under the
+# TableauLegacy section at the end, which relaxes the rules it breaks and only shrinks.
 # Public names are a one-way door (AGENTS.md): the naming rules reach a public member only in a change the maintainers
 # agreed, and a name that is also a wire name (an XML or JSON property) keeps it through an explicit attribute.
 root = true
@@ -18,12 +18,8 @@ indent_size = 4
 [*.{json,yml,yaml}]
 indent_size = 2
 
-[*.{csproj,props,targets,runsettings,config,xml}]
+[*.{csproj,props,targets,slnx,runsettings,config,xml}]
 indent_size = 2
-
-[*.sln]
-end_of_line = crlf
-indent_style = tab
 
 [*.md]
 # Two trailing spaces are a line break in markdown.
@@ -64,7 +60,7 @@ csharp_style_prefer_index_operator = true:warning
 csharp_style_prefer_range_operator = true:warning
 csharp_style_unused_value_expression_statement_preference = discard_variable:silent
 
-# --- Analyzers: each rule is `warning` (for now `suggestion -> warning`, see the top) or `none` with its reason ---
+# --- Analyzers: each rule is `warning` or `none` with its reason; the CA and SYSLIB rules are below, for src/ and tests/ ---
 
 # Kept.
 dotnet_diagnostic.IDE0003.severity = warning   # no `this.`
@@ -90,14 +86,6 @@ dotnet_diagnostic.IDE0305.severity = warning   # collection expression for fluen
 dotnet_diagnostic.IDE0330.severity = warning   # System.Threading.Lock
 dotnet_diagnostic.IDE0340.severity = warning   # unbound generic type
 dotnet_diagnostic.IDE1006.severity = warning   # the naming rules below; a rule's own severity reaches the IDE only
-dotnet_diagnostic.CA1068.severity = suggestion    # -> warning: CancellationToken goes last
-dotnet_diagnostic.CA1816.severity = suggestion    # -> warning: Dispose calls SuppressFinalize
-dotnet_diagnostic.CA1822.severity = suggestion    # -> warning: mark members static
-dotnet_diagnostic.CA1861.severity = suggestion    # -> warning: constant array arguments become static readonly
-dotnet_diagnostic.CA1875.severity = suggestion    # -> warning: Regex.Count over Matches().Count
-dotnet_diagnostic.CA2007.severity = suggestion    # -> warning: ConfigureAwait(false): a library must not capture its caller's context
-dotnet_diagnostic.SYSLIB1045.severity = suggestion  # -> warning: [GeneratedRegex]
-
 # Off.
 # CA1859: IReadOnlyList, IReadOnlyDictionary and IReadOnlySet return types are an immutability contract.
 dotnet_diagnostic.CA1859.severity = none
@@ -143,3 +131,92 @@ dotnet_naming_symbols.async_methods.applicable_kinds = method
 dotnet_naming_symbols.async_methods.required_modifiers = async
 dotnet_naming_style.end_in_async.capitalization = pascal_case
 dotnet_naming_style.end_in_async.required_suffix = Async
+
+# --- The library and its tests: the analyzer rules ---
+[{src,tests}/**.cs]
+dotnet_diagnostic.CA1816.severity = warning    # Dispose calls SuppressFinalize
+dotnet_diagnostic.CA1822.severity = warning    # mark members static
+dotnet_diagnostic.CA1861.severity = warning    # constant array arguments become static readonly
+dotnet_diagnostic.CA1875.severity = warning    # Regex.Count over Matches().Count
+dotnet_diagnostic.SYSLIB1045.severity = warning  # [GeneratedRegex]
+
+# Errors: each of these has shipped a bug in this library, or is the kind that does: a token not passed on, a captured
+# context, text that reads or compares by the machine's culture, a stream or response left open, a cast that always
+# throws.
+dotnet_diagnostic.CA1068.severity = error      # CancellationToken goes last
+dotnet_diagnostic.CA2016.severity = error      # a CancellationToken a method takes is passed on to what it calls
+dotnet_diagnostic.CA2007.severity = error      # ConfigureAwait(false): a library must not capture its caller's context
+dotnet_diagnostic.CA1305.severity = error      # an IFormatProvider, so a number or a date reads the same in any culture
+dotnet_diagnostic.CA1309.severity = error      # ordinal string comparison
+dotnet_diagnostic.CA1310.severity = error      # a StringComparison on every comparison
+dotnet_diagnostic.CA2000.severity = error      # dispose what you create
+dotnet_diagnostic.CA2021.severity = error      # Cast<T> and OfType<T> with a type that can never match
+
+# --- The tests: the idioms a test reads best in ---
+[tests/**.cs]
+# A test method is named for what it shows, without an Async suffix, and MSTest runs it on the test host's own context,
+# which ConfigureAwait would only clutter.
+dotnet_naming_rule.async_suffix.severity = none
+dotnet_diagnostic.CA2007.severity = none
+# Expected values written inline as array literals read best in an assertion, and a test runs them once.
+dotnet_diagnostic.CA1861.severity = none
+
+# --- Generated code ---
+# xsd.exe wrote it from Tableau's REST API schema (Models/how_to_generate_schema.txt). The analyzers skip it, and its
+# nullable context is off, as for any generated file.
+[src/Tableau.Api/Models/XmlSchema.cs]
+generated_code = true
+
+# --- TableauLegacy ---
+# The code from before 2.0, by file: today's files, and no other. They build with the rules below relaxed to
+# `suggestion`, so the editor still shows them: exactly the rules these files break, and no more. The ratchet only turns
+# one way. Each step that ports an area to the 2.0 client deletes the old files it replaces and takes them out of this
+# list, and a rule leaves the list once no file here breaks it. A new file never joins it. The reformat takes out the
+# style rules (IDE) it fixes. The release candidate of 2.0.0 is cut only once this section is gone.
+# Nullable is on for these files too, but nothing in them is annotated (CS86xx below), so until a port replaces them
+# their members read to a caller as never null, which they are not.
+[src/Tableau.Api/{PartialStream.cs,RequestPath.cs,TableauApiClient.cs,TableauApiClient_Authentication.cs,TableauApiClient_Datasources.cs,TableauApiClient_Favorites.cs,TableauApiClient_JobsTasksSchedules.cs,TableauApiClient_Metadata.cs,TableauApiClient_Permissions.cs,TableauApiClient_Projects.cs,TableauApiClient_Publishing.cs,TableauApiClient_Revisions.cs,TableauApiClient_Server.cs,TableauApiClient_Sites.cs,TableauApiClient_Subscriptions.cs,TableauApiClient_UsersAndGroups.cs,TableauApiClient_WorkbooksAndViews.cs,TableauHttp.cs,Attributes/{ApiVersionAttribute.cs,OnPremiseOnlyAttribute.cs},Enums/{DataQualityWarningType.cs,DatasourceFileType.cs,DefinedBy.cs,MetadataContentType.cs,Orientation.cs,PageOrientation.cs,PageType.cs,TableauImageWidth.cs,TargetType.cs,WorkbookFileType.cs},Exceptions/{TableauApiVersionException.cs,TableauOnlineNotSupportedException.cs,TableauRequestException.cs},Models/{SchemaExtensions.cs,TableauSession.cs,XmlSchema.cs},VizPortal/{VizPortalClient.cs,VizPortalClient_Datasources.cs,VizPortalClient_ExtractRefreshes.cs,VizPortalClient_Groups.cs,VizPortalClient_Projects.cs,VizPortalClient_Schedules.cs,VizPortalClient_Subscriptions.cs,VizPortalClient_Tags.cs,VizPortalClient_Users.cs,VizPortalClient_Workbooks.cs},VizPortal/Models/{Common.cs,CommonContent.cs,Datasources.cs,ExtractRefreshes.cs,Groups.cs,Projects.cs,Schedules.cs,Subscriptions.cs,Tags.cs,Users.cs,Workbooks.cs}}]
+dotnet_diagnostic.CA1018.severity = suggestion
+dotnet_diagnostic.CA1305.severity = suggestion
+dotnet_diagnostic.CA1309.severity = suggestion
+dotnet_diagnostic.CA1310.severity = suggestion
+dotnet_diagnostic.CA1707.severity = suggestion
+dotnet_diagnostic.CA1805.severity = suggestion
+dotnet_diagnostic.CA1822.severity = suggestion
+dotnet_diagnostic.CA1825.severity = suggestion
+dotnet_diagnostic.CA1848.severity = suggestion
+dotnet_diagnostic.CA1852.severity = suggestion
+dotnet_diagnostic.CA1854.severity = suggestion
+dotnet_diagnostic.CA1865.severity = suggestion
+dotnet_diagnostic.CA1866.severity = suggestion
+dotnet_diagnostic.CA1873.severity = suggestion
+dotnet_diagnostic.CA2000.severity = suggestion
+dotnet_diagnostic.CA2007.severity = suggestion
+dotnet_diagnostic.CA2021.severity = suggestion
+dotnet_diagnostic.CA2254.severity = suggestion
+dotnet_diagnostic.CA2263.severity = suggestion
+dotnet_diagnostic.CS1591.severity = suggestion
+dotnet_diagnostic.CS8600.severity = suggestion
+dotnet_diagnostic.CS8601.severity = suggestion
+dotnet_diagnostic.CS8602.severity = suggestion
+dotnet_diagnostic.CS8603.severity = suggestion
+dotnet_diagnostic.CS8604.severity = suggestion
+dotnet_diagnostic.CS8618.severity = suggestion
+dotnet_diagnostic.CS8619.severity = suggestion
+dotnet_diagnostic.CS8620.severity = suggestion
+dotnet_diagnostic.CS8625.severity = suggestion
+dotnet_diagnostic.IDE0022.severity = suggestion
+dotnet_diagnostic.IDE0025.severity = suggestion
+dotnet_diagnostic.IDE0027.severity = suggestion
+dotnet_diagnostic.IDE0044.severity = suggestion
+dotnet_diagnostic.IDE0057.severity = suggestion
+dotnet_diagnostic.IDE0059.severity = suggestion
+dotnet_diagnostic.IDE0063.severity = suggestion
+dotnet_diagnostic.IDE0090.severity = suggestion
+dotnet_diagnostic.IDE0161.severity = suggestion
+dotnet_diagnostic.IDE0290.severity = suggestion
+dotnet_diagnostic.IDE0300.severity = suggestion
+dotnet_diagnostic.IDE0301.severity = suggestion
+dotnet_diagnostic.IDE0305.severity = suggestion
+dotnet_diagnostic.IDE1006.severity = suggestion
+dotnet_diagnostic.SYSLIB1045.severity = suggestion

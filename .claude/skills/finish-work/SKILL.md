@@ -15,7 +15,7 @@ work feels complete. `main` takes PRs only, and a maintainer squash-merges them 
 ## Steps
 
 1. **Docs in the same change.** Check each thing that describes the change moved with it: the XML doc comment of
-   each public member it touches, `Tableau.Api/Models/how_to_generate_schema.txt` for the schema, `AGENTS.md` for a
+   each public member it touches, `src/Tableau.Api/Models/how_to_generate_schema.txt` for the schema, `AGENTS.md` for a
    changed path, command or rule, and the plan when the work departed from it (where and why). A plan with a progress
    log gets the step's row. Write them the way `AGENTS.md` asks.
 2. **The gate:** `dotnet run eng/gate.cs -- full`, which runs the offline tests in `tests/Tableau.Api.Tests/`. A
