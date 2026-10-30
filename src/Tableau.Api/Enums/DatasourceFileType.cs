@@ -1,14 +1,13 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Tableau.Api.Enums
+namespace Tableau.Api.Enums;
+
+public enum DatasourceFileType
 {
-    public enum DatasourceFileType
-    {
-        hyper,
-        tds,
-        tdsx,
-        tde
-    }
+    hyper,
+    tds,
+    tdsx,
+    tde
 }

@@ -1,12 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Tableau.Api.Enums
+namespace Tableau.Api.Enums;
+
+public enum TableauImageWidth
 {
-    public enum TableauImageWidth
-    {
-        Default_784px,
-        High_1568
-    }
+    Default_784px,
+    High_1568
 }
