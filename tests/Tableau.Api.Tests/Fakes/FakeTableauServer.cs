@@ -14,7 +14,9 @@ namespace Tableau.Api.Tests.Fakes;
 /// A Tableau server for tests: HTTP/1.1 on a loopback port, answering from a route table and recording every request
 /// as it came off the wire, the request line included. The library builds its own HttpClient and handler for each
 /// request, so a real socket is the only place a test can stand between it and Tableau, and what it records is what
-/// Tableau would receive. One request per connection: every response says Connection: close.
+/// Tableau would receive. One request per connection: every response says Connection: close, and once the client has
+/// closed its side, the server resets the connection, so the suite's thousands of connections leave no socket in
+/// TIME_WAIT holding a loopback port.
 /// </summary>
 internal sealed class FakeTableauServer : IDisposable
 {
@@ -102,12 +104,35 @@ internal sealed class FakeTableauServer : IDisposable
                 }
                 var response = respond is null ? FakeResponse.NoRoute(request) : Respond(respond, request);
                 await WriteAsync(stream, response).ConfigureAwait(false);
-                client.Client.Shutdown(SocketShutdown.Send);
+                // A side that closes gracefully after the other waits in TIME_WAIT, so the client closes first, as
+                // Connection: close asks, and the server then resets the connection, which ends it on both sides. The
+                // socket is closed here: disposing the TcpClient would shut it down gracefully first.
+                await WaitForCloseAsync(stream).ConfigureAwait(false);
+                client.Client.LingerState = new LingerOption(true, 0);
+                client.Client.Close();
             }
             catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException)
             {
                 // The client went away, or the server is stopping: there is no one to answer.
             }
+        }
+    }
+
+    /// <summary>Until the client closes its side, or ten seconds pass; anything it sends meanwhile is dropped.</summary>
+    private static async Task WaitForCloseAsync(Stream stream)
+    {
+        var buffer = new byte[256];
+        var deadline = Task.Delay(TimeSpan.FromSeconds(10));
+        while (true)
+        {
+            var read = stream.ReadAsync(buffer, 0, buffer.Length);
+            if (await Task.WhenAny(read, deadline).ConfigureAwait(false) == deadline)
+            {
+                // The read ends when the connection is reset; nothing waits for it.
+                _ = read.ContinueWith(task => task.Exception, TaskContinuationOptions.OnlyOnFaulted);
+                return;
+            }
+            if (await read.ConfigureAwait(false) == 0) return;
         }
     }
 
