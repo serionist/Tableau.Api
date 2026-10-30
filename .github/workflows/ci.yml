@@ -96,6 +96,9 @@ jobs:
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
+      # In a shallow clone MinVer finds no history and versions every build 2.0.0-alpha.0, without a warning.
+      - name: The whole history, for MinVer
+        run: test "$(git rev-parse --is-shallow-repository)" = false
       - name: Restore (locked)
         run: dotnet restore Tableau.Api.slnx --locked-mode
       - name: Build
