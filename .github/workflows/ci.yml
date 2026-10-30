@@ -100,8 +100,15 @@ jobs:
       # The same comparison by the ApiCompat tool, pinned in dotnet-tools.json, against 1.2.5's package checked by the
       # SHA-512 nuget.org lists for it. The tool reads no project property and gets no suppression file, so a NoWarn or a
       # suppression in the project can't hide a removed or changed member from it.
+      #
+      # The tool also gets the reference assemblies: without netstandard.dll it can't tell an enum from a class, so it
+      # misses an enum value that moved (CP0011). They are the folders of the assemblies the library compiles against,
+      # as MSBuild resolves them from the build's restore, keyed by the library's target framework moniker
+      # (".NETStandard,Version=v2.0", which the tool wants in full). 1.2.5 has the same target and dependency, so the
+      # same folders serve its package.
       - name: Compare the API with 1.2.5's package
         run: |
+          set -euo pipefail
           curl -sSfL -o "$RUNNER_TEMP/tableau.api.1.2.5.nupkg" \
             https://api.nuget.org/v3-flatcontainer/tableau.api/1.2.5/tableau.api.1.2.5.nupkg
           echo "089f5041c181ff4984f798c817a7bc76a0ab06a05ba13c6cdc178d5c2b3fb0fc7bfcbb9ede9a98888a5efe2f195ab7222d79d77e4f6d2a66ead009365258bc50  $RUNNER_TEMP/tableau.api.1.2.5.nupkg" \
@@ -113,8 +120,21 @@ jobs:
             echo "::error::Expected one package in artifacts/packages, found ${#packages[@]}."
             exit 1
           fi
+          dotnet msbuild Tableau.Api/Tableau.Api.csproj -p:Configuration=Release -t:ResolveAssemblyReferences \
+            -getProperty:TargetFrameworkMoniker -getItem:ReferencePath > "$RUNNER_TEMP/references.json"
+          references=$(jq -r '.Properties.TargetFrameworkMoniker + "|"
+            + ([.Items.ReferencePath[] | .RootDir + .Directory] | unique | join(","))' "$RUNNER_TEMP/references.json")
+          echo "Reference assemblies: $references"
           dotnet apicompat package "${packages[0]}" --baseline-package "$RUNNER_TEMP/tableau.api.1.2.5.nupkg" \
-            --enable-rule-cannot-change-parameter-name
+            --enable-rule-cannot-change-parameter-name \
+            --package-assembly-references "$references" --baseline-package-assembly-references "$references" \
+            2>&1 | tee "$RUNNER_TEMP/apicompat.txt"
+          # A reference folder or assembly the tool can't find is only a warning, and the comparison then passes
+          # without it, blind to a moved enum value again.
+          if grep -q 'Could not' "$RUNNER_TEMP/apicompat.txt"; then
+            echo "::error::The ApiCompat tool couldn't load the reference assemblies, so its comparison is incomplete."
+            exit 1
+          fi
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: packages
