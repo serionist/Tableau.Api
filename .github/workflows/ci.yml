@@ -1,12 +1,21 @@
-# CI on every pull request, every push to main, once a day on main, and by hand. Checks (Linux) runs the gate's quick
-# lane: its selftest, the library's build, AGENTS.md, the skills and their links, the hooks, no tool attribution in the
-# commits, and gitleaks over them. Build and pack (Linux) builds the library in Release, packs it, and checks the
-# package with eng/package-check.cs. No tests run here: the solution's old test project doesn't build and needs a
-# Tableau site, so a PR says what ran against one (AGENTS.md, Build and test). CI sums the run up; it and
-# pr-text.yml's PR text are the checks the main ruleset requires.
+# CI on every pull request, every push to main, once a day on main, and by hand.
+#
+# - Checks (Linux): the gate's quick lane: its selftest, the library's build, AGENTS.md, the skills and their links, the
+#   hooks, no tool attribution in the commits, and gitleaks over them.
+# - Build, test and pack (Linux): the library in Release, the offline tests in tests/Tableau.Api.Tests, and the package,
+#   packed and checked with eng/package-check.cs.
+# - Selftest and tests (Windows): the gate's selftest and the offline tests, where paths, line endings and the TLS stack
+#   differ from Linux.
+# - CI sums those up; it and pr-text.yml's PR text are the checks the main ruleset requires.
+#
+# Nothing here runs on a Tableau site: the solution's old live suite doesn't build and needs one, so a PR says what ran
+# against one (AGENTS.md, Build and test).
 #
 # The daily run is for Dependabot's merges: dependabot-auto-merge.yml turns on auto-merge with the workflow's token,
 # and a push made with that token starts no run, so main is checked within a day of one instead.
+#
+# The weekly run also audits release/1.x's packages: GitHub runs scheduled workflows only on the default branch, so the
+# 1.x line's weekly check lives here. CI doesn't sum it up, since it checks another branch; it fails its own run.
 name: CI
 
 on:
@@ -15,13 +24,15 @@ on:
     branches: [main]
   schedule:
     - cron: "17 5 * * *"
+    # Monday's: the package audit of release/1.x runs on this one.
+    - cron: "29 6 * * 1"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  # One group per ref. A newer push to a PR cancels its older run. Each run on main, a push, the daily one or one by
+  # One group per ref. A newer push to a PR cancels its older run. Each run on main, a push, a scheduled one or one by
   # hand, keeps its own result: its group also names the commit, so the next push never cancels a waiting run.
   group: ci-${{ github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -53,7 +64,7 @@ jobs:
           sudo tar -xzf "$RUNNER_TEMP/gitleaks.tgz" -C /usr/local/bin gitleaks
       # The commits checked start after the PR's base, or after the commit main was on before the push. A PR's checkout
       # is the merge of its branch into the base, so that merge is checked too. A push's before is all zeros for a new
-      # branch, and a commit no longer in the history after a force push; the daily run and a run by hand have none.
+      # branch, and a commit no longer in the history after a force push; a scheduled run and a run by hand have none.
       # Then the head commit alone is checked, since a squash merge is one commit. GATE_REQUIRE_GITLEAKS makes a
       # missing gitleaks a failure, not a warning.
       - name: The gate's quick lane
@@ -67,12 +78,12 @@ jobs:
           fi
           dotnet run eng/gate.cs -- quick --base "$BASE"
 
-  # What a release would publish, packed and checked on every run. The project turns ContinuousIntegrationBuild on
-  # where GITHUB_ACTIONS is set, so the build and the package hold no path of the runner.
+  # What a release would publish, tested, packed and checked on every run. The project turns ContinuousIntegrationBuild
+  # on where GITHUB_ACTIONS is set, so the build and the package hold no path of the runner.
   package:
-    name: Build and pack (Linux)
+    name: Build, test and pack (Linux)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -83,6 +94,10 @@ jobs:
       # The library alone: the solution's old test project doesn't build (AGENTS.md, Build and test).
       - name: Build
         run: dotnet build Tableau.Api/Tableau.Api.csproj -c Release
+      # The offline tests by their project's path, for the same reason. global.json runs them on
+      # Microsoft.Testing.Platform.
+      - name: Test
+        run: dotnet test --project tests/Tableau.Api.Tests/Tableau.Api.Tests.csproj -c Release
       - name: Pack
         run: dotnet pack Tableau.Api/Tableau.Api.csproj --no-build -c Release -o artifacts/packages
       - name: Check the package
@@ -94,11 +109,79 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  # The check the main ruleset requires: every job above passed. It runs whatever happened to them, since a required
-  # check that is skipped counts as passed, and it fails when one of them failed, was cancelled or was skipped.
+  windows:
+    name: Selftest and tests (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: The gate's selftest
+        run: dotnet run eng/gate.cs -- selftest
+      - name: Test
+        run: dotnet test --project tests/Tableau.Api.Tests/Tableau.Api.Tests.csproj -c Release
+
+  # release/1.x takes security fixes only, and a package it uses can get an advisory with no commit there. So on
+  # Monday's run, and on a run by hand, its solution is restored, which runs NuGet audit as its Directory.Build.props
+  # sets it, and every package each project uses, directly or through another, is checked against nuget.org's
+  # vulnerability data. One with an advisory fails the run.
+  audit-1x:
+    name: Package audit (release/1.x)
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '29 6 * * 1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: release/1.x
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Restore
+        run: dotnet restore Tableau.Api.sln
+      # dotnet list exits 0 whatever it finds, so its JSON report is read: each package of each project and framework,
+      # top-level and transitive.
+      - name: No package with a known advisory
+        shell: pwsh
+        run: |
+          $json = dotnet list Tableau.Api.sln package --vulnerable --include-transitive --format json
+          if ($LASTEXITCODE -ne 0) {
+            Write-Output "::error::dotnet list failed with exit code $LASTEXITCODE."
+            exit 1
+          }
+          $report = $json | Out-String | ConvertFrom-Json
+          $projects = @($report.projects)
+          if ($projects.Count -eq 0) {
+            Write-Output "::error::dotnet list found no project to check."
+            exit 1
+          }
+          $errors = @($report.problems | Where-Object { $_ -and $_.level -eq 'error' })
+          foreach ($problem in $errors) { Write-Output "::error::$($problem.text)" }
+          $found = @(foreach ($project in $projects) {
+            foreach ($framework in @($project.frameworks)) {
+              if (-not $framework) { continue }
+              foreach ($package in @($framework.topLevelPackages) + @($framework.transitivePackages)) {
+                if (-not $package -or -not $package.vulnerabilities) { continue }
+                $advisories = ($package.vulnerabilities | ForEach-Object { "$($_.severity) $($_.advisoryurl)" }) -join '; '
+                "$(Split-Path -Leaf $project.path) ($($framework.framework)): $($package.id) $($package.resolvedVersion): $advisories"
+              }
+            }
+          })
+          foreach ($line in $found) { Write-Output "::error::$line" }
+          if ($errors.Count -gt 0 -or $found.Count -gt 0) { exit 1 }
+          Write-Output "$($projects.Count) projects on release/1.x, no package with a known advisory."
+
+  # The check the main ruleset requires: every job above but the 1.x audit passed. It runs whatever happened to them,
+  # since a required check that is skipped counts as passed, and it fails when one of them failed, was cancelled or was
+  # skipped.
   ci:
     name: CI
-    needs: [checks, package]
+    needs: [checks, package, windows]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -107,6 +190,7 @@ jobs:
         env:
           CHECKS: ${{ needs.checks.result }}
           PACKAGE: ${{ needs.package.result }}
+          WINDOWS: ${{ needs.windows.result }}
         run: |
-          echo "Checks (Linux): $CHECKS. Build and pack (Linux): $PACKAGE."
-          test "$CHECKS" = success && test "$PACKAGE" = success
+          echo "Checks (Linux): $CHECKS. Build, test and pack (Linux): $PACKAGE. Selftest and tests (Windows): $WINDOWS."
+          test "$CHECKS" = success && test "$PACKAGE" = success && test "$WINDOWS" = success

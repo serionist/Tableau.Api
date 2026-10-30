@@ -1,6 +1,6 @@
-# Dependabot version updates, weekly on Monday: the NuGet packages of the solution's projects, the actions the
-# workflows pin by SHA, and the .NET SDK in global.json. Minor and patch updates come grouped, one PR a week for each
-# ecosystem; a major comes on a PR of its own. Each is a PR like any other, and CI must pass: a minor or patch update
+# Dependabot version updates, weekly on Monday: the NuGet packages of the solution's projects and of the offline tests,
+# the actions the workflows pin by SHA, and the .NET SDK in global.json. Minor and patch updates come grouped, one PR a
+# week for each ecosystem; a major comes on a PR of its own. Each is a PR like any other, and CI must pass: a minor or patch update
 # then merges itself (dependabot-auto-merge.yml), and a major waits for a maintainer. Security updates come as soon as
 # an advisory is published, whatever the schedule (they are on in the repository's settings); the cooldown holds
 # version updates only.
@@ -12,7 +12,9 @@ version: 2
 
 updates:
   - package-ecosystem: nuget
-    directory: /
+    # The solution's projects, and the offline tests, which are not in the solution: it still holds the old live suite,
+    # which would clash with their project's name.
+    directories: ["/", "/tests/Tableau.Api.Tests"]
     schedule:
       interval: weekly
       day: monday
