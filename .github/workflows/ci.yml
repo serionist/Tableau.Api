@@ -1,19 +1,26 @@
 # CI on every pull request, every push to main, once a day on main, and by hand.
 #
 # - Checks (Linux): the gate's quick lane: its selftest, the library's build, AGENTS.md, the skills and their links, the
-#   hooks, no tool attribution in the commits, and gitleaks over them.
+#   hooks, no tool attribution in the commits, and gitleaks over them; and the code style, which dotnet format verifies
+#   on the whole solution, so a change can't undo the reformat.
 # - Build, test and pack (Linux): the solution, Tableau.Api.slnx, restored in locked mode and built in Release; the
-#   offline tests; the package, packed with package validation against 1.2.5 and checked with eng/package-check.cs; and
-#   the API compared with 1.2.5's by eng/apicompat.cs, against the ledger of breaks in eng/apicompat/1.2.5.xml.
-# - Selftest and tests (Windows): the gate's selftest and the offline tests, where paths, line endings and the TLS stack
-#   differ from Linux.
+#   offline tests with coverage, held to their floors by eng/coverage-gate.cs; the package, packed with package
+#   validation against 1.2.5 and checked with eng/package-check.cs; and the API compared with 1.2.5's by
+#   eng/apicompat.cs, against the ledger of breaks in eng/apicompat/1.2.5.xml.
+# - Tests (Linux, <culture>): the offline tests and the coverage gate again, in a culture and a time zone whose rules
+#   differ from the invariant culture's and from UTC: Swedish writes -1 with U+2212, Turkish capitalises i as İ, and
+#   both zones are off UTC by a part of an hour, one ahead of it and one behind. A canary test fails the leg when its
+#   culture or zone did not take.
+# - Selftest and tests (Windows): the gate's selftest, the offline tests and the coverage gate, where paths, line
+#   endings and the TLS stack differ from Linux.
 # - CI sums those up; it and pr-text.yml's PR text are the checks the main ruleset requires.
 #
 # Every job that builds the library checks out the whole history: MinVer versions it from git's tags and history, and
-# a shallow clone would give it neither.
+# a shallow clone would give it neither. The coverage gate also reads origin/main's floors from it, since a floor only
+# rises.
 #
-# Nothing here runs on a Tableau site: the old live suite is in no solution and needs one, so a PR says what ran
-# against one (AGENTS.md, Build and test).
+# Nothing here runs on a Tableau site: the tests in the Live and ServerOnly categories are inconclusive without their
+# switches (tests/Tableau.Api.Tests/TableauSite.cs), so a PR says what ran against a site (AGENTS.md, Build and test).
 #
 # The daily run is for Dependabot's merges: dependabot-auto-merge.yml turns on auto-merge with the workflow's token,
 # and a push made with that token starts no run, so main is checked within a day of one instead.
@@ -80,6 +87,10 @@ jobs:
             BASE=HEAD~1
           fi
           dotnet run eng/gate.cs -- quick --base "$BASE"
+      # Whitespace, the code style and the analyzers' fixes, as .editorconfig sets them: a change that a dotnet format
+      # run would rewrite fails here, so the reformatted code stays formatted.
+      - name: Code style
+        run: dotnet format Tableau.Api.slnx --verify-no-changes
 
   # What a release would publish, tested, packed and checked on every run. ContinuousIntegrationBuild is on where
   # GITHUB_ACTIONS is set, so the build and the package hold no path of the runner, and every restore is locked where CI
@@ -103,9 +114,14 @@ jobs:
         run: dotnet restore Tableau.Api.slnx --locked-mode
       - name: Build
         run: dotnet build Tableau.Api.slnx --no-restore -c Release
-      # global.json runs the tests on Microsoft.Testing.Platform.
-      - name: Test
-        run: dotnet test --solution Tableau.Api.slnx --no-build -c Release
+      # global.json runs the tests on Microsoft.Testing.Platform; tests/coverage.config says what is measured.
+      - name: Test with coverage
+        run: >-
+          dotnet test --solution Tableau.Api.slnx --no-build -c Release
+          --coverage --coverage-output-format cobertura --coverage-settings tests/coverage.config
+          --results-directory artifacts/TestResults
+      - name: Coverage gate
+        run: dotnet run eng/coverage-gate.cs -- artifacts/TestResults
       # Package validation runs in the pack: it compares the package with 1.2.5 on nuget.org, and passes only the
       # dropped netstandard2.0, which src/Tableau.Api/CompatibilitySuppressions.xml suppresses.
       - name: Pack
@@ -123,6 +139,50 @@ jobs:
           path: artifacts/packages
           if-no-files-found: error
           retention-days: 14
+
+  # The culture and the time zone come from the environment, read by .NET through ICU, which needs no OS locale
+  # installed. They are set for the test step alone, so the build and the coverage gate run as everywhere else, and
+  # TABLEAU_TEST_CULTURE and TABLEAU_TEST_TIME_ZONE tell the canary in tests/Tableau.Api.Tests/CultureTests.cs what to
+  # find.
+  cultures:
+    name: Tests (Linux, ${{ matrix.culture }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - culture: sv-SE
+            locale: sv_SE.UTF-8
+            time-zone: Asia/Kathmandu
+          - culture: tr-TR
+            locale: tr_TR.UTF-8
+            time-zone: America/St_Johns
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Restore (locked)
+        run: dotnet restore Tableau.Api.slnx --locked-mode
+      - name: Build
+        run: dotnet build Tableau.Api.slnx --no-restore -c Release
+      - name: Test with coverage, in ${{ matrix.culture }} and ${{ matrix.time-zone }}
+        env:
+          LANG: ${{ matrix.locale }}
+          LC_ALL: ${{ matrix.locale }}
+          TZ: ${{ matrix.time-zone }}
+          TABLEAU_TEST_CULTURE: ${{ matrix.culture }}
+          TABLEAU_TEST_TIME_ZONE: ${{ matrix.time-zone }}
+        run: >-
+          dotnet test --solution Tableau.Api.slnx --no-build -c Release
+          --coverage --coverage-output-format cobertura --coverage-settings tests/coverage.config
+          --results-directory artifacts/TestResults
+      - name: Coverage gate
+        run: dotnet run eng/coverage-gate.cs -- artifacts/TestResults
 
   windows:
     name: Selftest and tests (Windows)
@@ -150,15 +210,20 @@ jobs:
           Add-Content -Path $env:GITHUB_PATH -Value $dir
       - name: The gate's selftest
         run: dotnet run eng/gate.cs -- selftest
-      - name: Test
-        run: dotnet test --solution Tableau.Api.slnx -c Release
+      - name: Test with coverage
+        run: >-
+          dotnet test --solution Tableau.Api.slnx -c Release
+          --coverage --coverage-output-format cobertura --coverage-settings tests/coverage.config
+          --results-directory artifacts/TestResults
+      - name: Coverage gate
+        run: dotnet run eng/coverage-gate.cs -- artifacts/TestResults
 
   # The check the main ruleset requires: every job above passed. It runs whatever happened to them,
   # since a required check that is skipped counts as passed, and it fails when one of them failed, was cancelled or was
-  # skipped.
+  # skipped. A matrix's result is failure when any of its legs failed.
   ci:
     name: CI
-    needs: [checks, package, windows]
+    needs: [checks, package, cultures, windows]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -167,8 +232,9 @@ jobs:
         env:
           CHECKS: ${{ needs.checks.result }}
           PACKAGE: ${{ needs.package.result }}
+          CULTURES: ${{ needs.cultures.result }}
           WINDOWS: ${{ needs.windows.result }}
         run: |
           echo "Checks (Linux): $CHECKS. Build, test and pack (Linux): $PACKAGE."
-          echo "Selftest and tests (Windows): $WINDOWS."
-          test "$CHECKS" = success && test "$PACKAGE" = success && test "$WINDOWS" = success
+          echo "Tests (Linux, sv-SE and tr-TR): $CULTURES. Selftest and tests (Windows): $WINDOWS."
+          test "$CHECKS" = success && test "$PACKAGE" = success && test "$CULTURES" = success && test "$WINDOWS" = success
