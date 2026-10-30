@@ -25,7 +25,7 @@ at the end of every step.
 - **Every owner call has its answer** (Owner calls). Plan review round 4 approved the plan, and @serionist approved it.
 
 **Sources:** the codebase review (findings F1 to F50) and the research (its decisions, called RD1 to RD9 here, and its
-22 ranked features), both of 2026-10-28. Until 1.2.6 is on nuget.org both stay in `.local/review/`, which git ignores.
+22 ranked features), both of 2026-10-28: `docs/reviews/2026-10-28-codebase.md` and `docs/reviews/2026-10-28-research.md`, published in S4 once 1.2.6 shipped.
 S4 publishes them as `docs/reviews/2026-10-28-codebase.md` and `docs/reviews/2026-10-28-research.md`.
 
 **Approval:** approved by @serionist on 2026-10-29 (Plan review). They took D1 to D10 on 2026-10-28 and D11 on
@@ -703,8 +703,8 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
 | S1 | main | CI and open-source files | F25 | #13 | #16 | done |
 | S2a | 1.x | The `release/1.x` branch set up: CI, release, backstops, harness, metadata, package validation | none | #14 | #20 | done |
 | S2b | 1.x | The 1.2.6 fixes, and the release | none on main; the tracker's 1.2.6 column | #15 | #21 | done: released as `v1.2.6` on 2026-10-30 |
-| S3 | main | Security on main | F1 F2 F3 F6 F39 | #23 | | in review |
-| S4 | main | Publish the review, after 1.2.6 | none | | | todo |
+| S3 | main | Security on main | F1 F2 F3 F6 F39 | #23 | #25 | done |
+| S4 | main | Publish the review, after 1.2.6 | none | #26 | | in review |
 | S5 | main | Build and layout for 2.0 | F24 F40 | | | todo |
 | S6 | main | Reformat, alone | none | | | todo |
 | S7 | main | Test platform and coverage | F26 F28 | | | todo |
@@ -1341,12 +1341,12 @@ Status: `todo`, `done` (with the PR) or `wontfix` (with the reason). No finding 
 
 | F | What closes it | Step | 1.2.6 | Status |
 |---|---|---|---|---|
-| F1 | Vizportal validates TLS certificates, with the same opt-out as REST | S3 | n/a | todo |
-| F2 | Every path segment validated and escaped: ids, tag names, site names | S3 | yes | todo |
-| F3 | Credentials and bodies never go to another host on a redirect; auth on each request | S3 | yes | todo |
+| F1 | Vizportal validates TLS certificates, with the same opt-out as REST | S3 | n/a | done |
+| F2 | Every path segment validated and escaped: ids, tag names, site names | S3 | yes | done |
+| F3 | Credentials and bodies never go to another host on a redirect; auth on each request | S3 | yes | done |
 | F4 | Version and deployment gates that run, from descriptors, without reflection | S9 | no | todo |
 | F5 | View filters with `vf_` on every export, from one helper; `maxAge` | S14 | yes: data, image, and PDF without filters | todo |
-| F6 | Every query key and value escaped; filter and sort escaped between separators | S3 | yes | todo |
+| F6 | Every query key and value escaped; filter and sort escaped between separators | S3 | yes | done |
 | F7 | Revision lists send their paging | S14 | yes | todo |
 | F8 | Database and table lists paged | S13 | no | todo |
 | F9 | Update Schedule with PUT on the schedule's id | S15 | refused before sending, since it would create a second schedule | todo |
@@ -1379,7 +1379,7 @@ Status: `todo`, `done` (with the PR) or `wontfix` (with the reason). No finding 
 | F36 | Logging without secrets or noise; Abstractions only | S9 | no | todo |
 | F37 | `ConfigureAwait(false)` on every await | S9 | no | todo |
 | F38 | The accept-any-certificate switch renamed and warned about; plain http refused unless allowed | S9 | no | todo |
-| F39 | The base URL's path kept | S3 | yes | todo |
+| F39 | The base URL's path kept | S3 | yes | done |
 | F40 | A strict build with no blanket `NoWarn`; nullable; the analyzers that matter as errors | S5 | no | todo |
 | F41 | Vizportal pages by items returned and leaves the caller's query alone; tolerant models | S16 | n/a | todo |
 | F42 | Download file name and kind from the header or the content, cleaned | S10 | no | todo |
@@ -1668,6 +1668,8 @@ and start the steps", and on the owner calls they have answered since (Q7 to Q9)
 | 2026-10-29 | S2a | Done: PR #20 merged into `release/1.x` as `41b57e5`, closing #14. The branch starts at `b23503e` and has CI (the gate, the build, the tests on Linux and on Windows with net48, the pack with package validation and ApiCompat against 1.2.5, the package check), `release.yml`, `pr-text.yml`, `codeql.yml`, main's backstops, a short AGENTS.md, and the offline harness: `FakeTableauServer` and five tests of unchanged behaviour. The old live suite is deleted on the line. One review-code round, clean, four minors fixed (`docs/reviews/2026-10-29-release-1x-setup-code.md` on that branch). |
 | 2026-10-30 | S2b | Done: PR #21 merged into `release/1.x` as `8635623`, closing #15, with the fixes of the 1.2.6 table and their offline tests (54 on net10.0, 60 on net48, the path rows also in AppDomains targeting .NET Framework 4.0, 4.6.1 and 4.8). Two review-code rounds (`docs/reviews/2026-10-30-1-2-6-fixes-code.md` on that branch): round 1 had one major, Tableau Cloud's 24-hour and 60-minute task intervals, which didn't parse, fixed with five minors; round 2 was clean. The live smoke check ran by hand on Tableau Server 2025.1.5 (REST API 3.25, driven as 3.14), signed in with a personal access token: projects and users listed, extract refresh tasks read, a project created, found by a filter and deleted. It ran on that server, not on the Developer Program site, and without the chunked publish and download; Tableau Cloud's task intervals are covered offline. `v1.2.6` was tagged, `release.yml` found the push run, a maintainer approved the `nuget` deployment, and nuget.org lists 1.2.6, with the GitHub release. #22 follows up a CI improvement. |
 | 2026-10-30 | S3 | Built on `23-security-on-main` for #23, from `origin/main` at `4ea869b`. One handler for both clients (`TableauHttp`): certificates validated unless `IgnoreSSLErrors` is set, no redirects. 1.2.6's `RequestPath`, query escaping, redirect exception, per-request token and base path, ported to every call site, main's `QueryView`, `QueryViewCrosstabExcel` and `QueryViewPermissions` included. `tests/Tableau.Api.Tests/` with 46 tests on net10.0: S2b's fake server with a TLS mode, the path rows over all of ASCII, `EveryMethodPathTests` (125 path parameters), queries, redirects, base paths, both clients against an untrusted certificate. The gate's `tests` check and its selftest; in CI the tests on Linux and Windows, and the weekly package audit and CodeQL scan of `release/1.x`; the rule files. Each fix group, broken on purpose in a scratch copy, failed its tests, except two no net10.0 test can show: the per-request token, since each request has its own client, and `buildUri`'s exact path check, since .NET 10 rewrites no escaped path. Departures: the status checks stay exact and the view filter prefix stays as it is, since any 2xx (F15) and `vf_` (F5) are later steps; the Vizportal client also keeps the base URL's path, follows no redirect and escapes the method name its public paging methods take; the test project stays out of the solution, whose old project has its name (MSB5004), so `dependabot.yml` names its folder; `codeql.yml` gains a run by hand; the selftest shows that a failed `dotnet test` fails the tests check and gate full, without running a failing project. F1, F2, F3, F6 and F39 turn done in the tracker when the PR merges. |
+| 2026-10-30 | S3 | Done: PR #25 merged as `a29ead8`, closing #23. Vizportal validates certificates as REST does, and main takes 1.2.6's request rules; 46 offline tests run in the gate's full lane and in CI on Linux and Windows. Review: two fresh reviewers, clean, three minors fixed (the release/1.x audit moved to `audit-1x.yml` on Windows; three rule files updated). Live: Vizportal's read calls passed against Tableau Server 2025.1.5 with certificates validated; a pre-existing Vizportal model bug is #24. |
+| 2026-10-30 | S4 | 1.2.6 is on nuget.org, advisory GHSA-wqhr-qp8x-c5gm is published, and main has the fixes, so the review (F1 to F50), the research, the review records of S2a, S2b and S3, and the plan review's private notes go into `docs/reviews/` (#26). |
 
 ## For the maintainers
 
@@ -1693,11 +1695,11 @@ What the session cannot do, first what closes a security exposure. Kept current 
 
 **After 1.2.6 is on nuget.org:**
 
-- [ ] Publish a GitHub security advisory for 1.2.5 and older, fixed in 1.2.6, describing what changed; request a CVE if
-  you want one.
+- [x] Publish a GitHub security advisory for 1.2.5 and older, fixed in 1.2.6, describing what changed: GHSA-wqhr-qp8x-c5gm,
+  2026-10-30. No CVE requested.
 - [ ] Deprecate 1.0.6 to 1.2.5 on nuget.org with "Critical bugs" and Tableau.Api 1.2.6 as the alternative. Leave 1.2.6
   undeprecated.
-- [ ] Tell Starschema, the co-owner.
+- [x] Tell Starschema, the co-owner: not needed, its owner is @serionist.
 
 **Before S11:**
 
