@@ -22,7 +22,7 @@ internal sealed class MultipartPart(IReadOnlyList<KeyValuePair<string, string>> 
 internal static class MultipartBody
 {
     // Latin-1 maps each byte to one char and back, so a part's bytes survive the string search.
-    private static readonly Encoding Bytes = Encoding.GetEncoding(28591);
+    private static readonly Encoding _latin1 = Encoding.GetEncoding(28591);
 
     public static IReadOnlyList<MultipartPart> Parse(RecordedRequest request)
     {
@@ -32,10 +32,10 @@ internal static class MultipartBody
             throw new InvalidDataException($"The request is not multipart: {contentType}");
         var boundary = contentType.Split(';').Select(parameter => parameter.Trim())
             .Where(parameter => parameter.StartsWith("boundary=", StringComparison.OrdinalIgnoreCase))
-            .Select(parameter => parameter.Substring("boundary=".Length).Trim('"'))
+            .Select(parameter => parameter["boundary=".Length..].Trim('"'))
             .FirstOrDefault() ?? throw new InvalidDataException($"The Content-Type names no boundary: {contentType}");
 
-        var text = Bytes.GetString(request.Body);
+        var text = _latin1.GetString(request.Body);
         var delimiter = "--" + boundary;
         var parts = new List<MultipartPart>();
         var at = text.IndexOf(delimiter, StringComparison.Ordinal);
@@ -48,7 +48,7 @@ internal static class MultipartBody
             at += 2;
             var next = text.IndexOf("\r\n" + delimiter, at, StringComparison.Ordinal);
             if (next < 0) throw new InvalidDataException("A part has no closing boundary");
-            parts.Add(Part(text.Substring(at, next - at)));
+            parts.Add(Part(text[at..next]));
             at = next + 2 + delimiter.Length;
         }
         return parts;
@@ -62,11 +62,11 @@ internal static class MultipartBody
         {
             var end = text.IndexOf("\r\n", at, StringComparison.Ordinal);
             if (end < 0) throw new InvalidDataException("A part's headers do not end with an empty line");
-            var line = text.Substring(at, end - at);
+            var line = text[at..end];
             var colon = line.IndexOf(':');
-            headers.Add(new(line.Substring(0, colon).Trim(), line.Substring(colon + 1).Trim()));
+            headers.Add(new(line[..colon].Trim(), line[(colon + 1)..].Trim()));
             at = end + 2;
         }
-        return new MultipartPart(headers, Bytes.GetBytes(text.Substring(at + 2)));
+        return new MultipartPart(headers, _latin1.GetBytes(text[(at + 2)..]));
     }
 }

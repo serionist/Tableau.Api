@@ -1,20 +1,26 @@
-# Dependabot version updates, weekly on Monday: the NuGet packages of the solution's projects and of the offline tests,
-# the actions the workflows pin by SHA, and the .NET SDK in global.json. Minor and patch updates come grouped, one PR a
-# week for each ecosystem; a major comes on a PR of its own. Each is a PR like any other, and CI must pass: a minor or patch update
-# then merges itself (dependabot-auto-merge.yml), and a major waits for a maintainer. Security updates come as soon as
-# an advisory is published, whatever the schedule (they are on in the repository's settings); the cooldown holds
-# version updates only.
+# Dependabot version updates, weekly on Monday: the NuGet packages (one version each, in Directory.Packages.props, for
+# the projects of Tableau.Api.slnx), the local tools in dotnet-tools.json, the actions the workflows pin by SHA, and the
+# .NET SDK in global.json. Minor and patch updates come grouped, one PR a week for each ecosystem; a major comes on a
+# PR of its own. Each is a PR like any other, and CI must pass: a minor or patch update then merges itself
+# (dependabot-auto-merge.yml), and a major waits for a maintainer. Security updates come as soon as an advisory is
+# published, whatever the schedule (they are on in the repository's settings); the cooldown holds version updates
+# only.
 #
 # eng/'s file-based apps use no packages, and Dependabot can't read a file-based app's `#:package` lines yet
 # (dependabot/dependabot-core#15187), so eng/ has no entry: an entry there would only fail to find a project. Add one
-# when an app there takes a package and Dependabot can read it.
+# when an app there takes a package and Dependabot can read it. eng/apicompat/Baseline.csproj pins the package 1.2.5
+# depended on, which never moves, and is in no solution, so Dependabot leaves it alone.
+#
+# CI restores in locked mode. Dependabot rewrites the lock files of the projects that reference a bumped package, but
+# can miss one that only gets it through a project reference, as the tests get the library's packages
+# (dependabot/dependabot-core#13950). Its PR then fails restore with NU1004: a maintainer runs
+# `dotnet restore Tableau.Api.slnx --force-evaluate` on its branch and pushes the lock files it changes.
 version: 2
 
 updates:
   - package-ecosystem: nuget
-    # The solution's projects, and the offline tests, which are not in the solution: it still holds the old live suite,
-    # which would clash with their project's name.
-    directories: ["/", "/tests/Tableau.Api.Tests"]
+    # Tableau.Api.slnx's projects, Directory.Packages.props and dotnet-tools.json, all found from the root.
+    directory: /
     schedule:
       interval: weekly
       day: monday

@@ -1,29 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The offline tests: the library, as users get it, driven against a fake Tableau server on a loopback port. A test
-       application on MSTest and Microsoft.Testing.Platform, which global.json selects for dotnet test. It targets net10.0
-       only: the library targets netstandard2.1, which .NET Framework can't load. The solution's old live suite,
-       Tableau.Api.Tests/, is a separate project, so this one is run by its path. -->
+  <!-- The offline tests: the library, as users get it, driven against a fake Tableau server on a loopback port. The
+       test application's settings and its packages are in tests/Directory.Build.props. -->
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <LangVersion>latest</LangVersion>
-    <Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <IsPackable>false</IsPackable>
-    <IsTestProject>true</IsTestProject>
-    <OutputType>Exe</OutputType>
-    <EnableMSTestRunner>true</EnableMSTestRunner>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="MSTest.TestFramework" Version="4.5.1" />
-    <PackageReference Include="MSTest.TestAdapter" Version="4.5.1" />
-    <PackageReference Include="MSTest.Analyzers" Version="4.5.1" PrivateAssets="all" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\..\Tableau.Api\Tableau.Api.csproj" />
+    <ProjectReference Include="..\..\src\Tableau.Api\Tableau.Api.csproj" />
   </ItemGroup>
 
 </Project>

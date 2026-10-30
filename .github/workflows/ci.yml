@@ -2,13 +2,16 @@
 #
 # - Checks (Linux): the gate's quick lane: its selftest, the library's build, AGENTS.md, the skills and their links, the
 #   hooks, no tool attribution in the commits, and gitleaks over them.
-# - Build, test and pack (Linux): the library in Release, the offline tests in tests/Tableau.Api.Tests, and the package,
-#   packed and checked with eng/package-check.cs.
+# - Build, test and pack (Linux): the solution, Tableau.Api.slnx, restored in locked mode and built in Release; the
+#   offline tests; and the package, packed with package validation against 1.2.5 and checked with eng/package-check.cs.
 # - Selftest and tests (Windows): the gate's selftest and the offline tests, where paths, line endings and the TLS stack
 #   differ from Linux.
 # - CI sums those up; it and pr-text.yml's PR text are the checks the main ruleset requires.
 #
-# Nothing here runs on a Tableau site: the solution's old live suite doesn't build and needs one, so a PR says what ran
+# Every job that builds the library checks out the whole history: MinVer versions it from git's tags and history, and
+# a shallow clone would give it neither.
+#
+# Nothing here runs on a Tableau site: the old live suite is in no solution and needs one, so a PR says what ran
 # against one (AGENTS.md, Build and test).
 #
 # The daily run is for Dependabot's merges: dependabot-auto-merge.yml turns on auto-merge with the workflow's token,
@@ -47,7 +50,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # The attribution and secret checks read the commits since the base, which a shallow clone doesn't have.
+          # The attribution and secret checks read the commits since the base, which a shallow clone doesn't have, and
+          # MinVer reads the history when the gate builds the library.
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
@@ -76,8 +80,9 @@ jobs:
           fi
           dotnet run eng/gate.cs -- quick --base "$BASE"
 
-  # What a release would publish, tested, packed and checked on every run. The project turns ContinuousIntegrationBuild
-  # on where GITHUB_ACTIONS is set, so the build and the package hold no path of the runner.
+  # What a release would publish, tested, packed and checked on every run. ContinuousIntegrationBuild is on where
+  # GITHUB_ACTIONS is set, so the build and the package hold no path of the runner, and every restore is locked where CI
+  # is set (Directory.Build.props).
   package:
     name: Build, test and pack (Linux)
     runs-on: ubuntu-latest
@@ -85,19 +90,22 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
-      # The library alone: the solution's old test project doesn't build (AGENTS.md, Build and test).
+      - name: Restore (locked)
+        run: dotnet restore Tableau.Api.slnx --locked-mode
       - name: Build
-        run: dotnet build Tableau.Api/Tableau.Api.csproj -c Release
-      # The offline tests by their project's path, for the same reason. global.json runs them on
-      # Microsoft.Testing.Platform.
+        run: dotnet build Tableau.Api.slnx --no-restore -c Release
+      # global.json runs the tests on Microsoft.Testing.Platform.
       - name: Test
-        run: dotnet test --project tests/Tableau.Api.Tests/Tableau.Api.Tests.csproj -c Release
+        run: dotnet test --solution Tableau.Api.slnx --no-build -c Release
+      # Package validation runs in the pack: it compares the package with 1.2.5 on nuget.org, and passes only the
+      # dropped netstandard2.0, which src/Tableau.Api/CompatibilitySuppressions.xml suppresses.
       - name: Pack
-        run: dotnet pack Tableau.Api/Tableau.Api.csproj --no-build -c Release -o artifacts/packages
+        run: dotnet pack src/Tableau.Api/Tableau.Api.csproj --no-build -c Release -o artifacts/packages
       - name: Check the package
         run: dotnet run eng/package-check.cs -- artifacts/packages
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -114,6 +122,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
@@ -133,7 +142,7 @@ jobs:
       - name: The gate's selftest
         run: dotnet run eng/gate.cs -- selftest
       - name: Test
-        run: dotnet test --project tests/Tableau.Api.Tests/Tableau.Api.Tests.csproj -c Release
+        run: dotnet test --solution Tableau.Api.slnx -c Release
 
   # The check the main ruleset requires: every job above passed. It runs whatever happened to them,
   # since a required check that is skipped counts as passed, and it fails when one of them failed, was cancelled or was

@@ -1,0 +1,27 @@
+<Project>
+
+  <!-- Central package management: every package version lives here, and a .csproj names packages without versions.
+       Transitive pinning is off, so the package's nuspec lists only what the library references. To fix an advisory in
+       a transitive package, reference it directly in the project that brings it in, with a comment naming the
+       advisory. -->
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup Label="Library">
+    <PackageVersion Include="Microsoft.Extensions.Logging" Version="2.2.0" />
+    <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
+  </ItemGroup>
+
+  <ItemGroup Label="Build">
+    <PackageVersion Include="MinVer" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="Tests">
+    <PackageVersion Include="MSTest.Analyzers" Version="4.5.1" />
+    <PackageVersion Include="MSTest.TestAdapter" Version="4.5.1" />
+    <PackageVersion Include="MSTest.TestFramework" Version="4.5.1" />
+  </ItemGroup>
+
+</Project>

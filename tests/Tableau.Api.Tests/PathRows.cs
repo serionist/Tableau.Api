@@ -70,7 +70,7 @@ internal static class PathRows
         Ascii().Concat(DotOnly()).Concat(SubDelimitersBesideNonAscii()).Concat(Bidi()).Distinct(StringComparer.Ordinal);
 
     public static bool IsSubDelimiterRow(string value) =>
-        value.Any(c => c > 0x7F) && value.Any(c => SubDelimiters.IndexOf(c) >= 0) && !value.Any(IsBidiControl);
+        value.Any(c => c > 0x7F) && value.Any(SubDelimiters.Contains) && !value.Any(IsBidiControl);
 
     public static bool IsRefused(string value) => value.All(c => c == '.');
 
@@ -82,7 +82,7 @@ internal static class PathRows
         var escaped = new StringBuilder();
         foreach (var b in Encoding.UTF8.GetBytes(value))
         {
-            if (b < 0x80 && Raw.IndexOf((char)b) >= 0) escaped.Append((char)b);
+            if (b < 0x80 && Raw.Contains((char)b)) escaped.Append((char)b);
             else escaped.Append('%').Append(b.ToString("X2", CultureInfo.InvariantCulture));
         }
         return escaped.ToString();

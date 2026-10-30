@@ -23,7 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Tableau.Api\Tableau.Api.csproj" />
+    <ProjectReference Include="..\src\Tableau.Api\Tableau.Api.csproj" />
   </ItemGroup>
 
 </Project>

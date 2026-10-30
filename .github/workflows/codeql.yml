@@ -8,9 +8,9 @@
 # release/1.x, the ref and commit it read, under the same categories as that branch's own codeql.yml, so they replace
 # its last analysis rather than sitting beside main's.
 #
-# C# is built by hand, the library alone as CI builds it, since the solution's old test project doesn't build
-# (AGENTS.md, Build and test); CodeQL reads what the compiler saw. The workflows themselves (language "actions") are
-# scanned too, for script injection and over-broad permissions, with nothing to build.
+# C# is built by hand, the library alone, which is the code a user runs; CodeQL reads what the compiler saw. On main the
+# checkout holds the whole history, which MinVer reads to version the build. The workflows themselves (language
+# "actions") are scanned too, for script injection and over-broad permissions, with nothing to build.
 #
 # This is CodeQL's advanced setup: the repository's default setup must stay off, or the two uploads conflict.
 name: CodeQL
@@ -57,6 +57,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         if: matrix.language == 'csharp'
@@ -69,7 +70,7 @@ jobs:
           queries: security-extended
       - name: Build the library
         if: matrix.language == 'csharp'
-        run: dotnet build Tableau.Api/Tableau.Api.csproj -c Release
+        run: dotnet build src/Tableau.Api/Tableau.Api.csproj -c Release
       - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           category: /language:${{ matrix.language }}
@@ -109,6 +110,7 @@ jobs:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
           queries: security-extended
+      # The library's path on release/1.x, which keeps the old layout.
       - name: Build the library
         if: matrix.language == 'csharp'
         run: dotnet build Tableau.Api/Tableau.Api.csproj -c Release

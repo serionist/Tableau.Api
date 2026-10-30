@@ -1,0 +1,43 @@
+<Project>
+
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <!-- Packaging, for the library. The licence and the repository's URLs are in the root Directory.Build.props, the
+       description and the tags in Tableau.Api.csproj. -->
+
+  <!-- The version comes from git tags (MinVer): tag v2.0.0 to release 2.0.0. An untagged build is
+       2.0.0-alpha.0.<height>. The 1.x line's v1.* tags are on release/1.x, which is never merged into main, so MinVer
+       here never sees one; and the minimum keeps any build of main at 2.0 or later. -->
+  <PropertyGroup Label="Version">
+    <MinVerTagPrefix>v</MinVerTagPrefix>
+    <MinVerMinimumMajorMinor>2.0</MinVerMinimumMajorMinor>
+    <MinVerDefaultPreReleaseIdentifiers>alpha.0</MinVerDefaultPreReleaseIdentifiers>
+  </PropertyGroup>
+
+  <!-- Symbols go to nuget.org's symbol server as a .snupkg; Source Link points them at the code on GitHub, so the
+       package carries no copy of the source. -->
+  <PropertyGroup Label="Package">
+    <IsPackable>true</IsPackable>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <!-- Package validation runs on every pack and compares the package with 1.2.5 on nuget.org. Across the change of
+       target, netstandard2.0 to net10.0, it can only say that netstandard2.0 is gone (PKV006), which
+       CompatibilitySuppressions.xml suppresses, alone. The API itself is compared by the ApiCompat tool in assembly
+       mode, 1.2.5's DLL against this build, with every break listed in eng/apicompat/1.2.5.xml (eng/apicompat.cs). -->
+  <PropertyGroup Label="Package validation">
+    <EnablePackageValidation>true</EnablePackageValidation>
+    <PackageValidationBaselineVersion>1.2.5</PackageValidationBaselineVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MinVer" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)..\README.md" Pack="true" PackagePath="/" Visible="false" />
+  </ItemGroup>
+
+</Project>

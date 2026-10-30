@@ -18,14 +18,12 @@ internal sealed class RecordingLogger : ILogger
     public bool IsEnabled(LogLevel logLevel) => true;
 
     public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception,
-        Func<TState, Exception, string> formatter)
-    {
+        Func<TState, Exception, string> formatter) =>
         _lines.Enqueue($"{logLevel}: {formatter(state, exception)}{(exception is null ? "" : "\n" + exception)}");
-    }
 
     /// <summary>The lines that hold any of secrets.</summary>
     public IEnumerable<string> LinesHolding(IEnumerable<string> secrets) =>
-        Lines.Where(line => secrets.Any(secret => line.IndexOf(secret, StringComparison.Ordinal) >= 0));
+        Lines.Where(line => secrets.Any(secret => line.Contains(secret, StringComparison.Ordinal)));
 
     private sealed class NoScope : IDisposable
     {

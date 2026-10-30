@@ -17,8 +17,8 @@ internal sealed class RecordedRequest
         Method = parts[0];
         Target = parts.Length > 1 ? parts[1] : "";
         var question = Target.IndexOf('?');
-        Path = question < 0 ? Target : Target.Substring(0, question);
-        Query = question < 0 ? "" : Target.Substring(question + 1);
+        Path = question < 0 ? Target : Target[..question];
+        Query = question < 0 ? "" : Target[(question + 1)..];
     }
 
     /// <summary>The request line as sent: `GET /api/3.4/sites/... HTTP/1.1`.</summary>
@@ -49,8 +49,8 @@ internal sealed class RecordedRequest
             : [.. Query.Split('&').Select(pair =>
             {
                 var equals = pair.IndexOf('=');
-                var name = equals < 0 ? pair : pair.Substring(0, equals);
-                var value = equals < 0 ? "" : pair.Substring(equals + 1);
+                var name = equals < 0 ? pair : pair[..equals];
+                var value = equals < 0 ? "" : pair[(equals + 1)..];
                 return new KeyValuePair<string, string>(Unescape(name), Unescape(value));
             })];
 
