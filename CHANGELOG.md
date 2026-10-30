@@ -8,7 +8,7 @@ a release turns that section into its own, dated (docs/releasing.md). The format
 
 ## [Unreleased]
 
-## [1.2.6] - 2026-10-29
+## [1.2.6] - 2026-10-30
 
 ### Security
 
