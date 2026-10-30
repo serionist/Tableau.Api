@@ -1,12 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Tableau.Api.Enums
+namespace Tableau.Api.Enums;
+
+public enum Orientation
 {
-    public enum Orientation
-    {
-        Portrait,
-        Landscape
-    }
+    Portrait,
+    Landscape
 }

@@ -1,8 +1,7 @@
-﻿namespace Tableau.Api.VizPortal.Models
+namespace Tableau.Api.VizPortal.Models;
+
+public class TagContentAction
 {
-    public class TagContentAction
-    {
-        public string[] Ids { get; set; }
-        public string[] Tags { get; set; }
-    }
+    public string[] Ids { get; set; }
+    public string[] Tags { get; set; }
 }
