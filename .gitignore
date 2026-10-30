@@ -1,5 +1,6 @@
 # Secrets: path-independent globs, never anchored paths (an anchored rule goes inert when a folder moves).
-# The live suite's settings, passwords included, live in a .runsettings file; testsettings.json is the modernization's.
+# A Tableau site's settings, passwords included, belong outside the clone, in environment variables; these catch the
+# files they have been kept in: a .runsettings file for the old live suite, testsettings.json.
 *.runsettings
 testsettings.json
 .env

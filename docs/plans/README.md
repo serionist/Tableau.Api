@@ -47,8 +47,9 @@ Ordered, each one buildable and checkable on its own, each naming what proves it
 
 ## Tests
 
-The new and changed tests and checks that prove it: the gate, the offline tests in `tests/Tableau.Api.Tests/`, the live
-suite (by hand, against which Tableau Server version or Tableau Cloud), and what none of them can show.
+The new and changed tests and checks that prove it: the gate, the offline tests in `tests/Tableau.Api.Tests/` and their
+coverage, the `Live` and `ServerOnly` tests or a run against a site (against which Tableau Server version or Tableau
+Cloud), and what none of them can show.
 
 ## Docs
 

@@ -39,8 +39,9 @@ Each is a yes or no; a "no" is a finding.
    maintainers is never run here, so until CI has passed on its head the answer is "not verified" and it waits.
 2. Does the change do what its issue and plan say, and nothing nobody asked for?
 3. Is new behaviour checked: by a test in `tests/Tableau.Api.Tests/` that fails without it, and what no offline test
-   can show by the live suite or a run against a site, which the PR names (Tableau Server and its version, or Tableau
-   Cloud) with what it could not show? Do tests use invented data and delete what they create on the site?
+   can show by a `Live` or `ServerOnly` test or a run against a site, which the PR names (Tableau Server and its
+   version, or Tableau Cloud) with what it could not show? Does the coverage gate pass with no floor lowered? Do tests
+   use invented data and delete what they create on the site?
 4. Does each request match Tableau's REST API reference for its method, path (`sites/{site-id}/...`), query, body and
    expected status, and does its `[ApiVersion]` name the version the reference gives?
 5. No password, token or runsettings in code, tests, logs, exception messages, docs, commits or the PR?
