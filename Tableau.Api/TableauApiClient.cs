@@ -10,7 +10,6 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Web;
 using System.Xml;
 using System.Xml.Linq;
 using System.Xml.Serialization;
@@ -107,24 +106,65 @@ namespace Tableau.Api
                 throw new TableauOnlineNotSupportedException(methodName);
         }
 
-        private HttpClient buildClient(string AuthToken = null)
+        private HttpClient buildClient()
         {
-            var clientOptions = new HttpClientHandler() { AllowAutoRedirect = true };
+            // A redirect is never followed, so a request, its body and its token go only to the host it was built for.
+            var clientOptions = new HttpClientHandler() { AllowAutoRedirect = false };
             if (IgnoreSSLErrors)
                 clientOptions.ServerCertificateCustomValidationCallback = (message, certificate2, arg3, arg4) => true;
             var c = new HttpClient(clientOptions) { Timeout = Timeout };
             c.DefaultRequestHeaders.Remove("Accept");
             c.DefaultRequestHeaders.Add("Accept", "application/xml");
-            if (!string.IsNullOrEmpty(AuthToken)) c.DefaultRequestHeaders.TryAddWithoutValidation("X-Tableau-Auth", AuthToken);
             return c;
         }
-        private Uri buildUri(string relativePath, params (string, string)[] urlParams)
-        {
-            var url = $"{BaseUrl.Scheme}://{BaseUrl.Host}:{BaseUrl.Port}/api/{ApiVersion}/{(relativePath.StartsWith("/") ? relativePath.Substring(1) : relativePath)}";
-            if (urlParams.Any())
-                url += $"?{string.Join("&", urlParams.Select(e => $"{e.Item1}={(e.Item1 == "filter" || e.Item1 == "sort" ? e.Item2 : HttpUtility.UrlEncode(e.Item2))}"))}";
-            return new Uri(url);
 
+        /// <summary>
+        /// The request URI: the base URL with its path, the API version, the path with its values escaped, and the
+        /// query with each key and value escaped. Throws ArgumentException, before anything is sent, when this
+        /// platform's URI parsing would send another path than the one written.
+        /// </summary>
+        private Uri buildUri(RequestPath relativePath, params (string, string)[] urlParams)
+        {
+            var basePath = BaseUrl.AbsolutePath.EndsWith("/", StringComparison.Ordinal)
+                ? BaseUrl.AbsolutePath
+                : BaseUrl.AbsolutePath + "/";
+            var path = $"{basePath}api/{ApiVersion}/{relativePath.ToEscapedPath()}";
+            var url = new StringBuilder($"{BaseUrl.Scheme}://{BaseUrl.Host}:{BaseUrl.Port}{path}");
+            for (var i = 0; i < urlParams.Length; i++)
+            {
+                url.Append(i == 0 ? '?' : '&');
+                UriEscaping.AppendQueryPart(url, urlParams[i].Item1 ?? "");
+                url.Append('=');
+                appendQueryValue(url, urlParams[i].Item1, urlParams[i].Item2);
+            }
+            var uri = new Uri(url.ToString());
+            // Some .NET Framework targets' URI parsing changes a path after it is escaped, so the path it would send is
+            // checked against the one written.
+            if (!string.Equals(uri.AbsolutePath, path, StringComparison.Ordinal))
+                throw new ArgumentException(
+                    $"The request path '{path}' would be sent as '{uri.AbsolutePath}' by this platform's URI parsing, so it "
+                    + "is not sent. A value or the base URL's path holds characters that this .NET Framework target "
+                    + "rewrites.");
+            return uri;
+        }
+
+        // A filter or sort expression keeps its separators, : and ,, and the parts between them are escaped.
+        private static void appendQueryValue(StringBuilder url, string key, string value)
+        {
+            if (value == null) return;
+            if (key != "filter" && key != "sort")
+            {
+                UriEscaping.AppendQueryPart(url, value);
+                return;
+            }
+            var start = 0;
+            for (var i = 0; i <= value.Length; i++)
+            {
+                if (i < value.Length && value[i] != ':' && value[i] != ',') continue;
+                UriEscaping.AppendQueryPart(url, value.Substring(start, i - start));
+                if (i < value.Length) url.Append(value[i]);
+                start = i + 1;
+            }
         }
 
       
@@ -142,6 +182,21 @@ namespace Tableau.Api
             return new TableauRequestException(resp.RequestMessage.RequestUri, resp.StatusCode, det);
         }
 
+        // Names the scheme, host and port the redirect points to, never its user info, path or query.
+        private static TableauRequestException buildRedirectException(HttpResponseMessage resp)
+        {
+            var requestUri = resp.RequestMessage.RequestUri;
+            var location = resp.Headers.Location;
+            string target = null;
+            if (location != null)
+            {
+                var absolute = location.IsAbsoluteUri ? location : new Uri(requestUri, location);
+                target = $"{absolute.Scheme}://{absolute.Host}{(absolute.IsDefaultPort ? "" : $":{absolute.Port}")}";
+            }
+            return new TableauRequestException(requestUri, resp.StatusCode, null,
+                target ?? "an address the response does not name");
+        }
+
         private async Task<HttpContent> apiRequest(Uri fullUri, HttpMethod method, int expectedStatusCode,
             CancellationToken? cancelToken, TableauSession session = null, HttpContent body = null)
         {
@@ -151,14 +206,22 @@ namespace Tableau.Api
                 try
                 {
                     Log?.Log(LogLevel.Information, $"Sending request to Tableau Server. Method: {method}, Url: '{fullUri}'. Expected response code: {expectedStatusCode}");
-                    using (var c = buildClient(session?.Token))
+                    using (var c = buildClient())
                     {
                         var msg = new HttpRequestMessage(method, fullUri);
+                        // On the request, not the client's default headers, so the token goes with this request only.
+                        if (!string.IsNullOrEmpty(session?.Token))
+                            msg.Headers.TryAddWithoutValidation("X-Tableau-Auth", session.Token);
                         if (body != null)
                             msg.Content = body;
 
                         var resp = await c.SendAsync(msg, cancelToken ?? CancellationToken.None);
-                        if ((int)resp.StatusCode != expectedStatusCode)
+                        var status = (int)resp.StatusCode;
+                        if (status >= 300 && status < 400)
+                            throw buildRedirectException(resp);
+                        // Tableau answers some calls with another 2xx than the call names, such as 201 for a schedule
+                        // created where 1.2.5 named 200.
+                        if (status < 200 || status >= 300)
                             throw await buildException(resp);
                         Log?.Log(LogLevel.Information, "Request successful");
                         return resp.Content;
@@ -205,7 +268,9 @@ namespace Tableau.Api
 
         }
 
-        private StringContent getObjectAsRequestContent(object o)
+        private StringContent getObjectAsRequestContent(object o) => xmlRequestContent(serializeRequest(o));
+
+        private static string serializeRequest(object o)
         {
             var ser = new XmlSerializer(typeof(tsRequest));
             using (var textWriter = new StringWriter())
@@ -216,12 +281,16 @@ namespace Tableau.Api
                 //remove first (XML schema) tag for compatibility with old versions of API
                 xml = xml.Substring(xml.IndexOf("?>") +2);
                 // remove XML definitions from tsRequest
-                xml = Regex.Replace(xml, @"(?<=<tsRequest )[^>]+", "");
-                var content = new StringContent(xml);
-                content.Headers.ContentType =
-                    new System.Net.Http.Headers.MediaTypeHeaderValue("application/xml");
-                return content;
+                return Regex.Replace(xml, @"(?<=<tsRequest )[^>]+", "");
             }
+        }
+
+        private static StringContent xmlRequestContent(string xml)
+        {
+            var content = new StringContent(xml);
+            content.Headers.ContentType =
+                new System.Net.Http.Headers.MediaTypeHeaderValue("application/xml");
+            return content;
         }
 
         private MultipartContent prepareFileUploadContent(StringContent xmlContent, Stream strm)

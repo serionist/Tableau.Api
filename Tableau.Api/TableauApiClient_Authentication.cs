@@ -32,7 +32,7 @@ namespace Tableau.Api
             var userModel = string.IsNullOrEmpty(userIdToImpersonate)
                 ? null
                 : new userType() {id = userIdToImpersonate};
-            var ret = await getResponseAsObject<tableauCredentialsType>(await apiRequest(buildUri("auth/signin"),
+            var ret = await getResponseAsObject<tableauCredentialsType>(await apiRequest(buildUri($"auth/signin"),
                 HttpMethod.Post, 200, cancelToken, null, getObjectAsRequestContent(
                     new tableauCredentialsType()
                     {
@@ -59,7 +59,7 @@ namespace Tableau.Api
         {
             checkEndpointAvailability();
             checkNullParameters((nameof(tokenName), tokenName), (nameof(token), token));
-            var ret = await getResponseAsObject<tableauCredentialsType>(await apiRequest(buildUri("auth/signin"),
+            var ret = await getResponseAsObject<tableauCredentialsType>(await apiRequest(buildUri($"auth/signin"),
                 HttpMethod.Post, 200, cancelToken, null, getObjectAsRequestContent(
                     new tableauCredentialsType()
                     {
@@ -103,7 +103,7 @@ namespace Tableau.Api
         {
             checkEndpointAvailability();
             checkNullParameters((nameof(session), session));
-            var ret = await getResponseAsObject<tableauCredentialsType>(await apiRequest(buildUri("auth/switchsite"),
+            var ret = await getResponseAsObject<tableauCredentialsType>(await apiRequest(buildUri($"auth/switchsite"),
                 HttpMethod.Post, 200, cancelToken, session,
                 getObjectAsRequestContent(new siteType() {contentUrl = newSiteContentUrl})));
             ret.user.name = session.UserName;

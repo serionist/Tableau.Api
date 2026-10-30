@@ -113,7 +113,7 @@ namespace Tableau.Api
         /// <param name="session"></param>
         /// <param name="viewId">The ID of the view to render as data.</param>
         /// <param name="cancelToken"></param>
-        /// <param name="filters">When provided, the filters will be set to the specified values on the view before downloading data.</param>
+        /// <param name="filters">When provided, the filters will be set to the specified values on the view before downloading data. Each name is sent with the vf_ prefix, added unless the name has it; names and values are escaped.</param>
         /// <returns></returns>
         /// <exception cref="TableauRequestException"></exception>
         /// <exception cref="TableauApiVersionException"></exception>
@@ -124,15 +124,27 @@ namespace Tableau.Api
         {
             checkEndpointAvailability();
             checkNullParameters((nameof(session), session), (nameof(viewId), viewId));
-            foreach (var filter in filters)
-                checkNullParameters((nameof(filter.filterName), filter.filterName), (nameof(filter.filterValue), filter.filterValue));
             return await (await apiRequest(
-                    buildUri($"sites/{session.SiteId}/views/{viewId}/data",
-                        filters.Select(e =>
-                            (e.filterName.StartsWith("vf_", StringComparison.CurrentCultureIgnoreCase)
-                                ? e.filterName.Substring(3)
-                                : e.filterName, e.filterValue)).ToArray()), HttpMethod.Get, 200, cancelToken, session))
+                    buildUri($"sites/{session.SiteId}/views/{viewId}/data", viewFilters(filters)), HttpMethod.Get, 200,
+                    cancelToken, session))
                 .ReadAsStreamAsync();
+        }
+
+        /// <summary>
+        /// View filters as Tableau reads them: each name gets the vf_ prefix unless it has it, in any case, and a null
+        /// list is no filters.
+        /// </summary>
+        private (string, string)[] viewFilters((string filterName, string filterValue)[] filters)
+        {
+            var built = new List<(string, string)>();
+            foreach (var filter in filters ?? new (string filterName, string filterValue)[0])
+            {
+                checkNullParameters((nameof(filter.filterName), filter.filterName), (nameof(filter.filterValue), filter.filterValue));
+                built.Add((filter.filterName.StartsWith("vf_", StringComparison.OrdinalIgnoreCase)
+                    ? filter.filterName
+                    : "vf_" + filter.filterName, filter.filterValue));
+            }
+            return built.ToArray();
         }
         /// <summary>
         /// Returns an image of the specified view as data stream. Versions 2.5+
@@ -141,7 +153,7 @@ namespace Tableau.Api
         /// <param name="viewId">The ID of the view to return an image for.</param>
         /// <param name="imageWidth">(Optional) The resolution of the image. By default, the width of the returned image is 784 pixels. If you set this parameter value to high, the width of the returned image is 1568 pixels. For both resolutions, the height varies to preserve the aspect ratio of the view.</param>
         /// <param name="cancelToken"></param>
-        /// <param name="filters">When provided, the filters will be set to the specified values on the view before downloading data.</param>
+        /// <param name="filters">When provided, the filters will be set to the specified values on the view before downloading data. Each name is sent with the vf_ prefix, added unless the name has it; names and values are escaped.</param>
         /// <returns></returns>
         /// <exception cref="TableauRequestException"></exception>
         /// <exception cref="TableauApiVersionException"></exception>
@@ -152,15 +164,10 @@ namespace Tableau.Api
         {
             checkEndpointAvailability();
             checkNullParameters((nameof(session), session), (nameof(viewId), viewId));
-            foreach (var filter in filters)
-                checkNullParameters((nameof(filter.filterName), filter.filterName), (nameof(filter.filterValue), filter.filterValue));
             var args = new List<(string,string)>();
             if (imageWidth == TableauImageWidth.High_1568)
                 args.Add(("resolution", "high"));
-            args.AddRange(filters.Select(e =>
-                (e.filterName.StartsWith("vf_", StringComparison.CurrentCultureIgnoreCase)
-                    ? e.filterName.Substring(3)
-                    : e.filterName, e.filterValue)));
+            args.AddRange(viewFilters(filters));
 
             return await (await apiRequest(
                     buildUri($"sites/{session.SiteId}/views/{viewId}/image", args.ToArray()), HttpMethod.Get, 200, cancelToken, session))
@@ -172,7 +179,7 @@ namespace Tableau.Api
         /// <param name="session"></param>
         /// <param name="viewId">The ID of the view to render as a .pdf file.</param>
         /// <param name="cancelToken"></param>
-        /// <param name="filters">When provided, the filters will be set to the specified values on the view before downloading data.</param>
+        /// <param name="filters">When provided, the filters will be set to the specified values on the view before downloading data. Each name is sent with the vf_ prefix, added unless the name has it; names and values are escaped.</param>
         /// <returns></returns>
         /// <exception cref="TableauRequestException"></exception>
         /// <exception cref="TableauApiVersionException"></exception>
@@ -184,15 +191,10 @@ namespace Tableau.Api
         {
             checkEndpointAvailability();
             checkNullParameters((nameof(session), session), (nameof(viewId), viewId));
-            foreach (var filter in filters ?? new (string filterName, string filterValue)[0])
-                checkNullParameters((nameof(filter.filterName), filter.filterName), (nameof(filter.filterValue), filter.filterValue));
             var args = new List<(string, string)>();
             args.Add(("type", Enum.GetName(typeof(PageType), pageType)));
             args.Add(("orientation", Enum.GetName(typeof(Orientation), orientation)));
-            args.AddRange(filters.Select(e =>
-                (!e.filterName.StartsWith("vf_", StringComparison.CurrentCultureIgnoreCase)
-                    ? $"vf_{e.filterName}"
-                    : e.filterName, e.filterValue)));
+            args.AddRange(viewFilters(filters));
 
             return await (await apiRequest(
                     buildUri($"sites/{session.SiteId}/views/{viewId}/pdf", args.ToArray()), HttpMethod.Get, 200, cancelToken, session))

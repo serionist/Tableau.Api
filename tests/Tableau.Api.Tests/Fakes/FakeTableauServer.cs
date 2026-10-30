@@ -14,7 +14,9 @@ namespace Tableau.Api.Tests.Fakes;
 /// A Tableau server for tests: HTTP/1.1 on a loopback port, answering from a route table and recording every request
 /// as it came off the wire, the request line included. The library builds its own HttpClient and handler for each
 /// request, so a real socket is the only place a test can stand between it and Tableau, and what it records is what
-/// Tableau would receive. One request per connection: every response says Connection: close.
+/// Tableau would receive. One request per connection: every response says Connection: close, and once the client has
+/// closed its side, the server resets the connection, so the suite's thousands of connections leave no socket in
+/// TIME_WAIT holding a loopback port.
 /// </summary>
 internal sealed class FakeTableauServer : IDisposable
 {
@@ -87,8 +89,11 @@ internal sealed class FakeTableauServer : IDisposable
 
     private async Task ServeAsync(TcpClient client)
     {
+        // Taken once: TcpClient.Client is null once the client is closed. Stopping the server resets a connection as
+        // its end does, so no stop leaves one in TIME_WAIT either.
+        var socket = client.Client;
         using (client)
-        using (_stop.Token.Register(client.Close))
+        using (_stop.Token.Register(() => Reset(socket)))
         {
             try
             {
@@ -102,12 +107,47 @@ internal sealed class FakeTableauServer : IDisposable
                 }
                 var response = respond is null ? FakeResponse.NoRoute(request) : Respond(respond, request);
                 await WriteAsync(stream, response).ConfigureAwait(false);
-                client.Client.Shutdown(SocketShutdown.Send);
+                // The side that closes first waits in TIME_WAIT, so the server waits for the client to close, as
+                // Connection: close asks, and answers with a reset, which leaves neither side waiting. The socket is
+                // closed here: disposing the TcpClient would shut it down gracefully first.
+                await WaitForCloseAsync(stream).ConfigureAwait(false);
+                Reset(socket);
             }
             catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException)
             {
                 // The client went away, or the server is stopping: there is no one to answer.
             }
+        }
+    }
+
+    private static void Reset(Socket socket)
+    {
+        try
+        {
+            socket.LingerState = new LingerOption(true, 0);
+            socket.Close();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Already closed, by the connection's end or the server's stop.
+        }
+    }
+
+    /// <summary>Until the client closes its side, or ten seconds pass; anything it sends meanwhile is dropped.</summary>
+    private static async Task WaitForCloseAsync(Stream stream)
+    {
+        var buffer = new byte[256];
+        var deadline = Task.Delay(TimeSpan.FromSeconds(10));
+        while (true)
+        {
+            var read = stream.ReadAsync(buffer, 0, buffer.Length);
+            if (await Task.WhenAny(read, deadline).ConfigureAwait(false) == deadline)
+            {
+                // The read ends when the connection is reset; nothing waits for it.
+                _ = read.ContinueWith(task => task.Exception, TaskContinuationOptions.OnlyOnFaulted);
+                return;
+            }
+            if (await read.ConfigureAwait(false) == 0) return;
         }
     }
 
@@ -183,6 +223,7 @@ internal sealed class FakeTableauServer : IDisposable
             .Append("HTTP/1.1 ").Append(response.Status.ToString(CultureInfo.InvariantCulture))
             .Append(' ').Append(response.Reason).Append("\r\n");
         if (response.ContentType is { } contentType) head.Append("Content-Type: ").Append(contentType).Append("\r\n");
+        foreach (var header in response.Headers) head.Append(header.Key).Append(": ").Append(header.Value).Append("\r\n");
         head.Append("Content-Length: ").Append(response.Body.Length.ToString(CultureInfo.InvariantCulture))
             .Append("\r\nConnection: close\r\n\r\n");
         var bytes = Encoding.ASCII.GetBytes(head.ToString());

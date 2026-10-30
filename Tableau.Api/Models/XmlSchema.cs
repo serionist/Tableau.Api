@@ -2969,6 +2969,12 @@ namespace Tableau.Api.Models
         /// <remarks/>
         [System.Xml.Serialization.XmlEnumAttribute("30")]
         Item30,
+
+        // Added by hand after the generated members, so no member's value moves: a value Tableau Cloud sends for an
+        // hourly task, which the 3.29 schema lacks.
+        /// <remarks/>
+        [System.Xml.Serialization.XmlEnumAttribute("60")]
+        Item60,
     }
 
     /// <remarks/>
@@ -3001,6 +3007,12 @@ namespace Tableau.Api.Models
         /// <remarks/>
         [System.Xml.Serialization.XmlEnumAttribute("12")]
         Item12,
+
+        // Added by hand after the generated members, so no member's value moves: a value Tableau Cloud sends for a
+        // daily task, which the 3.29 schema lacks.
+        /// <remarks/>
+        [System.Xml.Serialization.XmlEnumAttribute("24")]
+        Item24,
     }
 
     /// <remarks/>
@@ -3064,6 +3076,10 @@ namespace Tableau.Api.Models
 
         /// <remarks/>
         Flow,
+
+        // Added by hand from Tableau's REST API 3.29 schema, after the generated members, so no member's value moves.
+        /// <remarks/>
+        DataAcceleration,
     }
 
     /// <remarks/>
@@ -4251,6 +4267,10 @@ namespace Tableau.Api.Models
 
         /// <remarks/>
         ViewerWithPublish,
+
+        // Added by hand from Tableau's REST API 3.29 schema, after the generated members, so no member's value moves.
+        /// <remarks/>
+        SupportUser,
     }
 
     /// <remarks/>
@@ -4265,6 +4285,14 @@ namespace Tableau.Api.Models
 
         /// <remarks/>
         SAML,
+
+        // Added by hand after the generated members, so no member's value moves: OpenID from Tableau's REST API 3.29
+        // schema, and TableauIDWithMFA, which Tableau Cloud sends though no schema lists it.
+        /// <remarks/>
+        OpenID,
+
+        /// <remarks/>
+        TableauIDWithMFA,
     }
 
     /// <remarks/>
@@ -4279,6 +4307,10 @@ namespace Tableau.Api.Models
 
         /// <remarks/>
         ManagedByOwner,
+
+        // Added by hand from Tableau's REST API 3.29 schema, after the generated members, so no member's value moves.
+        /// <remarks/>
+        LockedToProjectWithoutNested,
     }
 
     /// <remarks/>
@@ -6962,6 +6994,25 @@ namespace Tableau.Api.Models
 
         /// <remarks/>
         RunFlow,
+
+        // Added by hand from Tableau's REST API 3.29 schema, after the generated members, so no member's value moves.
+        /// <remarks/>
+        BroadcastPost,
+
+        /// <remarks/>
+        CreateSiteUsersCsv,
+
+        /// <remarks/>
+        EmptyRecycleBin,
+
+        /// <remarks/>
+        LinkUserIdsUpdate,
+
+        /// <remarks/>
+        RefreshThumbnails,
+
+        /// <remarks/>
+        ResyncTCMUsersCsv,
     }
 
     /// <remarks/>
@@ -10231,6 +10282,34 @@ namespace Tableau.Api.Models
 
         /// <remarks/>
         Write,
+
+        // Added by hand from Tableau's REST API 3.29 schema, after the generated members, so no member's value moves.
+        /// <remarks/>
+        AiAccess,
+
+        /// <remarks/>
+        Execute,
+
+        /// <remarks/>
+        ExtractRefresh,
+
+        /// <remarks/>
+        Overwrite,
+
+        /// <remarks/>
+        PulseMetricDefine,
+
+        /// <remarks/>
+        RunExplainData,
+
+        /// <remarks/>
+        SaveAs,
+
+        /// <remarks/>
+        VizqlDataApiAccess,
+
+        /// <remarks/>
+        WebAuthoringForFlows,
     }
 
     /// <remarks/>
