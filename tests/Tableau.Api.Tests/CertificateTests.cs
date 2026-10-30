@@ -44,6 +44,10 @@ public sealed class CertificateTests
         var request = server.Requests.Single();
         Assert.AreEqual($"POST {Fixtures.VizportalPath}updateUsersSiteRole HTTP/1.1", request.RequestLine);
         Assert.Contains($"workgroup_session_id={Fixtures.SessionToken}", request.Header("Cookie") ?? "");
+        // Vizportal checks that the XSRF header repeats the XSRF cookie.
+        var cookie = (request.Header("Cookie") ?? "").Split(';').Select(part => part.Trim())
+            .Single(part => part.StartsWith("XSRF-TOKEN=", StringComparison.Ordinal))["XSRF-TOKEN=".Length..];
+        Assert.AreEqual(cookie, request.Header("X-Xsrf-Token"));
     }
 
     [TestMethod]

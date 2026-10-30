@@ -619,8 +619,8 @@ internal sealed record Endpoint(string Name, HttpMethod Method, string Template,
   - `Build and test (Linux)` and `Build and test (Windows)`: locked restore, build, tests with coverage and the gate,
     pack with package validation, `eng/package-check.cs` on the pack, and from S5 ApiCompat against 1.2.5;
   - from S8, `Native AOT (Linux)`;
-  - from S3, a weekly job that checks out `release/1.x` and restores it with NuGet audit (schedules run only on the
-    default branch);
+  - from S3, the weekly package audit of `release/1.x` in `audit-1x.yml`, a workflow of its own on Windows, so it
+    covers net48 and a failure leaves main's CI and its badge alone (schedules run only on the default branch);
   - `CI`, the required check, fails when any job above failed.
 - **`release/1.x` has its own `ci.yml`** (S2a): on PRs to the branch and on every push to it, so each commit on the
   line, a tagged one included, has a push run of its own.
@@ -1260,7 +1260,7 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
 | 1.x offline | PRs to and pushes on `release/1.x`, from S2a | Linux (net10.0), Windows (net10.0 and net48) |
 | 1.x paths and queries on .NET Framework | the same runs, from S2b | Windows, net48, in AppDomains targeting .NET Framework 4.0, 4.6.1 and 4.8, each asserting first that it took its target's URI parsing; each row's expected outcome worked out from 1.2.5's own `buildUri` in the same domain |
 | 1.x API checks | the same runs, from S2a | package validation and ApiCompat's `package` mode against 1.2.5, no suppressions |
-| 1.x NuGet audit | weekly, from S3, a job in main's `ci.yml` on `release/1.x` | Linux |
+| 1.x NuGet audit | weekly, from S3, `audit-1x.yml` on `release/1.x` | Windows |
 | Offline unit (`FakeTableauHandler`) | every PR, `main`, daily | Linux and Windows |
 | Pipeline (`FakeTableauServer`, with TLS) | every PR | Linux and Windows |
 | Culture and time zone | every PR | Linux: sv-SE, tr-TR, a non-UTC zone |

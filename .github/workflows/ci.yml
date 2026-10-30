@@ -14,8 +14,8 @@
 # The daily run is for Dependabot's merges: dependabot-auto-merge.yml turns on auto-merge with the workflow's token,
 # and a push made with that token starts no run, so main is checked within a day of one instead.
 #
-# The weekly run also audits release/1.x's packages: GitHub runs scheduled workflows only on the default branch, so the
-# 1.x line's weekly check lives here. CI doesn't sum it up, since it checks another branch; it fails its own run.
+# release/1.x's weekly package audit is audit-1x.yml, a workflow of its own, so a failure there leaves main's CI and
+# its badge alone.
 name: CI
 
 on:
@@ -24,8 +24,6 @@ on:
     branches: [main]
   schedule:
     - cron: "17 5 * * *"
-    # Monday's: the package audit of release/1.x runs on this one.
-    - cron: "29 6 * * 1"
   workflow_dispatch:
 
 permissions:
@@ -120,65 +118,24 @@ jobs:
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
+      # The version .gitleaks.toml names, checked against the SHA-256 its release publishes, so the selftest's gitleaks
+      # cases run here too.
+      - name: Install gitleaks
+        shell: pwsh
+        run: |
+          $zip = Join-Path $env:RUNNER_TEMP "gitleaks.zip"
+          Invoke-WebRequest -Uri "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_windows_x64.zip" -OutFile $zip
+          $hash = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLowerInvariant()
+          if ($hash -ne "d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e") { throw "gitleaks checksum mismatch: $hash" }
+          $dir = Join-Path $env:RUNNER_TEMP "gitleaks"
+          Expand-Archive -Path $zip -DestinationPath $dir
+          Add-Content -Path $env:GITHUB_PATH -Value $dir
       - name: The gate's selftest
         run: dotnet run eng/gate.cs -- selftest
       - name: Test
         run: dotnet test --project tests/Tableau.Api.Tests/Tableau.Api.Tests.csproj -c Release
 
-  # release/1.x takes security fixes only, and a package it uses can get an advisory with no commit there. So on
-  # Monday's run, and on a run by hand, its solution is restored, which runs NuGet audit as its Directory.Build.props
-  # sets it, and every package each project uses, directly or through another, is checked against nuget.org's
-  # vulnerability data. One with an advisory fails the run.
-  audit-1x:
-    name: Package audit (release/1.x)
-    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '29 6 * * 1'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: release/1.x
-          persist-credentials: false
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          global-json-file: global.json
-      - name: Restore
-        run: dotnet restore Tableau.Api.sln
-      # dotnet list exits 0 whatever it finds, so its JSON report is read: each package of each project and framework,
-      # top-level and transitive.
-      - name: No package with a known advisory
-        shell: pwsh
-        run: |
-          $json = dotnet list Tableau.Api.sln package --vulnerable --include-transitive --format json
-          if ($LASTEXITCODE -ne 0) {
-            Write-Output "::error::dotnet list failed with exit code $LASTEXITCODE."
-            exit 1
-          }
-          $report = $json | Out-String | ConvertFrom-Json
-          $projects = @($report.projects)
-          if ($projects.Count -eq 0) {
-            Write-Output "::error::dotnet list found no project to check."
-            exit 1
-          }
-          $errors = @($report.problems | Where-Object { $_ -and $_.level -eq 'error' })
-          foreach ($problem in $errors) { Write-Output "::error::$($problem.text)" }
-          $found = @(foreach ($project in $projects) {
-            foreach ($framework in @($project.frameworks)) {
-              if (-not $framework) { continue }
-              foreach ($package in @($framework.topLevelPackages) + @($framework.transitivePackages)) {
-                if (-not $package -or -not $package.vulnerabilities) { continue }
-                $advisories = ($package.vulnerabilities | ForEach-Object { "$($_.severity) $($_.advisoryurl)" }) `
-                  -join '; '
-                $where = "$(Split-Path -Leaf $project.path) ($($framework.framework))"
-                "${where}: $($package.id) $($package.resolvedVersion): $advisories"
-              }
-            }
-          })
-          foreach ($line in $found) { Write-Output "::error::$line" }
-          if ($errors.Count -gt 0 -or $found.Count -gt 0) { exit 1 }
-          Write-Output "$($projects.Count) projects on release/1.x, no package with a known advisory."
-
-  # The check the main ruleset requires: every job above but the 1.x audit passed. It runs whatever happened to them,
+  # The check the main ruleset requires: every job above passed. It runs whatever happened to them,
   # since a required check that is skipped counts as passed, and it fails when one of them failed, was cancelled or was
   # skipped.
   ci:

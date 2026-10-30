@@ -64,9 +64,12 @@ public sealed class EveryMethodPathTests
 
                 before = server.Requests.Count;
                 var thrown = await InvokeAsync(client, session, method, parameter, "..");
-                if (thrown is not ArgumentException || server.Requests.Count != before)
-                    failures.Add($"{Name(method)}({parameter.Name}) = \"..\": expected ArgumentException and no request; got "
-                        + $"{thrown?.GetType().Name ?? "no exception"} and {server.Requests.Count - before} request(s)");
+                // The parameter's own name, so the refusal is RequestPath's for this value, not a later check's.
+                if (thrown is not ArgumentException argument || argument.ParamName != parameter.Name
+                    || server.Requests.Count != before)
+                    failures.Add($"{Name(method)}({parameter.Name}) = \"..\": expected ArgumentException for {parameter.Name} and no "
+                        + $"request; got {thrown?.GetType().Name ?? "no exception"} ({(thrown as ArgumentException)?.ParamName}) and "
+                        + $"{server.Requests.Count - before} request(s)");
             }
         }
 
