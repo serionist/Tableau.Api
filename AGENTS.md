@@ -42,11 +42,17 @@ PowerShell.
 | the offline tests | `dotnet test --project tests/Tableau.Api.Tests/Tableau.Api.Tests.csproj` |
 | the gate | `dotnet run eng/gate.cs -- quick`, against `origin/release/1.x`; `full` adds the offline tests |
 | the package | `dotnet pack Tableau.Api/Tableau.Api.csproj -c Release -o artifacts/packages`, then `dotnet run eng/package-check.cs -- artifacts/packages` |
-| the API against 1.2.5 | `dotnet tool restore`, then `dotnet apicompat package artifacts/packages/Tableau.Api.<version>.nupkg --baseline-package <1.2.5's .nupkg> --enable-rule-cannot-change-parameter-name` |
+| the API against 1.2.5 | `dotnet tool restore`, then `dotnet apicompat package artifacts/packages/Tableau.Api.<version>.nupkg --baseline-package <1.2.5's .nupkg> --enable-rule-cannot-change-parameter-name`, with the reference assemblies (below) |
 
 - **The library builds with the doc-comment warnings 1.2.5 had** (CS1570 to CS1591); any other warning is an error.
 - **1.2.5's `.nupkg`:** a pack puts it in NuGet's global packages folder, under `tableau.api/1.2.5/`
   (`dotnet nuget locals global-packages --list` names the folder). CI downloads it and checks its SHA-512.
+- **ApiCompat needs the reference assemblies,** or it can't tell an enum from a class and misses a moved enum value.
+  Pass `--package-assembly-references` and `--baseline-package-assembly-references`, each
+  `".NETStandard,Version=v2.0|<folder>,<folder>"`: the folders of `netstandard.dll` (NETStandard.Library's
+  `build/netstandard2.0/ref`) and `Microsoft.Extensions.Logging.Abstractions.dll`. A short `netstandard2.0` matches
+  nothing: the tool warns "Could not find a reference directory" and passes. CI takes the folders from MSBuild
+  (`-getItem:ReferencePath`) and fails on any "Could not" warning.
 - **CI** runs the gate, the offline tests on Linux and Windows, the pack, the package check and both API checks on
   every PR into `release/1.x` and every push to it.
 
