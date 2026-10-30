@@ -91,6 +91,11 @@ namespace Tableau.Api.VizPortal
         {
             // Disposed after each request, as the REST client's is, so its connection doesn't wait for the finalizer.
             using var c = buildClient(session.Token);
+            // The method name ends the path, escaped and checked as a value in a REST path is: the public paging
+            // methods take it from the caller. It is appended to the base address, never resolved against it, so no
+            // name can reach another path or host.
+            RequestPath method = $"{methodName}";
+            var uri = new Uri(c.BaseAddress.AbsoluteUri + method.ToEscapedPath());
 
             try
             {
@@ -98,7 +103,7 @@ namespace Tableau.Api.VizPortal
                 var reqStr = new JObject(new JProperty("method", methodName), new JProperty("params", parameters))
                     .ToString(
                         Formatting.Indented);
-                var resp = await c.PostAsync(methodName,
+                var resp = await c.PostAsync(uri,
                     new StringContent(reqStr
                         , Encoding.UTF8, "application/json"));
                 if (TableauHttp.IsRedirect(resp.StatusCode))

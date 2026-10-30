@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Tableau.Api.Models;
 using Tableau.Api.Tests.Fakes;
+using Tableau.Api.VizPortal.Models;
 
 namespace Tableau.Api.Tests;
 
@@ -106,6 +107,48 @@ public sealed class PathTests
 
         Assert.AreEqual($"POST {Path} HTTP/1.1", server.Requests.Single().RequestLine);
     }
+
+    // The public paging methods take the Vizportal method's name from the caller, and it ends the path.
+    [TestMethod]
+    [DataRow("get/Projects? #1", "get%2FProjects%3F%20%231")]
+    [DataRow("http://127.0.0.1:1/elsewhere", "http:%2F%2F127.0.0.1:1%2Felsewhere")]
+    public async Task AVizportalMethodNameIsSentAsOneSegment(string name, string escaped)
+    {
+        using var server = FakeTableauServer.Start();
+        var client = Fixtures.Client(server);
+        var path = Fixtures.VizportalPath + escaped;
+        server.Map("POST", path, NoProjects());
+
+        await foreach (var _ in client.VizPortal.PaginateRequest(Fixtures.Session(), name, new QueryModel(),
+                           (ProjectQueryResponse page) => page.Projects))
+        {
+        }
+
+        Assert.AreEqual($"POST {path} HTTP/1.1", server.Requests.Single().RequestLine);
+    }
+
+    [TestMethod]
+    [DataRow("")]
+    [DataRow("..")]
+    public async Task AVizportalMethodNameThatIsEmptyOrOnlyDotsIsRefusedBeforeSending(string name)
+    {
+        using var server = FakeTableauServer.Start();
+        var client = Fixtures.Client(server);
+
+        var thrown = await Assert.ThrowsAsync<ArgumentException>(async () =>
+        {
+            await foreach (var _ in client.VizPortal.PaginateRequest(Fixtures.Session(), name, new QueryModel(),
+                               (ProjectQueryResponse page) => page.Projects))
+            {
+            }
+        });
+
+        Assert.AreEqual("methodName", thrown.ParamName);
+        Assert.IsEmpty(server.Requests);
+    }
+
+    private static FakeResponse NoProjects() =>
+        FakeResponse.Json(200, "{\"result\":{\"moreItems\":false,\"totalCount\":0,\"projects\":[]}}");
 
     [TestMethod]
     public async Task AnUnpairedSurrogateIsRefusedBeforeSending()

@@ -95,7 +95,8 @@ internal sealed class FakeTableauServer : IDisposable
         request.CertificateExtensions.Add(new X509KeyUsageExtension(
             X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment, false));
         request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension([new Oid("1.3.6.1.5.5.7.3.1")], false));
-        using var created = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddHours(1));
+        var now = DateTimeOffset.UtcNow;
+        using var created = request.CreateSelfSigned(now.AddMinutes(-5), now.AddHours(1));
         // Windows' TLS stack can't use a key that lives only in memory, so the certificate goes through a PFX, which
         // gives it a key the server can use; disposing the server deletes it.
         return X509CertificateLoader.LoadPkcs12(created.Export(X509ContentType.Pfx), null);
