@@ -18,9 +18,9 @@ work feels complete. `main` takes PRs only, and a maintainer squash-merges them 
    each public member it touches, `src/Tableau.Api/Models/how_to_generate_schema.txt` for the schema, `AGENTS.md` for a
    changed path, command or rule, and the plan when the work departed from it (where and why). A plan with a progress
    log gets the step's row. Write them the way `AGENTS.md` asks.
-2. **The gate:** `dotnet run eng/gate.cs -- full`, which runs the tests in `tests/Tableau.Api.Tests/` with coverage
-   and the coverage gate. A change to a request, a model or the Vizportal client has a test there that fails without
-   it. Fix every failure; never weaken a test, a check, a warning setting or a coverage floor to pass. When the gate
+2. **The gate:** `dotnet run eng/gate.cs -- full`, which verifies the code style with `dotnet format`, and runs the
+   tests in `tests/Tableau.Api.Tests/` in Release with coverage, then the coverage gate. A change to a request, a model
+   or the Vizportal client has a test there that fails without it. Fix every failure; never weaken a test, a check, a warning setting or a coverage floor to pass. When the gate
    says a floor can rise, raise it in `eng/coverage.json`.
 3. **The tests on a site,** for a change to a request, a model or the Vizportal client, when the developer has a
    Tableau site they may change (`AGENTS.md`, Build and test): the `Live` tests that reach the change, which the

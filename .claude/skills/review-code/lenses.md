@@ -85,7 +85,9 @@ Applies when: the scope touches `src/Tableau.Api/VizPortal/`.
   Tableau Cloud, and what it can't cover? A Server-only change: did its `ServerOnly` tests run by hand on a Tableau
   Server, and does the PR say what Tableau Cloud couldn't show? Is a failure compared with `main`'s run on the same
   site before it is called the change's?
-- Coverage: does the coverage gate pass without a lower floor, and does a new test cover its code's branches?
+- Coverage: does the coverage gate pass without a lower floor or a wider exclusion in `tests/coverage.config`, and does
+  a new test cover its code's branches?
+- A test on a site: is it a `[SiteTest]` with its `TestCategory`, and does it name every setting it reads?
 - Do tests use invented data, and delete what they create on the site?
 - A gate change: does the selftest cover it?
 

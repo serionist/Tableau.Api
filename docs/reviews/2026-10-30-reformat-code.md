@@ -2,7 +2,7 @@
 subject: "Reformat the hand-written code to .editorconfig (#33)"
 base: main e0b3d06
 head: f0eafdd
-date: 2026-10-31
+date: 2026-10-30
 round: 1
 tier: standard (one fresh reviewer, refuting in a scratch clone; findings checked against the code by the main session)
 verdict: clean
@@ -31,7 +31,7 @@ Verified:
 
 | Improvement | Answer |
 |---|---|
-| Run `dotnet format Tableau.Api.slnx --verify-no-changes` in CI, so a later change can't undo the reformat | taken in the next step (#34): ci.yml's Checks (Linux) runs it |
+| Run `dotnet format Tableau.Api.slnx --verify-no-changes` in CI, so a later change can't undo the reformat | taken in the next step (#34): ci.yml's Checks (Linux) runs it, and so does the gate's full lane |
 
 ## Checks
 

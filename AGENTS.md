@@ -21,7 +21,7 @@ Newtonsoft.Json and Microsoft.Extensions.Logging.
 | Path | What |
 |---|---|
 | `src/` | `Directory.Build.props`: the package (MinVer from `v` tags, at least 2.0; the README; symbols; package validation against 1.2.5, with `Tableau.Api/CompatibilitySuppressions.xml` passing only the dropped netstandard2.0); `Tableau.Api/`, the library: `TableauApiClient.cs` (requests, `buildUri`, versions), `RequestPath.cs` (each value in a request path escaped and checked), `TableauHttp.cs` (the handler both clients use: certificates, no redirects, the base URL's path), `TableauApiClient_*.cs` (endpoints by area), `VizPortal/` (the Vizportal client and its `Models/`), `Models/` (`XmlSchema.cs`, generated; `how_to_generate_schema.txt`, the steps; `SchemaExtensions.cs`, `TableauSession.cs`), `Attributes/` (`ApiVersion`, `OnPremiseOnly`), `Enums/`, `Exceptions/`, `PartialStream.cs`, `Tableau.Api.csproj` |
-| `tests/` | `Directory.Build.props`: test applications on MSTest and Microsoft.Testing.Platform, with its coverage extension, never packed; `coverage.config`, what coverage measures: the library without `XmlSchema.cs`; `Tableau.Api.Tests/`, the tests: `Fakes/` (`FakeTableauServer`, an HTTP/1.1 server on a loopback port, with a TLS mode, that records each request as sent; `RecordingLogger`, each log line), `Fixtures.cs` (the invented site, user and tokens), `TableauSite.cs` (the `Live` and `ServerOnly` categories), one class per behaviour |
+| `tests/` | `Directory.Build.props`: test applications on MSTest and Microsoft.Testing.Platform, with its coverage extension, never packed; `coverage.config`, what coverage measures: the library without `XmlSchema.cs`; `Tableau.Api.Tests/`, the tests: `Fakes/` (`FakeTableauServer`, an HTTP/1.1 server on a loopback port, with a TLS mode, that records each request as sent; `RecordingLogger`, each log line), `Fixtures.cs` (the invented site, user and tokens), `TableauSite.cs` (`[SiteTest]` and the `Live` and `ServerOnly` categories), one class per behaviour |
 | `Tableau.Api.slnx` | the solution: the library and the tests |
 | `eng/` | `gate.cs`, the gate, the hooks' entry points and the setup, as one .NET file-based app; `coverage-gate.cs`, the tests' coverage against the floors in `coverage.json`; `package-check.cs`, what a packed package must hold (`dotnet run eng/package-check.cs -- <folder> [<version>]`); `apicompat.cs`, 1.2.5's API against the build's, by the ApiCompat tool, and `apicompat/`: `1.2.5.xml`, the ledger of every break, and `Baseline.csproj`, the assemblies 1.2.5 compiles against |
 | `.githooks/` | `commit-msg` refuses attribution, `pre-push` runs gate quick on what the push sends, `post-checkout` and `post-merge` name changed AI setup files |
@@ -46,8 +46,9 @@ PowerShell. The `--` after `eng/gate.cs` is needed: without it `dotnet run` take
 |---|---|
 | once per clone | `dotnet run eng/gate.cs -- setup` (hooks, `git blame`, skill links) |
 | the library | `dotnet build src/Tableau.Api/Tableau.Api.csproj`: 0 warnings, and every warning is an error. Its package, into an emptied `artifacts/packages` (each commit packs a new version): `dotnet pack src/Tableau.Api/Tableau.Api.csproj -c Release -o artifacts/packages`, then `dotnet run eng/package-check.cs -- artifacts/packages` and `dotnet run eng/apicompat.cs` (`-- --update` rewrites the ledger after a break a maintainer agreed) |
-| the tests | `dotnet test --project tests/Tableau.Api.Tests/Tableau.Api.Tests.csproj`; for coverage, add `--coverage --coverage-output-format cobertura --coverage-settings tests/coverage.config --results-directory artifacts/TestResults` with that folder emptied, then `dotnet run eng/coverage-gate.cs` |
-| the gate | `dotnet run eng/gate.cs -- quick` (selftest, build, AGENTS.md, skills, links, hooks, attribution, secrets); `full` adds the tests and the coverage gate; `text --file -` checks a PR's title and description: no attribution, and the issue named |
+| the tests | `dotnet test --project tests/Tableau.Api.Tests/Tableau.Api.Tests.csproj`; for coverage, measured in Release as CI measures it, add `-c Release --coverage --coverage-output-format cobertura --coverage-settings tests/coverage.config --results-directory artifacts/TestResults` with that folder emptied, then `dotnet run eng/coverage-gate.cs` |
+| the code style | `dotnet format Tableau.Api.slnx --verify-no-changes`, which catches style the build lets through; without `--verify-no-changes` it fixes it |
+| the gate | `dotnet run eng/gate.cs -- quick` (selftest, build, AGENTS.md, skills, links, hooks, attribution, secrets); `full` adds the code style, the tests with coverage and the coverage gate; `text --file -` checks a PR's title and description: no attribution, and the issue named |
 
 - **Versions come from git tags** through MinVer, so a clone needs its history. After a package version changes in
   `Directory.Packages.props`, `dotnet restore Tableau.Api.slnx --force-evaluate` rewrites the lock files.
@@ -56,9 +57,10 @@ PowerShell. The `--` after `eng/gate.cs` is needed: without it `dotnet run` take
 - **Coverage only rises:** `eng/coverage.json` holds the library's line and branch floors, in whole percent. The
   coverage gate fails a run below them, and a floor lower than `origin/main`'s; a floor it says can rise is raised in
   the change.
-- **A test on a Tableau site** is in the `Live` or `ServerOnly` category (`TableauSite.cs`): inconclusive unless
-  `TABLEAU_LIVE=1` or `TABLEAU_SERVER_ONLY=1`, failed, naming each setting, when that is set and a setting is not. Its
-  settings are environment variables set outside the clone; run it only on a site you may change.
+- **A test on a Tableau site** is a `[SiteTest]` in the `Live` or `ServerOnly` category (`TableauSite.cs`). It is
+  inconclusive when its switch, `TABLEAU_LIVE` or `TABLEAU_SERVER_ONLY`, is unset or empty; any value but 1 fails, so a
+  typo can't skip a run meant for a site; at 1, each missing setting fails it, named. Its settings are environment
+  variables set outside the clone; run it only on a site you may change.
 
 ## How a change lands
 

@@ -40,8 +40,8 @@ Each is a yes or no; a "no" is a finding.
 2. Does the change do what its issue and plan say, and nothing nobody asked for?
 3. Is new behaviour checked: by a test in `tests/Tableau.Api.Tests/` that fails without it, and what no offline test
    can show by a `Live` or `ServerOnly` test or a run against a site, which the PR names (Tableau Server and its
-   version, or Tableau Cloud) with what it could not show? Does the coverage gate pass with no floor lowered? Do tests
-   use invented data and delete what they create on the site?
+   version, or Tableau Cloud) with what it could not show? Does the coverage gate pass without a lower floor or a wider
+   exclusion? Do tests use invented data and delete what they create on the site?
 4. Does each request match Tableau's REST API reference for its method, path (`sites/{site-id}/...`), query, body and
    expected status, and does its `[ApiVersion]` name the version the reference gives?
 5. No password, token or runsettings in code, tests, logs, exception messages, docs, commits or the PR?
@@ -92,6 +92,7 @@ These decide how every other change is checked:
 - `eng/`, `.githooks/`, `.gitleaks.toml`, `.github/`;
 - the `Directory.Build.props` files, `Directory.Packages.props`, `.editorconfig` and the csproj settings that make
   warnings errors; `src/Tableau.Api/CompatibilitySuppressions.xml`, `.config/dotnet-tools.json`, and `Tableau.Api.slnx`, whose projects CI builds and tests;
+  `tests/coverage.config`, which says what coverage measures and so what the floors in `eng/coverage.json` mean;
 - `nuget.config` (its sources and their mapping), `global.json`, and the secrets block of `.gitignore`.
 
 Rules:
@@ -99,7 +100,8 @@ Rules:
 - A change that loosens a check is a blocker unless a maintainer agrees in the PR.
 - That includes a gate step dropped or made a warning, a rule or a test skipped, a `NoWarn` or an ignore added, a
   file added to the TableauLegacy section of `.editorconfig` or a rule the build already enforced relaxed there, a
-  package validation suppression added, a question or a lens removed, or attribution let through. A break added to
+  package validation suppression added, a coverage floor lowered or an exclusion added to `tests/coverage.config`, a
+  question or a lens removed, or attribution let through. A break added to
   `eng/apicompat/1.2.5.xml` by its regeneration is no loosening: it is a change to the public API, which question 6
   asks about.
 - A change that only makes a check stricter needs no more than a normal review.
