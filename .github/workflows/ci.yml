@@ -3,7 +3,8 @@
 # - Checks (Linux): the gate's quick lane: its selftest, the library's build, AGENTS.md, the skills and their links, the
 #   hooks, no tool attribution in the commits, and gitleaks over them.
 # - Build, test and pack (Linux): the solution, Tableau.Api.slnx, restored in locked mode and built in Release; the
-#   offline tests; and the package, packed with package validation against 1.2.5 and checked with eng/package-check.cs.
+#   offline tests; the package, packed with package validation against 1.2.5 and checked with eng/package-check.cs; and
+#   the API compared with 1.2.5's by eng/apicompat.cs, against the ledger of breaks in eng/apicompat/1.2.5.xml.
 # - Selftest and tests (Windows): the gate's selftest and the offline tests, where paths, line endings and the TLS stack
 #   differ from Linux.
 # - CI sums those up; it and pr-text.yml's PR text are the checks the main ruleset requires.
@@ -108,6 +109,11 @@ jobs:
         run: dotnet pack src/Tableau.Api/Tableau.Api.csproj --no-build -c Release -o artifacts/packages
       - name: Check the package
         run: dotnet run eng/package-check.cs -- artifacts/packages
+      # 1.2.5's DLL against this build, each with the assemblies it compiles against, by the ApiCompat tool pinned in
+      # dotnet-tools.json. It fails on a break the ledger doesn't list, on an entry that is no longer a break, and on a
+      # ledger that differs from what the tool writes for this build.
+      - name: Compare the API with 1.2.5's
+        run: dotnet run eng/apicompat.cs
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: packages

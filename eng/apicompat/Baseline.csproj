@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Never built: eng/apicompat.cs restores it to find the assemblies 1.2.5 compiled against, netstandard2.0 and its one
+       dependency at the version its package names, so the ApiCompat tool reads 1.2.5's DLL as a compiler would. The
+       version is pinned here, outside central package management, because it is 1.2.5's and never moves; the lock file
+       beside it holds each package's hash. -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <EnableDefaultItems>false</EnableDefaultItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="[2.1.1]" />
+  </ItemGroup>
+
+</Project>
