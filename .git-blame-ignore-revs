@@ -1,0 +1,4 @@
+# Commits git blame skips: whole-file reformats, which change no behaviour.
+#
+# This line has none. The file exists because `dotnet run eng/gate.cs -- setup`, run on main, points
+# blame.ignoreRevsFile at it, and git blame fails on a branch where the file is missing.

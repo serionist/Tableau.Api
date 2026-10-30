@@ -27,7 +27,7 @@ repo's rules (`git show origin/main:AGENTS.md`); where the two differ, on this b
 | `dotnet-tools.json` | the ApiCompat tool, pinned |
 | `Directory.Build.props` | the package metadata, the MIT licence expression, NuGet audit |
 | `global.json`, `nuget.config` | the .NET 10 SDK and the test runner; nuget.org as the only package source |
-| `.gitleaks.toml`, `.gitattributes`, `.gitignore` | the secret scan; LF everywhere; what git ignores, secrets first |
+| `.gitleaks.toml`, `.gitattributes`, `.gitignore`, `.git-blame-ignore-revs` | the secret scan; LF everywhere; what git ignores, secrets first; the reformats git blame skips (none on this line) |
 | `README.md`, `CHANGELOG.md`, `SECURITY.md`, `LICENSE` | the package's README; what changed in 1.x; how to report a vulnerability; MIT |
 
 ## Build and test
