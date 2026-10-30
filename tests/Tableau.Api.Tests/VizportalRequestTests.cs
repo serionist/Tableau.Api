@@ -65,12 +65,17 @@ public sealed class VizportalRequestTests
     }
 
     [TestMethod]
-    [DataRow(200, """{"result":{"errors":[{"code":403}]}}""", "403", DisplayName = "an error in a 200")]
-    [DataRow(500, """{"result":{"errors":[{"code":1}]}}""", "1", DisplayName = "an error in a 500")]
-    [DataRow(200, """{"result":{"errors":{}}}""", "100", DisplayName = "errors that are no list")]
-    [DataRow(200, """{"answer":{}}""", "100", DisplayName = "no result")]
-    [DataRow(500, "<html>Proxy error</html>", null, DisplayName = "a 500 that is no JSON")]
-    public async Task AFailureIsATableauRequestException(int status, string body, string? code)
+    [DataRow(200, """{"result":{"errors":[{"code":403}]}}""", "403", "Tableau VizPortal API threw code 403",
+        DisplayName = "an error in a 200")]
+    [DataRow(200, """{"result":{"errors":[{"code":-1}]}}""", "-1", "Tableau VizPortal API threw code -1",
+        DisplayName = "a negative code, the same in every culture")]
+    [DataRow(500, """{"result":{"errors":[{"code":1}]}}""", "1", "Tableau VizPortal API threw code 1",
+        DisplayName = "an error in a 500")]
+    [DataRow(200, """{"result":{"errors":{}}}""", "100", "Tableau VizPortal API threw an unknown error",
+        DisplayName = "errors that are no list")]
+    [DataRow(200, """{"answer":{}}""", "100", "VizPortal response invalid", DisplayName = "no result")]
+    [DataRow(500, "<html>Proxy error</html>", null, null, DisplayName = "a 500 that is no JSON")]
+    public async Task AFailureIsATableauRequestException(int status, string body, string? code, string? summary)
     {
         using var server = FakeTableauServer.Start();
         var client = Fixtures.Client(server);
@@ -82,6 +87,7 @@ public sealed class VizportalRequestTests
 
         Assert.AreEqual((HttpStatusCode)status, thrown.StatusCode);
         Assert.AreEqual(code, thrown.Details?.code);
+        Assert.AreEqual(summary, thrown.Details?.summary);
         Assert.AreEqual(code is not null, thrown.HasDetails);
     }
 

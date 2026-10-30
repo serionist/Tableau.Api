@@ -120,13 +120,16 @@ public partial class VizPortalClient
                     new errorType() { code = "100", summary = "VizPortal response invalid", detail = "No 'result' property provided in response" });
             if (result.ContainsKey("errors"))
                 if ((result["errors"] is JArray errArr) && errArr.First != null && errArr.First is JObject errObj)
+                {
+                    var code = errObj.Value<int>("code").ToString(CultureInfo.InvariantCulture);
                     throw new TableauRequestException(resp.RequestMessage.RequestUri, resp.StatusCode,
                         new errorType()
                         {
-                            code = errObj.Value<int>("code").ToString(CultureInfo.InvariantCulture),
-                            summary = $"Tableau VizPortal API threw code {errObj.Value<int>("code")}",
+                            code = code,
+                            summary = $"Tableau VizPortal API threw code {code}",
                             detail = "No further information is provided by VizPortal"
                         });
+                }
                 else throw new TableauRequestException(resp.RequestMessage.RequestUri, resp.StatusCode,
                     new errorType()
                     {
