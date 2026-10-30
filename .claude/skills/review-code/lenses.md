@@ -81,8 +81,13 @@ Applies when: the scope touches `src/Tableau.Api/VizPortal/`.
 - The offline tests in `tests/Tableau.Api.Tests/`: does a change to a request, a model or the Vizportal client add one
   there, against `FakeTableauServer`, that asserts what goes on the wire (the request line, a header, the body)? Does a
   new method that builds a path keep `EveryMethodPathTests`' count true?
-- The live suite needs a site: does the PR say whether it ran, against which Tableau Server version or Tableau Cloud,
-  and what it can't cover? Is a failure compared with `main`'s run on the same site before it is called the change's?
+- The `Live` and `ServerOnly` tests need a site: does the PR say what ran, against which Tableau Server version or
+  Tableau Cloud, and what it can't cover? A Server-only change: did its `ServerOnly` tests run by hand on a Tableau
+  Server, and does the PR say what Tableau Cloud couldn't show? Is a failure compared with `main`'s run on the same
+  site before it is called the change's?
+- Coverage: does the coverage gate pass without a lower floor or a wider exclusion in `tests/coverage.config`, and does
+  a new test cover its code's branches?
+- A test on a site: is it a `[SiteTest]` with its `TestCategory`, and does it name every setting it reads?
 - Do tests use invented data, and delete what they create on the site?
 - A gate change: does the selftest cover it?
 

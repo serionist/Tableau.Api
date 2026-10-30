@@ -21,19 +21,18 @@ Newtonsoft.Json and Microsoft.Extensions.Logging.
 | Path | What |
 |---|---|
 | `src/` | `Directory.Build.props`: the package (MinVer from `v` tags, at least 2.0; the README; symbols; package validation against 1.2.5, with `Tableau.Api/CompatibilitySuppressions.xml` passing only the dropped netstandard2.0); `Tableau.Api/`, the library: `TableauApiClient.cs` (requests, `buildUri`, versions), `RequestPath.cs` (each value in a request path escaped and checked), `TableauHttp.cs` (the handler both clients use: certificates, no redirects, the base URL's path), `TableauApiClient_*.cs` (endpoints by area), `VizPortal/` (the Vizportal client and its `Models/`), `Models/` (`XmlSchema.cs`, generated; `how_to_generate_schema.txt`, the steps; `SchemaExtensions.cs`, `TableauSession.cs`), `Attributes/` (`ApiVersion`, `OnPremiseOnly`), `Enums/`, `Exceptions/`, `PartialStream.cs`, `Tableau.Api.csproj` |
-| `tests/` | `Directory.Build.props`: test applications on MSTest and Microsoft.Testing.Platform, never packed; `Tableau.Api.Tests/`, the offline tests: `Fakes/` (`FakeTableauServer`, an HTTP/1.1 server on a loopback port, with a TLS mode, that records each request as sent), `Fixtures.cs` (the invented site, user and tokens), one class per behaviour |
-| `Tableau.Api.Tests/` | the old live suite, MSTest: ordered classes `A01_Prepare` to `A06_DataSources`, `Base/` (the shared context, prerequisites), `Resources/sample.tde` |
-| `Tableau.Api.slnx` | the solution: the library and the offline tests; the old live suite is in none |
-| `eng/` | `gate.cs`, the gate, the hooks' entry points and the setup, as one .NET file-based app; `package-check.cs`, what a packed package must hold (`dotnet run eng/package-check.cs -- <folder> [<version>]`); `apicompat.cs`, 1.2.5's API against the build's, by the ApiCompat tool, and `apicompat/`: `1.2.5.xml`, the ledger of every break, and `Baseline.csproj`, the assemblies 1.2.5 compiles against |
+| `tests/` | `Directory.Build.props`: test applications on MSTest and Microsoft.Testing.Platform, with its coverage extension, never packed; `coverage.config`, what coverage measures: the library without `XmlSchema.cs`; `Tableau.Api.Tests/`, the tests: `Fakes/` (`FakeTableauServer`, an HTTP/1.1 server on a loopback port, with a TLS mode, that records each request as sent; `RecordingLogger`, each log line), `Fixtures.cs` (the invented site, user and tokens), `TableauSite.cs` (`[SiteTest]` and the `Live` and `ServerOnly` categories), one class per behaviour |
+| `Tableau.Api.slnx` | the solution: the library and the tests |
+| `eng/` | `gate.cs`, the gate, the hooks' entry points and the setup, as one .NET file-based app; `coverage-gate.cs`, the tests' coverage against the floors in `coverage.json`; `package-check.cs`, what a packed package must hold (`dotnet run eng/package-check.cs -- <folder> [<version>]`); `apicompat.cs`, 1.2.5's API against the build's, by the ApiCompat tool, and `apicompat/`: `1.2.5.xml`, the ledger of every break, and `Baseline.csproj`, the assemblies 1.2.5 compiles against |
 | `.githooks/` | `commit-msg` refuses attribution, `pre-push` runs gate quick on what the push sends, `post-checkout` and `post-merge` name changed AI setup files |
 | `docs/plans/`, `docs/reviews/`, `docs/migration-2.0.md` | plans of non-trivial changes, with the template; review records. Dated records, never current truth. The guide from 1.2.x to 2.0, grouped from the ledger |
-| `.github/` | `CODEOWNERS`, `pull_request_template.md`; `workflows/`: `ci.yml` (gate quick; locked restore, build, the offline tests, pack with package validation, the package check, `apicompat.cs`; the selftest and the tests on Windows; summed up by `CI`), `audit-1x.yml` (weekly, the package audit of `release/1.x`, on Windows), `pr-text.yml` (`PR text`, gate text on the PR), `codeql.yml` (`main`, and weekly `release/1.x`), `dependabot-auto-merge.yml` (minor and patch updates, once CI is required); `dependabot.yml`; `ISSUE_TEMPLATE/` (the bug and feature forms; security reports go to private reporting) |
+| `.github/` | `CODEOWNERS`, `pull_request_template.md`; `workflows/`: `ci.yml` (gate quick and `dotnet format`; locked restore, build, the offline tests and the coverage gate, pack with package validation, the package check, `apicompat.cs`; the tests and the coverage gate again under sv-SE and tr-TR in time zones off UTC, and on Windows with the selftest; summed up by `CI`), `audit-1x.yml` (weekly, the package audit of `release/1.x`, on Windows), `pr-text.yml` (`PR text`, gate text on the PR), `codeql.yml` (`main`, and weekly `release/1.x`), `dependabot-auto-merge.yml` (minor and patch updates, once CI is required); `dependabot.yml`; `ISSUE_TEMPLATE/` (the bug and feature forms; security reports go to private reporting) |
 | `.claude/` | `CLAUDE.md` (imports this file), `settings.json` (no attribution in commits or PRs, and no permission rules: each developer's own settings decide what Claude Code may run), `settings.local.json.example`, `skills/` (below) |
 | `.agents/skills/` | links to `.claude/skills/<name>` for Codex, written into git's index by `dotnet run eng/gate.cs -- link` |
 | `AGENTS.md`, `REVIEW.md` | this file; what a review finding is, and the questions every review answers |
 | `.mcp.json` | Microsoft Learn and Context7 over HTTP; `.claude/settings.local.json.example` turns them on |
 | `Directory.Build.props`, `Directory.Packages.props`, `.config/dotnet-tools.json`, `global.json`, `nuget.config` | what every project shares: net10.0, Nullable, XML docs, warnings as errors, the analyzers and the code style in the build, the package metadata, the MIT licence expression, NuGet audit, a `packages.lock.json` beside each project, locked in CI; every package's version; the ApiCompat tool; the .NET 10 SDK, and Microsoft.Testing.Platform for `dotnet test`; nuget.org as the only package source |
-| `.gitleaks.toml`, `.editorconfig`, `.gitattributes`, `.gitignore` | the secret scan: gitleaks' own rules, and any exception with its reason; the code style and the analyzer rules, the old files' relaxed in its TableauLegacy section; LF everywhere; what git ignores, secrets first |
+| `.gitleaks.toml`, `.editorconfig`, `.gitattributes`, `.gitignore`, `.git-blame-ignore-revs` | the secret scan: gitleaks' own rules, and any exception with its reason; the code style and the analyzer rules, the old files' relaxed in its TableauLegacy section; LF everywhere; what git ignores, secrets first; the reformatting commits `git blame` skips |
 | `LICENSE`, `README.md`, `SECURITY.md`, `CONTRIBUTING.md`, `CHANGELOG.md` | MIT; what users read first, also packed into the package; how to report a vulnerability, and the supported versions; the short path for a contributor; what changed, under Unreleased until a release |
 
 A new top-level file or folder adds its row in the same change.
@@ -47,19 +46,21 @@ PowerShell. The `--` after `eng/gate.cs` is needed: without it `dotnet run` take
 |---|---|
 | once per clone | `dotnet run eng/gate.cs -- setup` (hooks, `git blame`, skill links) |
 | the library | `dotnet build src/Tableau.Api/Tableau.Api.csproj`: 0 warnings, and every warning is an error. Its package, into an emptied `artifacts/packages` (each commit packs a new version): `dotnet pack src/Tableau.Api/Tableau.Api.csproj -c Release -o artifacts/packages`, then `dotnet run eng/package-check.cs -- artifacts/packages` and `dotnet run eng/apicompat.cs` (`-- --update` rewrites the ledger after a break a maintainer agreed) |
-| the offline tests | `dotnet test --project tests/Tableau.Api.Tests/Tableau.Api.Tests.csproj` |
-| the gate | `dotnet run eng/gate.cs -- quick` (selftest, build, AGENTS.md, skills, links, hooks, attribution, secrets); `full` adds the offline tests; `text --file -` checks a PR's title and description: no attribution, and the issue named |
-| the live suite | `dotnet test --project Tableau.Api.Tests --settings <full path outside the clone>.runsettings`, once issue #2 moves it on |
+| the tests | `dotnet test --project tests/Tableau.Api.Tests/Tableau.Api.Tests.csproj`; for coverage, measured in Release as CI measures it, add `-c Release --coverage --coverage-output-format cobertura --coverage-settings tests/coverage.config --results-directory artifacts/TestResults` with that folder emptied, then `dotnet run eng/coverage-gate.cs` |
+| the code style | `dotnet format Tableau.Api.slnx --verify-no-changes`, which catches style the build lets through; without `--verify-no-changes` it fixes it |
+| the gate | `dotnet run eng/gate.cs -- quick` (selftest, build, AGENTS.md, skills, links, hooks, attribution, secrets); `full` adds the code style, the tests with coverage and the coverage gate; `text --file -` checks a PR's title and description: no attribution, and the issue named |
 
 - **Versions come from git tags** through MinVer, so a clone needs its history. After a package version changes in
   `Directory.Packages.props`, `dotnet restore Tableau.Api.slnx --force-evaluate` rewrites the lock files.
-- **The offline tests** run on the fake server with invented data; CI runs them on Linux and Windows with gate quick
-  and the package check, never on a Tableau site: a PR says what ran there, and on which version.
-- **The live suite** signs in to a Tableau Server or Tableau Cloud site, creates projects and publishes data sources.
-  Run it only on a site you may change. Its settings come from a `.runsettings` file: `Url`, `Version`, `User`,
-  `Password`, `Site`, `NonAdminUser`, `NonAdminPassword`, `NonAdminUserId` (`A01_Prepare.cs`, `A02_Authentication.cs`).
-- **Keep that file outside the clone,** and pass its full path to `--settings`: a search or a glob in the clone never
-  reaches it there. `*.runsettings` stays git-ignored as a backstop.
+- **The offline tests** run on the fake server with invented data. CI runs them on Linux, again under sv-SE and tr-TR
+  in time zones off UTC, and on Windows, never on a Tableau site: a PR says what ran there, and on which version.
+- **Coverage only rises:** `eng/coverage.json` holds the library's line and branch floors, in whole percent. The
+  coverage gate fails a run below them, and a floor lower than `origin/main`'s; a floor it says can rise is raised in
+  the change.
+- **A test on a Tableau site** is a `[SiteTest]` in the `Live` or `ServerOnly` category (`TableauSite.cs`). It is
+  inconclusive when its switch, `TABLEAU_LIVE` or `TABLEAU_SERVER_ONLY`, is unset or empty; any value but 1 fails, so a
+  typo can't skip a run meant for a site; at 1, each missing setting fails it, named. Its settings are environment
+  variables set outside the clone; run it only on a site you may change.
 
 ## How a change lands
 

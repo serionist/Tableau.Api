@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Net.Http;
 using System.Text;
 using System.Threading;
@@ -85,8 +86,9 @@ public partial class TableauApiClient
         checkParametersBetween((nameof(pageSize), pageSize, 1, 1000), (nameof(pageNumber), pageNumber, 1, int.MaxValue));
         var ret = await getResponseAsObject<paginationType, subscriptionListType>(
             await apiRequest(
-                buildUri($"sites/{session.SiteId}/subscriptions", ("pageSize", pageSize.ToString()),
-                    ("pageNumber", pageNumber.ToString())), HttpMethod.Get, 200,
+                buildUri($"sites/{session.SiteId}/subscriptions",
+                    ("pageSize", pageSize.ToString(CultureInfo.InvariantCulture)),
+                    ("pageNumber", pageNumber.ToString(CultureInfo.InvariantCulture))), HttpMethod.Get, 200,
                 cancelToken, session));
         return (ret.Item1, ret.Item2.subscription);
     }

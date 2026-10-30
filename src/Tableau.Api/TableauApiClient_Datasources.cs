@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -111,8 +112,8 @@ public partial class TableauApiClient
         checkParametersBetween((nameof(pageSize), pageSize, 1, 1000), (nameof(pageNumber), pageNumber, 1, int.MaxValue));
         var args = new List<(string, string)>()
         {
-            ("pageSize", pageSize.ToString()),
-            ("pageNumber", pageNumber.ToString())
+            ("pageSize", pageSize.ToString(CultureInfo.InvariantCulture)),
+            ("pageNumber", pageNumber.ToString(CultureInfo.InvariantCulture))
         };
         if (!string.IsNullOrEmpty(fieldsExpression))
             args.Add(("fields", fieldsExpression));
@@ -168,7 +169,7 @@ public partial class TableauApiClient
                 ("includeExtract", includeExtract.ToString())), HttpMethod.Get, 200, cancelToken, session);
 
         return (await resp.ReadAsStreamAsync(),
-            resp.Headers.ContentType.MediaType.Equals("application/xml", StringComparison.CurrentCultureIgnoreCase)
+            resp.Headers.ContentType.MediaType.Equals("application/xml", StringComparison.OrdinalIgnoreCase)
                 ? DatasourceFileType.tds
                 : DatasourceFileType.tdsx);
     }

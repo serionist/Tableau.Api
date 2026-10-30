@@ -1,0 +1,6 @@
+# Commits that git blame skips, so a line is blamed on the change that wrote it, not on one that only reformatted it.
+# `dotnet run eng/gate.cs -- setup` points blame.ignoreRevsFile here; GitHub's blame view reads this file by its name.
+# Only a commit that changes formatting and nothing else belongs here, each with its full id and what it was.
+
+# Reformat the hand-written code to .editorconfig (#32, PR #33)
+80c76d76a051b98a0702aa7e80a156c60837efe7

@@ -28,6 +28,7 @@ internal sealed class FakeTableauServer : IDisposable
     // Never disposed: a connection accepted as the server stops still reads its token.
     private readonly CancellationTokenSource _stop = new();
     private readonly Dictionary<string, Func<RecordedRequest, FakeResponse>> _routes = new(StringComparer.Ordinal);
+    private readonly List<(string Method, string Prefix, Func<RecordedRequest, FakeResponse> Respond)> _prefixRoutes = [];
     private readonly List<RecordedRequest> _requests = [];
     private readonly Lock _lock = new();
     private readonly X509Certificate2? _certificate;
@@ -74,6 +75,15 @@ internal sealed class FakeTableauServer : IDisposable
     }
 
     public void Map(string method, string path, FakeResponse response) => Map(method, path, _ => response);
+
+    /// <summary>
+    /// Answer method on every path that starts with prefix and that no route of <see cref="Map(string, string,
+    /// FakeResponse)"/> answers, for a test that calls every method of a client without listing their paths.
+    /// </summary>
+    public void MapPrefix(string method, string prefix, FakeResponse response)
+    {
+        lock (_lock) _prefixRoutes.Add((method, prefix, _ => response));
+    }
 
     public void Dispose()
     {
@@ -155,7 +165,11 @@ internal sealed class FakeTableauServer : IDisposable
                 lock (_lock)
                 {
                     _requests.Add(request);
-                    _routes.TryGetValue(Key(request.Method, request.Path), out respond);
+                    if (!_routes.TryGetValue(Key(request.Method, request.Path), out respond))
+                    {
+                        respond = _prefixRoutes.Find(route => route.Method == request.Method
+                            && request.Path.StartsWith(route.Prefix, StringComparison.Ordinal)).Respond;
+                    }
                 }
                 var response = respond is null ? FakeResponse.NoRoute(request) : Respond(respond, request);
                 await WriteAsync(stream, response).ConfigureAwait(false);

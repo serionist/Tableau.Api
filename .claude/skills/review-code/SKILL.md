@@ -60,7 +60,7 @@ included.
      `REVIEW.md` (The harness) require, recorded in the issue or the PR.
    - List the improvements to the developer after each round and ask take, leave or later for each.
    - A change to a request, a model or the Vizportal client: when the developer has a Tableau site they may change,
-     check the fixes there and add a `## Live run` section (`finish-work`, The live suite).
+     check the fixes there and add a `## Live run` section (`finish-work`, The tests on a site).
    - Someone else's PR: once the developer has read them, post the findings with
      `gh pr review <n> --comment --body-file <file>`. Never push to their branch.
    - A path: write the report to `docs/reviews/<date>-<slug>.md` and offer to turn its findings into issues.

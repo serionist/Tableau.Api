@@ -51,6 +51,10 @@ and [the migration guide](docs/migration-2.0.md) lists every change from 1.2.5 a
   query with `JsonReaderException`, as on Tableau Server 2025.1.5.
 - **Vizportal's `QuerySubscriptionsForSchedule` reads a subscription to a flow:** `TargetType` gains `Flow`, after its
   existing members. Without it, a schedule holding such a subscription failed with `JsonSerializationException`.
+- **Requests read the same in every culture:** numbers are written in the invariant culture, and a download's media
+  type and a view filter's `vf_` prefix are compared ordinally. In a Swedish culture, `-1` for a site's capacities,
+  storage quota or revision limit went as `−1` (U+2212 MINUS SIGN), which is no number; in a Turkish one, a download
+  whose media type came in capitals read as packaged.
 
 ## [1.2.6] - 2026-10-30
 

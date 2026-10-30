@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using System.Threading.Tasks;
 using Tableau.Api.Exceptions;
 using Tableau.Api.Models;
@@ -29,13 +30,13 @@ public partial class VizPortalClient
         var req = await Request<MoveContent, Empty>(session, "moveContentToContainer",
         new MoveContent()
         {
-            ContainerId = containerId.ToString(),
+            ContainerId = containerId.ToString(CultureInfo.InvariantCulture),
             ContainerType = "PROJECT",
             ContentItems = new[]
             {
                 new MoveContent.Content()
                 {
-                    ContentId = contentId.ToString(),
+                    ContentId = contentId.ToString(CultureInfo.InvariantCulture),
                     ContentType = "workbook",
                     MoveType = null
                 }
@@ -55,7 +56,7 @@ public partial class VizPortalClient
         var req = await Request<RenameContent, Empty>(session, "renameWorkbook",
             new RenameContent()
             {
-                Id = workbookId.ToString(),
+                Id = workbookId.ToString(CultureInfo.InvariantCulture),
                 Name = newName
             });
     }
@@ -72,7 +73,7 @@ public partial class VizPortalClient
         var req = await Request<ChangeContentOwner, Empty>(session, "setWorkbooksOwner",
             new ChangeContentOwner()
             {
-                Ids = new[] { workbookId.ToString() },
+                Ids = new[] { workbookId.ToString(CultureInfo.InvariantCulture) },
                 OwnerId = newOwnerId
             });
     }
@@ -88,7 +89,7 @@ public partial class VizPortalClient
         var req = await Request<DeleteContent, Empty>(session, "deleteWorkbooks",
             new DeleteContent()
             {
-                Ids = new[] { workbookId.ToString() }
+                Ids = new[] { workbookId.ToString(CultureInfo.InvariantCulture) }
             });
     }
 

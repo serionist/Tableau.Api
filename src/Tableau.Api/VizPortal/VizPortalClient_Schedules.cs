@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Tableau.Api.Models;
@@ -38,7 +39,7 @@ public partial class VizPortalClient
         var req = await Request<TriggerSchedule, Empty>(session, "runSchedules",
             new TriggerSchedule()
             {
-                Ids = new[] { scheduleId.ToString() }
+                Ids = new[] { scheduleId.ToString(CultureInfo.InvariantCulture) }
             });
     }
 

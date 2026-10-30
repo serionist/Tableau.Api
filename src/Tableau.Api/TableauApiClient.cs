@@ -261,11 +261,11 @@ public partial class TableauApiClient
             ser.Serialize(xmlWriter, new tsRequest() { Item = o });
             var xml = textWriter.ToString();
             //remove first (XML schema) tag for compatibility with old versions of API
-            xml = xml.Substring(xml.IndexOf("?>") + 2);
+            xml = xml.Substring(xml.IndexOf("?>", StringComparison.Ordinal) + 2);
             // remove XML definitions from tsRequest
             xml = Regex.Replace(xml, @"(?<=<tsRequest )[^>]+", "").Trim();
             var m = Regex.Match(xml, @"<([^>]*)>$");
-            if (m.Success && !m.Groups[1].Value.StartsWith("/") && !m.Groups[1].Value.StartsWith("/"))
+            if (m.Success && !m.Groups[1].Value.StartsWith('/'))
                 xml = $"{xml.Substring(0, xml.Length - 1)}/>";
 
             var content = new StringContent(xml);

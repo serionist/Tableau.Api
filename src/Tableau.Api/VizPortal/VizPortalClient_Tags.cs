@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Threading.Tasks;
 using Tableau.Api.Models;
 using Tableau.Api.VizPortal.Models;
@@ -18,7 +19,7 @@ public partial class VizPortalClient
         var req = await Request<TagContentAction, Empty>(session, "addTagsToWorkbooks",
             new TagContentAction()
             {
-                Ids = new[] { workbookId.ToString() },
+                Ids = new[] { workbookId.ToString(CultureInfo.InvariantCulture) },
                 Tags = new[] { $"\"{tag}\"" }
             });
     }
@@ -35,7 +36,7 @@ public partial class VizPortalClient
         var req = await Request<TagContentAction, Empty>(session, "removeTagsFromWorkbooks",
             new TagContentAction()
             {
-                Ids = new[] { workbookId.ToString() },
+                Ids = new[] { workbookId.ToString(CultureInfo.InvariantCulture) },
                 Tags = new[] { $"\"{tag}\"" }
             });
     }
@@ -52,7 +53,7 @@ public partial class VizPortalClient
         var req = await Request<TagContentAction, Empty>(session, "addTagsToDatasources",
             new TagContentAction()
             {
-                Ids = new[] { datasourceId.ToString() },
+                Ids = new[] { datasourceId.ToString(CultureInfo.InvariantCulture) },
                 Tags = new[] { $"\"{tag}\"" }
             });
     }
@@ -69,7 +70,7 @@ public partial class VizPortalClient
         var req = await Request<TagContentAction, Empty>(session, "removeTagsFromDatasources",
             new TagContentAction()
             {
-                Ids = new[] { datasourceId.ToString() },
+                Ids = new[] { datasourceId.ToString(CultureInfo.InvariantCulture) },
                 Tags = new[] { $"\"{tag}\"" }
             });
     }

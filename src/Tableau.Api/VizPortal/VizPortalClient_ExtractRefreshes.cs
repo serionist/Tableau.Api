@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
@@ -135,8 +136,8 @@ public partial class VizPortalClient
         var req = await Request<ChangeExtractRefreshTaskSchedule, Empty>(session, "setExtractTasksSchedule",
             new ChangeExtractRefreshTaskSchedule()
             {
-                ScheduleId = scheduleId.ToString(),
-                Ids = new[] { extractRefreshId.ToString() }
+                ScheduleId = scheduleId.ToString(CultureInfo.InvariantCulture),
+                Ids = new[] { extractRefreshId.ToString(CultureInfo.InvariantCulture) }
             });
 
     }
@@ -153,7 +154,7 @@ public partial class VizPortalClient
         var req = await Request<TriggerExtractRefreshTask, Empty>(session, "runExtractTasks",
             new TriggerExtractRefreshTask()
             {
-                Ids = new[] { extractRefreshId.ToString() }
+                Ids = new[] { extractRefreshId.ToString(CultureInfo.InvariantCulture) }
             });
     }
 
@@ -168,7 +169,7 @@ public partial class VizPortalClient
         var req = await Request<DeleteExtractRefreshTask, Empty>(session, "deleteExtractTasks",
             new DeleteExtractRefreshTask()
             {
-                Ids = new[] { extractRefreshId.ToString() }
+                Ids = new[] { extractRefreshId.ToString(CultureInfo.InvariantCulture) }
             });
     }
 }

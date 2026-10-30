@@ -2,7 +2,7 @@
 subject: "Target net10.0 only, version 2.0 by MinVer and keep the Tableau.Api id, on a strict src/ build (#31)"
 base: main fbb10b9
 head: e9a1890
-date: 2026-10-31
+date: 2026-10-30
 round: 1
 tier: two fresh reviewers split by scope (the build and packaging; CI, the gate and the docs), each in a full clone
 verdict: clean

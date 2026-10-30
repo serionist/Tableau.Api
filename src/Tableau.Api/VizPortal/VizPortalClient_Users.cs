@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Threading.Tasks;
 using Tableau.Api.Exceptions;
 using Tableau.Api.Models;
@@ -31,7 +32,7 @@ public partial class VizPortalClient
             new ChangeUserRole()
             {
                 SiteRole = role,
-                UserIds = new[] { userId.ToString() }
+                UserIds = new[] { userId.ToString(CultureInfo.InvariantCulture) }
             });
     }
 
@@ -46,7 +47,7 @@ public partial class VizPortalClient
         var req = await Request<DeleteUser, Empty>(session, "deleteUsers",
             new DeleteUser()
             {
-                Ids = new[] { userId.ToString() }
+                Ids = new[] { userId.ToString(CultureInfo.InvariantCulture) }
             });
     }
 
@@ -61,7 +62,7 @@ public partial class VizPortalClient
         var req = await Request<UserGroupMembership, UserGroupResponse>(session, "getUsersGroupMembership",
             new UserGroupMembership()
             {
-                userIds = new[] { userId.ToString() }
+                userIds = new[] { userId.ToString(CultureInfo.InvariantCulture) }
             });
 
         foreach (var res in req.Groups ?? Array.Empty<UserGroup>())

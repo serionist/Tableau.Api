@@ -66,6 +66,10 @@ internal sealed class FakeResponse
     public static FakeResponse Text(int status, string text) =>
         new(status, "text/plain; charset=utf-8", Encoding.UTF8.GetBytes(text));
 
+    /// <summary>A body with the Content-Type given, as a download or a proxy's error page comes.</summary>
+    public static FakeResponse Content(int status, string contentType, string body) =>
+        new(status, contentType, Encoding.UTF8.GetBytes(body));
+
     /// <summary>What a request with no route gets: a 404 that names it, so the failing test says which.</summary>
     public static FakeResponse NoRoute(RecordedRequest request) =>
         Error(404, "404000", "No route",

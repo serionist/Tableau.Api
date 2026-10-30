@@ -25,8 +25,10 @@
 //
 // quick and full check two things:
 // - the working tree: the library builds, AGENTS.md is within 150 lines, each skill's frontmatter and its Codex link,
-//   the hooks stored as executable and turned on in this clone; full adds the offline tests. These run when the head is
-//   the checked-out commit, and are skipped, with the reason, when the tree is not what is checked;
+//   the hooks stored as executable and turned on in this clone; full adds dotnet format's verification, the offline
+//   tests in Release with coverage, and the coverage gate, eng/coverage-gate.cs, on what they measured, its floors
+//   compared with the base's. These run when the head is the checked-out commit, and are skipped, with the reason, when
+//   the tree is not what is checked;
 // - the commits: no tool attribution in any message, author or committer, and gitleaks, on base..head (merges
 //   included).
 // Both start with the selftest, the gate's own tests. The gate prints a table and exits 1 when a check failed; a
@@ -66,6 +68,13 @@ internal static class Repo
     public const string BlameIgnoreRevs = ".git-blame-ignore-revs";
     public const string Library = "src/Tableau.Api/Tableau.Api.csproj";
     public const string Tests = "tests/Tableau.Api.Tests/Tableau.Api.Tests.csproj";
+    public const string Solution = "Tableau.Api.slnx";
+    public const string CoverageSettings = "tests/coverage.config";
+    public const string CoverageGate = "eng/coverage-gate.cs";
+    public const string CoverageFloors = "eng/coverage.json";
+
+    /// <summary>Where the full lane's tests write their coverage, emptied first, so no older report counts.</summary>
+    public const string CoverageResults = "artifacts/gate/TestResults";
 
     /// <summary>The folder above eng/, wherever the command runs from.</summary>
     public static string Root { get; } = Path.GetFullPath(Path.Combine(
@@ -713,18 +722,23 @@ internal sealed class Result(string name, string status, string detail = "", str
     public double? Seconds { get; set; }
 }
 
-/// <summary>What one run checks: the commits in its ranges, listed once, and whether the working tree is what they hold.</summary>
-internal sealed class Scope(List<string> ranges, string? treeSkipped, List<Commit> commits, string? problem)
+/// <summary>
+/// What one run checks: the commits in its ranges, listed once, whether the working tree is what they hold, and the
+/// base the coverage floors are compared with.
+/// </summary>
+internal sealed class Scope(List<string> ranges, string? treeSkipped, List<Commit> commits, string? problem,
+    string baseRef = Repo.Base)
 {
     public List<string> Ranges { get; } = ranges;
+    public string Base { get; } = baseRef;
     public string? TreeSkipped { get; set; } = treeSkipped;
     public List<Commit> Commits { get; } = commits;
     public string? Problem { get; } = problem;
 
-    public static Scope Of(List<string> ranges, string? treeSkipped = null, string? cwd = null)
+    public static Scope Of(List<string> ranges, string? treeSkipped = null, string? cwd = null, string baseRef = Repo.Base)
     {
         var (commits, problem) = Lanes.ListCommits(ranges, cwd);
-        return new Scope(ranges, treeSkipped, commits, problem);
+        return new Scope(ranges, treeSkipped, commits, problem, baseRef);
     }
 }
 
@@ -755,11 +769,15 @@ internal static class Lanes
         ("gitleaks", CheckGitleaks, false),
     ];
 
-    // What full adds to quick, each a check that reads the working tree: `dotnet test` on the offline tests, and the
-    // coverage floor once the modernization brings one.
+    // What full adds to quick, each a check that reads the working tree: dotnet format's verification of the
+    // solution, which catches style the build lets through; `dotnet test` on the offline tests in Release, with
+    // coverage, as CI measures it; then the coverage gate on what they measured. The format check is full's, not
+    // quick's, since every push runs quick.
     private static readonly (string Name, Func<Scope, Result> Check, bool ReadsTree)[] FullOnly =
     [
+        ("format", CheckFormat, true),
         ("tests", CheckTests, true),
+        ("coverage", CheckCoverage, true),
     ];
 
     /// <summary>The names of the checks a lane runs, in order.</summary>
@@ -966,14 +984,79 @@ internal static class Lanes
         return new Result("gitleaks", "pass", $"{scope.Commits.Count} commits");
     }
 
-    // The offline tests, by their project's path, so the count the check reports is theirs alone. The old live suite,
-    // Tableau.Api.Tests/, is in no solution: it doesn't build and needs a Tableau site (AGENTS.md, Build and test).
+    // Whitespace, the code style and the analyzers as .editorconfig sets them, over the whole solution: the build lets
+    // some style through, such as a `this.` qualifier, and this catches it, as CI's Checks job does.
+    private static Result CheckFormat(Scope _)
+    {
+        var dotnet = Proc.Which("dotnet");
+        if (dotnet is null) return new Result("format", "FAIL", "dotnet not found: https://dotnet.microsoft.com/download");
+        return FormatResult(Proc.Run(dotnet, ["format", Repo.Solution, "--verify-no-changes", "-v:q"],
+            env: new Dictionary<string, string?> { ["DOTNET_CLI_UI_LANGUAGE"] = "en" }));
+    }
+
+    private static readonly Regex FormatDiagnostic = new(@"^.+?\(\d+,\d+\): (?:error|warning) \w+:", RegexOptions.CultureInvariant | RegexOptions.Multiline);
+
+    /// <summary>The format check from what `dotnet format --verify-no-changes` did: any exit but 0 fails it.</summary>
+    public static Result FormatResult(Done done)
+    {
+        var output = Py.Strip(done.Stdout + done.Stderr);
+        if (done.ExitCode == 0) return new Result("format", "pass", $"{Repo.Solution} as .editorconfig formats it");
+        var places = FormatDiagnostic.Matches(output).Count;
+        return new Result("format", "FAIL", places > 0
+            ? $"{places} place(s) dotnet format would change: dotnet format {Repo.Solution} fixes them"
+            : Rules.LastLine(output), output);
+    }
+
+    // The offline tests, by their project's path, so the count the check reports is theirs alone, built in Release as
+    // CI builds them, since a Debug build measures other coverage, with their coverage written where the coverage check
+    // reads it.
     private static Result CheckTests(Scope _)
     {
         var dotnet = Proc.Which("dotnet");
         if (dotnet is null) return new Result("tests", "FAIL", "dotnet not found: https://dotnet.microsoft.com/download");
-        return TestsResult(Proc.Run(dotnet, ["test", "--project", Repo.Tests, "--no-ansi", "--no-progress"],
+        var results = Path.Combine(Repo.Root, Repo.CoverageResults);
+        SelfTest.DeleteTree(results);
+        return TestsResult(Proc.Run(dotnet,
+        [
+            "test", "--project", Repo.Tests, "-c", "Release", "--no-ansi", "--no-progress", "--coverage",
+            "--coverage-output-format", "cobertura", "--coverage-settings", Repo.CoverageSettings, "--results-directory", results,
+        ], env: new Dictionary<string, string?> { ["DOTNET_CLI_UI_LANGUAGE"] = "en" }));
+    }
+
+    // The coverage gate on the reports the tests check wrote, its floors compared with the lane's base.
+    private static Result CheckCoverage(Scope scope)
+    {
+        var dotnet = Proc.Which("dotnet");
+        if (dotnet is null) return new Result("coverage", "FAIL", "dotnet not found: https://dotnet.microsoft.com/download");
+        return CoverageResult(Proc.Run(dotnet,
+            ["run", Repo.CoverageGate, "--", Path.Combine(Repo.Root, Repo.CoverageResults), "--base", scope.Base],
             env: new Dictionary<string, string?> { ["DOTNET_CLI_UI_LANGUAGE"] = "en" }));
+    }
+
+    private static readonly Regex RaisedFloor = new(@"""(?<assembly>[^""]+)"": \{ ""lines"": (?<lines>\d+), ""branches"": (?<branches>\d+) \}",
+        RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// The coverage check from what the coverage gate did: its first failure when it failed; when it passed, the figures
+    /// and, when they beat a floor by a whole point, the floors the gate says eng/coverage.json can rise to.
+    /// </summary>
+    public static Result CoverageResult(Done done)
+    {
+        var output = Py.Strip(done.Stdout + done.Stderr);
+        if (done.ExitCode != 0)
+        {
+            var failure = Py.SplitLines(output).FirstOrDefault(line => line.StartsWith("FAIL ", StringComparison.Ordinal));
+            return new Result("coverage", "FAIL", failure?[5..] ?? Rules.LastLine(output), output);
+        }
+        var figures = Py.SplitLines(output).Select(Py.Split)
+            .FirstOrDefault(parts => parts.Count == 5 && parts[0] == "Tableau.Api");
+        var detail = figures is null
+            ? Rules.LastLine(output)
+            : $"lines {figures[1]} (floor {figures[2]}), branches {figures[3]} (floor {figures[4]})";
+        var raise = RaisedFloor.Matches(output).Cast<Match>()
+            .Select(match => $"{match.Groups["assembly"].Value} to lines {match.Groups["lines"].Value}%, branches {match.Groups["branches"].Value}%")
+            .ToList();
+        return new Result("coverage", "pass", raise.Count == 0 ? detail : $"{detail}; raise {Repo.CoverageFloors}: {string.Join("; ", raise)}");
     }
 
     /// <summary>
@@ -1074,7 +1157,7 @@ internal static class Lanes
         var headSha = Py.Strip(Proc.Git(["rev-parse", "--verify", "--quiet", $"{head}^{{commit}}"]).Stdout);
         var checkedOut = Py.Strip(Proc.Git(["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]).Stdout);
         var skipped = headSha.Length > 0 && headSha == checkedOut ? null : $"{head} is not the checked-out commit";
-        return Scope.Of([$"{baseRef}..{head}"], skipped);
+        return Scope.Of([$"{baseRef}..{head}"], skipped, baseRef: baseRef);
     }
 
     /// <summary>
@@ -1752,6 +1835,7 @@ internal static class SelfTest
             TextLaneCases(t, scratch);
             Flags(t);
             TestsCases(t);
+            CoverageCases(t, scratch);
             StrictnessCases(t, scratch);
             Files(t);
             CommitMsgCases(t, scratch);
@@ -1899,9 +1983,23 @@ internal static class SelfTest
         t.Equal("tests: no test found fails the check", "FAIL",
             Lanes.TestsResult(new Done(8, "Zero tests ran\n  total: 0\n  failed: 0\n", "")).Status);
 
-        t.True("full runs the tests check", Lanes.CheckNames("full").Contains("tests"), string.Join(", ", Lanes.CheckNames("full")));
-        t.True("quick runs every check but the tests", !Lanes.CheckNames("quick").Contains("tests")
-            && Lanes.CheckNames("full").Except(Lanes.CheckNames("quick")).SequenceEqual(["tests"]));
+        t.Same("full runs the format check, the tests and the coverage gate, after quick's checks",
+            [.. Lanes.CheckNames("quick"), "format", "tests", "coverage"], Lanes.CheckNames("full"));
+        t.True("quick runs none of them", !Lanes.CheckNames("quick").Intersect(["format", "tests", "coverage"]).Any());
+
+        t.Equal("format: no change passes", "pass", Lanes.FormatResult(new Done(0, "", "")).Status);
+        var unformatted = Lanes.FormatResult(new Done(2,
+            "src/A.cs(40,9): error IDE0003: Name can be simplified [src/A.csproj]\n"
+            + "src/B.cs(3,1): error WHITESPACE: Fix whitespace formatting. [src/A.csproj]\n", ""));
+        t.Equal("format: a change it would make fails the check", "FAIL", unformatted.Status);
+        t.Equal("format: it counts the places", "2 place(s) dotnet format would change: dotnet format Tableau.Api.slnx fixes them",
+            unformatted.Detail);
+        t.Equal("format: a failed run with no place named fails too", "FAIL",
+            Lanes.FormatResult(new Done(1, "", "Could not find a MSBuild project file")).Status);
+        var formatOut = new StringWriter();
+        t.Equal("gate full fails when the format check fails", 1,
+            Lanes.RunChecks("full", [("format", _ => unformatted, true)], new Scope([], null, [], null), formatOut));
+        t.Contains("it names the format check", formatOut.ToString(), "gate full FAILED: format");
         var stdout = new StringWriter();
         var code = Lanes.RunChecks("full", [("tests", _ => failed, true)], new Scope([], null, [], null), stdout);
         t.Equal("gate full fails when a test fails", 1, code);
@@ -1909,15 +2007,88 @@ internal static class SelfTest
         t.Contains("it shows what dotnet test printed", stdout.ToString(), "failed PathTests.EveryAsciiCharacterIsSentEscaped");
     }
 
+    // The coverage gate itself, run on a scratch repo laid out as this one is, with this repo's global.json, a base
+    // commit whose floors are 80% of lines and 70% of branches, and a report beside it.
+    private static void CoverageCases(Tally t, string scratch)
+    {
+        string[] names = ["coverage: a run below the floor fails", "coverage: a run at the floor passes",
+            "coverage: a line floor lower than the base's fails", "coverage: a branch floor lower than the base's fails",
+            "coverage: a base it can't find fails", "coverage: no report fails",
+            "coverage: a run a whole point over a floor says how far it can rise"];
+        var dotnet = Proc.Which("dotnet");
+        if (dotnet is null)
+        {
+            foreach (var name in names) t.Skip(name, "dotnet not found");
+            return;
+        }
+        var repo = Path.Combine(scratch, "coverage");
+        Directory.CreateDirectory(Path.Combine(repo, "src", "Tableau.Api"));
+        Directory.CreateDirectory(Path.Combine(repo, "eng"));
+        Directory.CreateDirectory(Path.Combine(repo, "reports"));
+        Directory.CreateDirectory(Path.Combine(repo, "empty"));
+        File.Copy(Path.Combine(Repo.Root, "global.json"), Path.Combine(repo, "global.json"));
+        File.WriteAllText(Path.Combine(repo, "Tableau.Api.slnx"), "<Solution />\n");
+        File.WriteAllText(Path.Combine(repo, "src", "Tableau.Api", "Tableau.Api.csproj"), "<Project />\n");
+        void Floors(int lines, int branches) => File.WriteAllText(Path.Combine(repo, "eng", "coverage.json"),
+            $"{{\n  \"Tableau.Api\": {{ \"lines\": {lines}, \"branches\": {branches} }}\n}}\n");
+        void Measured(double lines, double branches) => File.WriteAllText(Path.Combine(repo, "reports", "run.cobertura.xml"),
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<coverage><packages><package name=\"Tableau.Api\" "
+            + string.Create(CultureInfo.InvariantCulture, $"line-rate=\"{lines / 100}\" branch-rate=\"{branches / 100}\"")
+            + " /></packages></coverage>\n");
+        var noHooks = Path.Combine(repo, ".no-hooks");
+        Directory.CreateDirectory(noHooks);
+        Floors(80, 70);
+        foreach (var args in new[] { new[] { "init", "-q", "-b", "main" }, ["add", "eng/coverage.json"], ["commit", "-q", "-m", "Floors"] })
+        {
+            var done = Proc.Git(["-c", "user.name=Test", "-c", "user.email=test@example.org", "-c", "commit.gpgsign=false",
+                "-c", $"core.hooksPath={noHooks}", .. args], repo);
+            if (done.ExitCode != 0) throw new InvalidOperationException($"git {string.Join(' ', args)}: {Py.Strip(done.Stderr)}");
+        }
+        var env = new Dictionary<string, string?>(Proc.EnvFor(repo) ?? new Dictionary<string, string?>()) { ["DOTNET_CLI_UI_LANGUAGE"] = "en" };
+        Done Gate(string reports = "reports", string baseRef = "main") => Proc.Run(dotnet,
+            ["run", Path.Combine(Repo.Root, Repo.CoverageGate), "--", reports, "--base", baseRef], cwd: repo, env: env);
+        void Case(string name, Done done, int exitCode, string detail)
+        {
+            var result = Lanes.CoverageResult(done);
+            t.True(name, done.ExitCode == exitCode && result.Detail == detail, $"exit {done.ExitCode}: {result.Detail}");
+        }
+
+        Measured(79.5, 75);
+        var below = Gate();
+        Case(names[0], below, 1, "Tableau.Api: lines 79.50% is below its floor of 80%");
+        var stdout = new StringWriter();
+        t.Equal("gate full fails when coverage is below the floor", 1,
+            Lanes.RunChecks("full", [("coverage", _ => Lanes.CoverageResult(below), true)], new Scope([], null, [], null), stdout));
+        t.Contains("it names the coverage check", stdout.ToString(), "gate full FAILED: coverage");
+
+        Measured(80, 70);
+        Case(names[1], Gate(), 0, "lines 80.00% (floor 80%), branches 70.00% (floor 70%)");
+        Case(names[4], Gate(baseRef: "nothing"), 1,
+            "can't find nothing to compare the floors with: git fetch origin main:refs/remotes/origin/main, or name another commit with --base");
+        Case(names[5], Gate(reports: "empty"), 1,
+            "no *.cobertura.xml report under empty: run the tests with --coverage first (AGENTS.md, Build and test)");
+
+        Measured(81.2, 72.5);
+        Case(names[6], Gate(), 0,
+            "lines 81.20% (floor 80%), branches 72.50% (floor 70%); raise eng/coverage.json: Tableau.Api to lines 81%, branches 72%");
+
+        Measured(95, 95);
+        Floors(79, 70);
+        Case(names[2], Gate(), 1, "Tableau.Api: the line floor of 79% is lower than main's 80%; floors only rise");
+        Floors(80, 69);
+        Case(names[3], Gate(), 1, "Tableau.Api: the branch floor of 69% is lower than main's 70%; floors only rise");
+    }
+
     // A cast that can never succeed, which CA2021 finds, in a new file beside the library's old code.
     private const string CastProbe = "using System.Collections.Generic;\nusing System.Linq;\n\nnamespace Tableau.Api;\n\n"
         + "internal static class GateProbe\n{\n"
         + "    internal static IEnumerable<string> Strings(IEnumerable<int> numbers) => numbers.Cast<string>();\n}\n";
 
-    // The library's strictness, built for real: the repo's build settings and .editorconfig, copied into a scratch
-    // folder with a project in the library's place, so nothing is written into the repo. The TableauLegacy section of
-    // .editorconfig relaxes CA2021 only for the old files it lists, so the new file must fail the build, with CA2021
-    // alone: any other error would mean the probe, not the rule, failed it.
+    // The library's strictness, built for real: the repo's build settings and .editorconfig, and the library's own
+    // src/Directory.Build.props and project file, copied into a scratch folder with the probe as the project's one
+    // source file, so nothing is written into the repo and a setting in any of them that turned the analyzers off would
+    // fail this. The TableauLegacy section of .editorconfig relaxes CA2021 only for the old files it lists, so the new
+    // file must fail the build, with CA2021 alone: any other error would mean the probe, not the rule, failed it.
     private static void StrictnessCases(Tally t, string scratch)
     {
         const string Name = "a CA2021 cast fails the build outside the legacy section";
@@ -1930,12 +2101,17 @@ internal static class SelfTest
         var probe = Path.Combine(scratch, "strictness");
         var library = Path.Combine(probe, Path.GetDirectoryName(Repo.Library)!);
         Directory.CreateDirectory(library);
-        foreach (var file in new[] { ".editorconfig", "Directory.Build.props", "Directory.Packages.props", "global.json", "nuget.config" })
+        foreach (var file in new[]
+                 {
+                     ".editorconfig", "Directory.Build.props", "Directory.Packages.props", "global.json", "nuget.config",
+                     "src/Directory.Build.props", Repo.Library,
+                 })
             File.Copy(Path.Combine(Repo.Root, file), Path.Combine(probe, file));
-        File.WriteAllText(Path.Combine(probe, Repo.Library), "<Project Sdk=\"Microsoft.NET.Sdk\" />\n", new UTF8Encoding(false));
         File.WriteAllText(Path.Combine(library, "GateProbe.cs"), CastProbe, new UTF8Encoding(false));
-        // No lock file is kept for the probe, so a CI run's locked mode is turned off for it.
-        var done = Proc.Run(dotnet, ["build", Repo.Library, "-nologo", "-tl:off", "-nodeReuse:false", "-p:RestoreLockedMode=false"],
+        // No lock file is kept for the probe, so a CI run's locked mode is turned off for it; and the scratch folder is
+        // no git repo, where MinVer would warn that it finds no version.
+        var done = Proc.Run(dotnet,
+            ["build", Repo.Library, "-nologo", "-tl:off", "-nodeReuse:false", "-p:RestoreLockedMode=false", "-p:MinVerSkip=true"],
             cwd: probe, env: new Dictionary<string, string?> { ["DOTNET_CLI_UI_LANGUAGE"] = "en" });
         var output = Py.Strip(done.Stdout + done.Stderr);
         var errors = Regex.Matches(output, @"GateProbe\.cs\(\d+,\d+\): error (\w+)", RegexOptions.CultureInvariant)

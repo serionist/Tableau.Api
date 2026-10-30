@@ -24,7 +24,8 @@ start: an issue, a plan when it needs one, the plan approved, and a branch. `fin
    - the code of every file the change touches: the endpoint in `src/Tableau.Api/TableauApiClient_<Area>.cs`, what it
      calls in `TableauApiClient.cs` (`buildUri`, `apiRequest`, the XML helpers), the types it sends and returns in
      `Models/`; for Vizportal, `VizPortal/VizPortalClient.cs` and its `Models/`;
-   - the tests that exercise it: offline in `tests/Tableau.Api.Tests/`, live in `Tableau.Api.Tests/`;
+   - the tests that exercise it, in `tests/Tableau.Api.Tests/`: offline, and on a site in the `Live` and `ServerOnly`
+     categories;
    - `REVIEW.md`, and `AGENTS.md`'s Traps;
    - every endpoint it calls, in Tableau's REST API reference for the versions it claims, and every .NET API through
      Microsoft Learn (`AGENTS.md`, Look up APIs before coding against them).
