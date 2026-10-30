@@ -65,6 +65,7 @@ internal static class Repo
     public const string GitleaksIgnore = ".gitleaksignore";
     public const string BlameIgnoreRevs = ".git-blame-ignore-revs";
     public const string Library = "Tableau.Api/Tableau.Api.csproj";
+    public const string Tests = "tests/Tableau.Api.Tests/Tableau.Api.Tests.csproj";
 
     /// <summary>The folder above eng/, wherever the command runs from.</summary>
     public static string Root { get; } = Path.GetFullPath(Path.Combine(
@@ -754,12 +755,18 @@ internal static class Lanes
         ("gitleaks", CheckGitleaks, false),
     ];
 
-    // What full adds to quick. The offline tests the modernization brings go here, each a check that reads the working
-    // tree: `dotnet test` on them, then the coverage floor.
+    // What full adds to quick, each a check that reads the working tree: `dotnet test` on the offline tests, and the
+    // coverage floor once the modernization brings one.
     private static readonly (string Name, Func<Scope, Result> Check, bool ReadsTree)[] FullOnly =
     [
         ("tests", CheckTests, true),
     ];
+
+    /// <summary>The names of the checks a lane runs, in order.</summary>
+    public static List<string> CheckNames(string lane) => [.. Checks(lane).Select(check => check.Name)];
+
+    private static (string Name, Func<Scope, Result> Check, bool ReadsTree)[] Checks(string lane) =>
+        lane == "full" ? [.. Quick, .. FullOnly] : Quick;
 
     /// <summary>Every commit in the ranges, merges included, each once; and why they could not be listed.</summary>
     public static (List<Commit> Commits, string? Problem) ListCommits(List<string> ranges, string? cwd = null)
@@ -959,9 +966,40 @@ internal static class Lanes
         return new Result("gitleaks", "pass", $"{scope.Commits.Count} commits");
     }
 
-    // The library has no offline tests yet: Tableau.Api.Tests runs only against a live site (AGENTS.md, Build and test).
-    private static Result CheckTests(Scope _) =>
-        new("tests", "pass", "no offline tests yet, so none ran; the live suite needs a Tableau site");
+    // The offline tests, by their project's path: the solution also holds the old live suite, Tableau.Api.Tests/, which
+    // doesn't build and needs a Tableau site (AGENTS.md, Build and test).
+    private static Result CheckTests(Scope _)
+    {
+        var dotnet = Proc.Which("dotnet");
+        if (dotnet is null) return new Result("tests", "FAIL", "dotnet not found: https://dotnet.microsoft.com/download");
+        return TestsResult(Proc.Run(dotnet, ["test", "--project", Repo.Tests, "--no-ansi", "--no-progress"],
+            env: new Dictionary<string, string?> { ["DOTNET_CLI_UI_LANGUAGE"] = "en" }));
+    }
+
+    /// <summary>
+    /// The tests check from what `dotnet test` did. Any exit but 0 fails it: a failed test, a build error, or no test
+    /// found, which Microsoft.Testing.Platform exits 8 for.
+    /// </summary>
+    public static Result TestsResult(Done done)
+    {
+        var output = Py.Strip(done.Stdout + done.Stderr);
+        var total = LastCount(TestTotal, output);
+        if (done.ExitCode != 0)
+        {
+            var failed = LastCount(TestFailed, output);
+            var detail = failed is not null && failed != "0" && total is not null
+                ? $"{failed} of {total} tests failed"
+                : Rules.LastLine(output);
+            return new Result("tests", "FAIL", detail, output);
+        }
+        return new Result("tests", "pass", $"{total ?? "?"} tests on net10.0");
+    }
+
+    private static readonly Regex TestTotal = new(@"^\s*total: (\d+)", RegexOptions.CultureInvariant | RegexOptions.Multiline);
+    private static readonly Regex TestFailed = new(@"^\s*failed: (\d+)", RegexOptions.CultureInvariant | RegexOptions.Multiline);
+
+    private static string? LastCount(Regex pattern, string output) =>
+        pattern.Matches(output).Cast<Match>().LastOrDefault()?.Groups[1].Value;
 
     private static Result Outcome(string name, List<string> problems, string detail) =>
         problems.Count > 0
@@ -974,9 +1012,12 @@ internal static class Lanes
         $"  {name.PadRight(width)}  {status,-6}  {seconds,6}  {detail}".TrimEnd();
 
     /// <summary>Run the lane's checks on the scope, print the table, and return the exit code: 1 when any failed.</summary>
-    public static int RunLane(string lane, Scope scope, TextWriter stdout)
+    public static int RunLane(string lane, Scope scope, TextWriter stdout) => RunChecks(lane, Checks(lane), scope, stdout);
+
+    /// <summary>The checks given, run as the lane runs them; the selftest gives its own.</summary>
+    public static int RunChecks(string lane, (string Name, Func<Scope, Result> Check, bool ReadsTree)[] checks, Scope scope,
+        TextWriter stdout)
     {
-        var checks = lane == "full" ? [.. Quick, .. FullOnly] : Quick;
         var width = checks.Max(check => check.Name.Length);
         var ranges = string.Join(", ", scope.Ranges) is { Length: > 0 } joined ? FullSha.Replace(joined, "$1") : "(none)";
         stdout.WriteLine($"gate {lane}, commits {ranges}");
@@ -1710,6 +1751,7 @@ internal static class SelfTest
             Attribution(t);
             TextLaneCases(t, scratch);
             Flags(t);
+            TestsCases(t);
             Files(t);
             CommitMsgCases(t, scratch);
             PushCases(t);
@@ -1834,6 +1876,36 @@ internal static class SelfTest
             Cli.Run(["text", "--file", "-"], stdoutOf, stderrOf, () => new MemoryStream(bytes)));
         t.True("text names the line read from standard input",
             Py.SplitLines(stderrOf.ToString()).Contains($"gate text: refused: tool attribution: {Robot}"), stderrOf.ToString());
+    }
+
+    // What `dotnet test` prints on Microsoft.Testing.Platform, cut to its summary.
+    private const string TestsPassed = "Test run summary: Passed! - Tableau.Api.Tests.dll (net10.0|x64)\n"
+        + "  total: 42\n  failed: 0\n  succeeded: 42\n  skipped: 0\n  duration: 9s 772ms\n";
+    private const string TestsFailed = "failed PathTests.EveryAsciiCharacterIsSentEscaped (1s 20ms)\n"
+        + "Test run summary: Failed! - Tableau.Api.Tests.dll (net10.0|x64)\n"
+        + "  total: 42\n  failed: 1\n  succeeded: 41\n  skipped: 0\n  duration: 9s 772ms\n";
+
+    private static void TestsCases(Tally t)
+    {
+        var passed = Lanes.TestsResult(new Done(0, TestsPassed, ""));
+        t.Equal("tests: a run with no failure passes", "pass", passed.Status);
+        t.Equal("tests: it says how many ran", "42 tests on net10.0", passed.Detail);
+        var failed = Lanes.TestsResult(new Done(2, TestsFailed, ""));
+        t.Equal("tests: a failed test fails the check", "FAIL", failed.Status);
+        t.Equal("tests: it says how many failed", "1 of 42 tests failed", failed.Detail);
+        t.Equal("tests: a build error fails the check", "FAIL",
+            Lanes.TestsResult(new Done(1, "", "error CS1002: ; expected\nBuild failed with 1 error(s)")).Status);
+        t.Equal("tests: no test found fails the check", "FAIL",
+            Lanes.TestsResult(new Done(8, "Zero tests ran\n  total: 0\n  failed: 0\n", "")).Status);
+
+        t.True("full runs the tests check", Lanes.CheckNames("full").Contains("tests"), string.Join(", ", Lanes.CheckNames("full")));
+        t.True("quick runs every check but the tests", !Lanes.CheckNames("quick").Contains("tests")
+            && Lanes.CheckNames("full").Except(Lanes.CheckNames("quick")).SequenceEqual(["tests"]));
+        var stdout = new StringWriter();
+        var code = Lanes.RunChecks("full", [("tests", _ => failed, true)], new Scope([], null, [], null), stdout);
+        t.Equal("gate full fails when a test fails", 1, code);
+        t.Contains("it names the tests check", stdout.ToString(), "gate full FAILED: tests");
+        t.Contains("it shows what dotnet test printed", stdout.ToString(), "failed PathTests.EveryAsciiCharacterIsSentEscaped");
     }
 
     private static void Flags(Tally t)

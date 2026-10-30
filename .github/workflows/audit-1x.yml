@@ -1,0 +1,68 @@
+# The weekly package audit of release/1.x. GitHub runs scheduled workflows only on the default branch, so the 1.x line's
+# weekly check lives on main, in a workflow of its own: a failure here fails this run, not main's CI or its badge.
+name: Audit release/1.x
+
+on:
+  schedule:
+    - cron: "29 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: audit-1x
+  cancel-in-progress: false
+
+jobs:
+  # release/1.x takes security fixes only, and a package it uses can get an advisory with no commit there. So every
+  # Monday, and on a run by hand, its solution is restored on Windows, where its test project also targets net48, which runs NuGet audit as its Directory.Build.props
+  # sets it, and every package each project uses, directly or through another, is checked against nuget.org's
+  # vulnerability data. One with an advisory fails the run.
+  audit-1x:
+    name: Package audit (release/1.x)
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: release/1.x
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Restore
+        run: dotnet restore Tableau.Api.sln
+      # dotnet list exits 0 whatever it finds, so its JSON report is read: each package of each project and framework,
+      # top-level and transitive.
+      - name: No package with a known advisory
+        shell: pwsh
+        run: |
+          $json = dotnet list Tableau.Api.sln package --vulnerable --include-transitive --format json
+          if ($LASTEXITCODE -ne 0) {
+            Write-Output "::error::dotnet list failed with exit code $LASTEXITCODE."
+            exit 1
+          }
+          $report = $json | Out-String | ConvertFrom-Json
+          $projects = @($report.projects)
+          if ($projects.Count -eq 0) {
+            Write-Output "::error::dotnet list found no project to check."
+            exit 1
+          }
+          $errors = @($report.problems | Where-Object { $_ -and $_.level -eq 'error' })
+          foreach ($problem in $errors) { Write-Output "::error::$($problem.text)" }
+          $found = @(foreach ($project in $projects) {
+            foreach ($framework in @($project.frameworks)) {
+              if (-not $framework) { continue }
+              foreach ($package in @($framework.topLevelPackages) + @($framework.transitivePackages)) {
+                if (-not $package -or -not $package.vulnerabilities) { continue }
+                $advisories = ($package.vulnerabilities | ForEach-Object { "$($_.severity) $($_.advisoryurl)" }) `
+                  -join '; '
+                $where = "$(Split-Path -Leaf $project.path) ($($framework.framework))"
+                "${where}: $($package.id) $($package.resolvedVersion): $advisories"
+              }
+            }
+          })
+          foreach ($line in $found) { Write-Output "::error::$line" }
+          if ($errors.Count -gt 0 -or $found.Count -gt 0) { exit 1 }
+          Write-Output "$($projects.Count) projects on release/1.x, no package with a known advisory."

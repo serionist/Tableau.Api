@@ -78,6 +78,9 @@ Applies when: the scope touches `Tableau.Api/VizPortal/`.
 ## tests
 
 - Would each new check fail without the change? Is a fix pinned by something that reproduced the bug?
+- The offline tests in `tests/Tableau.Api.Tests/`: does a change to a request, a model or the Vizportal client add one
+  there, against `FakeTableauServer`, that asserts what goes on the wire (the request line, a header, the body)? Does a
+  new method that builds a path keep `EveryMethodPathTests`' count true?
 - The live suite needs a site: does the PR say whether it ran, against which Tableau Server version or Tableau Cloud,
   and what it can't cover? Is a failure compared with `main`'s run on the same site before it is called the change's?
 - Do tests use invented data, and delete what they create on the site?

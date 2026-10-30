@@ -1,12 +1,21 @@
-# CI on every pull request, every push to main, once a day on main, and by hand. Checks (Linux) runs the gate's quick
-# lane: its selftest, the library's build, AGENTS.md, the skills and their links, the hooks, no tool attribution in the
-# commits, and gitleaks over them. Build and pack (Linux) builds the library in Release, packs it, and checks the
-# package with eng/package-check.cs. No tests run here: the solution's old test project doesn't build and needs a
-# Tableau site, so a PR says what ran against one (AGENTS.md, Build and test). CI sums the run up; it and
-# pr-text.yml's PR text are the checks the main ruleset requires.
+# CI on every pull request, every push to main, once a day on main, and by hand.
+#
+# - Checks (Linux): the gate's quick lane: its selftest, the library's build, AGENTS.md, the skills and their links, the
+#   hooks, no tool attribution in the commits, and gitleaks over them.
+# - Build, test and pack (Linux): the library in Release, the offline tests in tests/Tableau.Api.Tests, and the package,
+#   packed and checked with eng/package-check.cs.
+# - Selftest and tests (Windows): the gate's selftest and the offline tests, where paths, line endings and the TLS stack
+#   differ from Linux.
+# - CI sums those up; it and pr-text.yml's PR text are the checks the main ruleset requires.
+#
+# Nothing here runs on a Tableau site: the solution's old live suite doesn't build and needs one, so a PR says what ran
+# against one (AGENTS.md, Build and test).
 #
 # The daily run is for Dependabot's merges: dependabot-auto-merge.yml turns on auto-merge with the workflow's token,
 # and a push made with that token starts no run, so main is checked within a day of one instead.
+#
+# release/1.x's weekly package audit is audit-1x.yml, a workflow of its own, so a failure there leaves main's CI and
+# its badge alone.
 name: CI
 
 on:
@@ -21,7 +30,7 @@ permissions:
   contents: read
 
 concurrency:
-  # One group per ref. A newer push to a PR cancels its older run. Each run on main, a push, the daily one or one by
+  # One group per ref. A newer push to a PR cancels its older run. Each run on main, a push, a scheduled one or one by
   # hand, keeps its own result: its group also names the commit, so the next push never cancels a waiting run.
   group: ci-${{ github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -53,7 +62,7 @@ jobs:
           sudo tar -xzf "$RUNNER_TEMP/gitleaks.tgz" -C /usr/local/bin gitleaks
       # The commits checked start after the PR's base, or after the commit main was on before the push. A PR's checkout
       # is the merge of its branch into the base, so that merge is checked too. A push's before is all zeros for a new
-      # branch, and a commit no longer in the history after a force push; the daily run and a run by hand have none.
+      # branch, and a commit no longer in the history after a force push; a scheduled run and a run by hand have none.
       # Then the head commit alone is checked, since a squash merge is one commit. GATE_REQUIRE_GITLEAKS makes a
       # missing gitleaks a failure, not a warning.
       - name: The gate's quick lane
@@ -67,12 +76,12 @@ jobs:
           fi
           dotnet run eng/gate.cs -- quick --base "$BASE"
 
-  # What a release would publish, packed and checked on every run. The project turns ContinuousIntegrationBuild on
-  # where GITHUB_ACTIONS is set, so the build and the package hold no path of the runner.
+  # What a release would publish, tested, packed and checked on every run. The project turns ContinuousIntegrationBuild
+  # on where GITHUB_ACTIONS is set, so the build and the package hold no path of the runner.
   package:
-    name: Build and pack (Linux)
+    name: Build, test and pack (Linux)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -83,6 +92,10 @@ jobs:
       # The library alone: the solution's old test project doesn't build (AGENTS.md, Build and test).
       - name: Build
         run: dotnet build Tableau.Api/Tableau.Api.csproj -c Release
+      # The offline tests by their project's path, for the same reason. global.json runs them on
+      # Microsoft.Testing.Platform.
+      - name: Test
+        run: dotnet test --project tests/Tableau.Api.Tests/Tableau.Api.Tests.csproj -c Release
       - name: Pack
         run: dotnet pack Tableau.Api/Tableau.Api.csproj --no-build -c Release -o artifacts/packages
       - name: Check the package
@@ -94,11 +107,40 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  # The check the main ruleset requires: every job above passed. It runs whatever happened to them, since a required
-  # check that is skipped counts as passed, and it fails when one of them failed, was cancelled or was skipped.
+  windows:
+    name: Selftest and tests (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      # The version .gitleaks.toml names, checked against the SHA-256 its release publishes, so the selftest's gitleaks
+      # cases run here too.
+      - name: Install gitleaks
+        shell: pwsh
+        run: |
+          $zip = Join-Path $env:RUNNER_TEMP "gitleaks.zip"
+          Invoke-WebRequest -Uri "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_windows_x64.zip" -OutFile $zip
+          $hash = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLowerInvariant()
+          if ($hash -ne "d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e") { throw "gitleaks checksum mismatch: $hash" }
+          $dir = Join-Path $env:RUNNER_TEMP "gitleaks"
+          Expand-Archive -Path $zip -DestinationPath $dir
+          Add-Content -Path $env:GITHUB_PATH -Value $dir
+      - name: The gate's selftest
+        run: dotnet run eng/gate.cs -- selftest
+      - name: Test
+        run: dotnet test --project tests/Tableau.Api.Tests/Tableau.Api.Tests.csproj -c Release
+
+  # The check the main ruleset requires: every job above passed. It runs whatever happened to them,
+  # since a required check that is skipped counts as passed, and it fails when one of them failed, was cancelled or was
+  # skipped.
   ci:
     name: CI
-    needs: [checks, package]
+    needs: [checks, package, windows]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -107,6 +149,8 @@ jobs:
         env:
           CHECKS: ${{ needs.checks.result }}
           PACKAGE: ${{ needs.package.result }}
+          WINDOWS: ${{ needs.windows.result }}
         run: |
-          echo "Checks (Linux): $CHECKS. Build and pack (Linux): $PACKAGE."
-          test "$CHECKS" = success && test "$PACKAGE" = success
+          echo "Checks (Linux): $CHECKS. Build, test and pack (Linux): $PACKAGE."
+          echo "Selftest and tests (Windows): $WINDOWS."
+          test "$CHECKS" = success && test "$PACKAGE" = success && test "$WINDOWS" = success

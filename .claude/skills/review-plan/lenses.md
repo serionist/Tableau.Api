@@ -63,8 +63,8 @@ the usual way this breaks.
 ## sequencing-and-checks
 
 - Can each step be built, checked and committed on its own, in that order?
-- Does each step name what proves it: a test that fails without it once offline tests exist, and until then the live
-  suite or a run against a site? Does the plan say which Tableau version that is, and what it cannot show?
+- Does each step name what proves it: an offline test that fails without it, and for what no offline test can show,
+  the live suite or a run against a site? Does the plan say which Tableau version that is, and what it cannot show?
 
 ## simplicity
 

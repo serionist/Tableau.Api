@@ -14,27 +14,26 @@ Microsoft.Extensions.Logging.
 - **`VizPortalClient`:** Tableau's own web client's API (`/vizportal/api/web/v1/`), JSON through Newtonsoft.Json. It
   is internal and unversioned: Tableau documents none of it and may change it in any release.
 - **Where the work stands:** issue #2 reviews the code and modernizes it; its plan in `docs/plans/` records the
-  decisions. Until then the code is as it was in 2024.
+  decisions. Until then the code is 2024's, with 1.2.6's request rules and Vizportal's certificate checks.
 
 ## Where things are
 
 | Path | What |
 |---|---|
-| `Tableau.Api/` | the library: `TableauApiClient.cs` (requests, `buildUri`, versions), `TableauApiClient_*.cs` (endpoints by area), `VizPortal/` (the Vizportal client and its `Models/`), `Models/` (`XmlSchema.cs`, generated; `how_to_generate_schema.txt`, the steps; `SchemaExtensions.cs`, `TableauSession.cs`), `Attributes/` (`ApiVersion`, `OnPremiseOnly`), `Enums/`, `Exceptions/`, `PartialStream.cs`, `Tableau.Api.csproj` |
-| `Tableau.Api.Tests/` | MSTest, live only: ordered classes `A01_Prepare` to `A06_DataSources`, `Base/` (the shared context, prerequisites), `Resources/sample.tde` |
+| `Tableau.Api/` | the library: `TableauApiClient.cs` (requests, `buildUri`, versions), `RequestPath.cs` (each value in a request path escaped and checked), `TableauHttp.cs` (the handler both clients use: certificates, no redirects, the base URL's path), `TableauApiClient_*.cs` (endpoints by area), `VizPortal/` (the Vizportal client and its `Models/`), `Models/` (`XmlSchema.cs`, generated; `how_to_generate_schema.txt`, the steps; `SchemaExtensions.cs`, `TableauSession.cs`), `Attributes/` (`ApiVersion`, `OnPremiseOnly`), `Enums/`, `Exceptions/`, `PartialStream.cs`, `Tableau.Api.csproj` |
+| `tests/Tableau.Api.Tests/` | the offline tests, MSTest on Microsoft.Testing.Platform, net10.0: `Fakes/` (`FakeTableauServer`, an HTTP/1.1 server on a loopback port, with a TLS mode, that records each request as sent), `Fixtures.cs` (the invented site, user and tokens), one class per behaviour |
+| `Tableau.Api.Tests/` | the old live suite, MSTest: ordered classes `A01_Prepare` to `A06_DataSources`, `Base/` (the shared context, prerequisites), `Resources/sample.tde` |
 | `Tableau.Api.sln` | the solution |
 | `eng/` | `gate.cs`, the gate, the hooks' entry points and the setup, as one .NET file-based app; `package-check.cs`, what a packed package must hold (`dotnet run eng/package-check.cs -- <folder> [<version>]`) |
 | `.githooks/` | `commit-msg` refuses attribution, `pre-push` runs gate quick on what the push sends, `post-checkout` and `post-merge` name changed AI setup files |
 | `docs/plans/`, `docs/reviews/` | plans of non-trivial changes, with the template; review records. Dated records, never current truth |
-| `.github/` | `CODEOWNERS`, `pull_request_template.md`; `workflows/`: `ci.yml` (gate quick, then build, pack and the package check, summed up by `CI`), `pr-text.yml` (`PR text`, gate text on the PR), `codeql.yml`, `dependabot-auto-merge.yml` (minor and patch updates, once CI is required); `dependabot.yml`; `ISSUE_TEMPLATE/` (the bug and feature forms; security reports go to private reporting) |
+| `.github/` | `CODEOWNERS`, `pull_request_template.md`; `workflows/`: `ci.yml` (gate quick; build, the offline tests, pack and the package check; the selftest and the tests on Windows; summed up by `CI`), `audit-1x.yml` (weekly, the package audit of `release/1.x`, on Windows), `pr-text.yml` (`PR text`, gate text on the PR), `codeql.yml` (`main`, and weekly `release/1.x`), `dependabot-auto-merge.yml` (minor and patch updates, once CI is required); `dependabot.yml`; `ISSUE_TEMPLATE/` (the bug and feature forms; security reports go to private reporting) |
 | `.claude/` | `CLAUDE.md` (imports this file), `settings.json` (no attribution in commits or PRs, and no permission rules: each developer's own settings decide what Claude Code may run), `settings.local.json.example`, `skills/` (below) |
 | `.agents/skills/` | links to `.claude/skills/<name>` for Codex, written into git's index by `dotnet run eng/gate.cs -- link` |
 | `AGENTS.md`, `REVIEW.md` | this file; what a review finding is, and the questions every review answers |
 | `.mcp.json` | Microsoft Learn and Context7 over HTTP; `.claude/settings.local.json.example` turns them on |
-| `Directory.Build.props` | what every project shares: the package metadata, the MIT licence expression, NuGet audit |
-| `global.json`, `nuget.config` | the .NET 10 SDK; nuget.org as the only package source |
-| `.gitleaks.toml` | the secret scan: gitleaks' own rules, and any exception with its reason |
-| `.editorconfig`, `.gitattributes`, `.gitignore` | the target code style; LF everywhere; what git ignores, secrets first |
+| `Directory.Build.props`, `global.json`, `nuget.config` | what every project shares: the package metadata, the MIT licence expression, NuGet audit; the .NET 10 SDK, and Microsoft.Testing.Platform for `dotnet test`; nuget.org as the only package source |
+| `.gitleaks.toml`, `.editorconfig`, `.gitattributes`, `.gitignore` | the secret scan: gitleaks' own rules, and any exception with its reason; the target code style; LF everywhere; what git ignores, secrets first |
 | `LICENSE`, `README.md`, `SECURITY.md`, `CONTRIBUTING.md`, `CHANGELOG.md` | MIT; what users read first, also packed into the package; how to report a vulnerability, and the supported versions; the short path for a contributor; what changed, under Unreleased until a release |
 
 A new top-level file or folder adds its row in the same change.
@@ -48,18 +47,19 @@ PowerShell. The `--` after `eng/gate.cs` is needed: without it `dotnet run` take
 |---|---|
 | once per clone | `dotnet run eng/gate.cs -- setup` (hooks, `git blame`, skill links) |
 | the library | `dotnet build Tableau.Api/Tableau.Api.csproj`: 0 warnings, and its csproj treats warnings as errors |
+| the offline tests | `dotnet test --project tests/Tableau.Api.Tests/Tableau.Api.Tests.csproj` |
 | the gate | `dotnet run eng/gate.cs -- quick` (selftest, build, AGENTS.md, skills, links, hooks, attribution, secrets); `full` adds the offline tests; `text --file -` checks a PR's title and description: no attribution, and the issue named |
-| the live suite | `dotnet test Tableau.Api.Tests --settings <full path outside the clone>.runsettings`, once the test project builds |
+| the live suite | `dotnet test --project Tableau.Api.Tests --settings <full path outside the clone>.runsettings`, once issue #2 moves it on |
 
-- **The solution doesn't build today:** `dotnet build Tableau.Api.sln` fails with NU1201, since the test project's
-  netcoreapp2.1 can't reference netstandard2.1. Build the library alone; issue #2 moves the tests on.
-- **No offline tests yet:** gate full says so and passes. The modernization adds them, and their coverage floor.
+- **The solution doesn't build today:** `dotnet build Tableau.Api.sln` fails with NU1201, since the old live suite's
+  netcoreapp2.1 can't reference netstandard2.1. So the library and the offline tests are built by their own paths.
+- **The offline tests** run on the fake server with invented data; CI runs them on Linux and Windows with gate quick
+  and the package check, never on a Tableau site: a PR says what ran there, and on which version.
 - **The live suite** signs in to a Tableau Server or Tableau Cloud site, creates projects and publishes data sources.
   Run it only on a site you may change. Its settings come from a `.runsettings` file: `Url`, `Version`, `User`,
   `Password`, `Site`, `NonAdminUser`, `NonAdminPassword`, `NonAdminUserId` (`A01_Prepare.cs`, `A02_Authentication.cs`).
 - **Keep that file outside the clone,** pass its full path to `--settings`; the solution's `test.runsettings` is a
   leftover. A search or a glob in the clone never reaches it there. `*.runsettings` stays git-ignored as a backstop.
-- **CI** runs gate quick and the package check, never on a Tableau site: a PR says what ran there, and on which version.
 
 ## How a change lands
 

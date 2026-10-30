@@ -1,6 +1,12 @@
-# CodeQL code scanning, with the security-extended queries, on every pull request to main, every push to main and once
-# a week, so new queries also reach code that has not changed. Results go to the repository's Security tab and annotate
-# the PR. A Dependabot merge starts no push run (dependabot-auto-merge.yml): the weekly run covers main after one.
+# CodeQL code scanning, with the security-extended queries, on every pull request to main, every push to main, once a
+# week and by hand, so new queries also reach code that has not changed. Results go to the repository's Security tab and
+# annotate the PR. A Dependabot merge starts no push run (dependabot-auto-merge.yml): the weekly run covers main after
+# one.
+#
+# The weekly run and a run by hand also analyse release/1.x, in a job that checks that branch out: GitHub runs
+# scheduled workflows only on the default branch, so the 1.x line's weekly scan lives here. Its results go to
+# release/1.x, the ref and commit it read, under the same categories as that branch's own codeql.yml, so they replace
+# its last analysis rather than sitting beside main's.
 #
 # C# is built by hand, the library alone as CI builds it, since the solution's old test project doesn't build
 # (AGENTS.md, Build and test); CodeQL reads what the compiler saw. The workflows themselves (language "actions") are
@@ -16,12 +22,14 @@ on:
     branches: [main]
   schedule:
     - cron: "41 4 * * 1"
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  # As in ci.yml: a newer push to a PR cancels its older run, and each push to main or weekly run keeps its own result.
+  # As in ci.yml: a newer push to a PR cancels its older run, and each push to main, weekly run or run by hand keeps its
+  # own result.
   group: codeql-${{ github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
@@ -65,3 +73,47 @@ jobs:
       - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           category: /language:${{ matrix.language }}
+
+  analyze-1x:
+    name: Analyse release/1.x (${{ matrix.language }})
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      # Uploads the results to code scanning.
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: csharp
+            build-mode: manual
+          - language: actions
+            build-mode: none
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: release/1.x
+          persist-credentials: false
+      # The commit analysed, which the upload names along with release/1.x.
+      - name: The commit checked out
+        id: commit
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        if: matrix.language == 'csharp'
+        with:
+          global-json-file: global.json
+      - uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          queries: security-extended
+      - name: Build the library
+        if: matrix.language == 'csharp'
+        run: dotnet build Tableau.Api/Tableau.Api.csproj -c Release
+      - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          category: /language:${{ matrix.language }}
+          ref: refs/heads/release/1.x
+          sha: ${{ steps.commit.outputs.sha }}
