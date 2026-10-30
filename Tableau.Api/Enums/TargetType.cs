@@ -3,6 +3,8 @@
     public enum TargetType
     {
         View,
-        Workbook
+        Workbook,
+        // Tableau Server 2025.1 sends FLOW for a subscription to a flow. Last, so no member's value changes.
+        Flow
     }
 }

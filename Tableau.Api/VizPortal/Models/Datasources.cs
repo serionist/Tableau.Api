@@ -25,7 +25,7 @@ namespace Tableau.Api.VizPortal.Models
         public string RepositoryUrl { get; set; }
         public string ModifiedByUserId { get; set; }
         public string ExtractEncryptionState { get; set; }
-        public string[] DataQualityIndicators { get; set; }
+        public DataQualityIndicator[] DataQualityIndicators { get; set; }
         public bool? HasExtracts { get; set; }
         public string DownloadUrl { get; set; }
         public string Luid { get; set; }
@@ -43,6 +43,22 @@ namespace Tableau.Api.VizPortal.Models
         public string ConnectionType { get; set; }
         public string OwnerId { get; set; }
         public string Id { get; set; } // ID of the Content
+    }
+
+    /// <summary>
+    /// A data quality warning on a data source, one object per indicator, as Tableau Server 2025.1 sends them.
+    /// <see cref="Category"/> and <see cref="Type"/> are strings, so a value Tableau adds later still reads.
+    /// </summary>
+    public class DataQualityIndicator
+    {
+        public string Id { get; set; }
+        public string Category { get; set; }
+        public string Type { get; set; }
+        public string Message { get; set; }
+        public bool? IsActive { get; set; }
+        public bool? IsSevere { get; set; }
+        public DateTime? UpdatedAt { get; set; }
+        public ContentUser Owner { get; set; }
     }
 
     public class CertificationDetails
