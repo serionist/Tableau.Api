@@ -45,8 +45,9 @@ Each is a yes or no; a "no" is a finding.
    expected status, and does its `[ApiVersion]` name the version the reference gives?
 5. No password, token or runsettings in code, tests, logs, exception messages, docs, commits or the PR?
 6. Do the public members of `TableauApiClient`, `VizPortalClient` and the `Models` types stay as they were, or does the
-   change name the one it breaks?
-7. Does the library still build alone on netstandard2.1 with 0 warnings?
+   change name the one it breaks, in `eng/apicompat/1.2.5.xml` and `docs/migration-2.0.md`?
+7. Does the library still build alone on net10.0 with 0 warnings, without a `NoWarn`, and with no file added to the
+   TableauLegacy section of `.editorconfig`?
 8. Do paths, encodings, line endings and processes work on Windows and Linux?
 9. Does it leave the one-way doors in `AGENTS.md` alone, or name the one it changes and link a maintainer's
    agreement in its issue?
@@ -77,7 +78,7 @@ Each is a yes or no; a "no" is a finding.
 - **Pagination, cancellation, versions:** page size 1 to 1,000, page number from 1, every page reachable; every public
   async method takes the `CancellationToken?` last and passes it to the request; a new endpoint carries `[ApiVersion]`,
   and `[OnPremiseOnly]` when Tableau Cloud lacks it.
-- **Vizportal** (`Tableau.Api/VizPortal/`): an internal, unversioned API, so the PR names the Tableau version it was
+- **Vizportal** (`src/Tableau.Api/VizPortal/`): an internal, unversioned API, so the PR names the Tableau version it was
   checked on; the session token goes only in the `workgroup_session_id` cookie, with an `X-Xsrf-Token` that matches
   its cookie; certificate validation follows the caller's `IgnoreSSLErrors`.
 - **The harness** (below).
@@ -88,14 +89,18 @@ These decide how every other change is checked:
 
 - `AGENTS.md`, `REVIEW.md`, `.claude/` (`CLAUDE.md`, the settings, the skills), `.agents/`, `.mcp.json`;
 - `eng/`, `.githooks/`, `.gitleaks.toml`, `.github/`;
-- `Directory.Build.props`, `.editorconfig` and the csproj settings that make warnings errors;
+- the `Directory.Build.props` files, `Directory.Packages.props`, `.editorconfig` and the csproj settings that make
+  warnings errors; `src/Tableau.Api/CompatibilitySuppressions.xml` and `dotnet-tools.json`;
 - `nuget.config` (its sources and their mapping), `global.json`, and the secrets block of `.gitignore`.
 
 Rules:
 
 - A change that loosens a check is a blocker unless a maintainer agrees in the PR.
 - That includes a gate step dropped or made a warning, a rule or a test skipped, a `NoWarn` or an ignore added, a
-  question or a lens removed, or attribution let through.
+  file added to the TableauLegacy section of `.editorconfig` or a rule the build already enforced relaxed there, a
+  package validation suppression added, a question or a lens removed, or attribution let through. A break added to
+  `eng/apicompat/1.2.5.xml` by its regeneration is no loosening: it is a change to the public API, which question 6
+  asks about.
 - A change that only makes a check stricter needs no more than a normal review.
 - The attribution rule in `eng/gate.cs` is omniverse-mcp's, with Python's meaning, and its selftest cases are that
   repo's: a change to one changes the other, or says why not.

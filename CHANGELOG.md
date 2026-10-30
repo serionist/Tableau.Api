@@ -8,7 +8,7 @@ same PR. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1
 
 2.0.0 is in progress on `main`: a rebuild for .NET 10, not for use yet. It targets net10.0 only; .NET Framework and
 older .NET stay on 1.2.x. The changes on `main` since 1.2.5, the Vizportal client among them, reach users in 2.0.0,
-and its migration guide will list every change from 1.2.5.
+and [the migration guide](docs/migration-2.0.md) lists every change from 1.2.5 a caller has to act on.
 
 ### Security
 
@@ -27,6 +27,12 @@ and its migration guide will list every change from 1.2.5.
 
 ### Changed
 
+- **The package targets net10.0 only,** where `main` targeted netstandard2.1 and 1.2.x targets netstandard2.0. On
+  .NET Framework or an older .NET, stay on 1.2.x.
+- **The version is 2.0,** from git tags: a build of `main` is `2.0.0-alpha.0.<n>`, and nothing is published before
+  2.0.0's release candidate. Every break of 1.2.5's public API is in the migration guide; so far, six methods whose
+  parameters or return type `main` had changed, and the `capabilityTypeName` members renumbered by the capabilities
+  added among them.
 - **Values in paths and queries are escaped,** so a value the caller had already URL-encoded is encoded twice.
 - **The base URL's path is used,** by the REST and the Vizportal clients alike, so a server behind a path prefix,
   such as `https://example.com/tableau/`, is reachable. A base URL must be the server's address, not a site's or a

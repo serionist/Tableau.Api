@@ -21,7 +21,7 @@ start: an issue, a plan when it needs one, the plan approved, and a branch. `fin
      `gh issue create --title "<title>" --body-file .local/issue-body.md`. Every change gets an issue, a typo or a
      comment fix too: its PR names it, and gate text checks that.
 2. **Read before planning,** never from memory:
-   - the code of every file the change touches: the endpoint in `Tableau.Api/TableauApiClient_<Area>.cs`, what it
+   - the code of every file the change touches: the endpoint in `src/Tableau.Api/TableauApiClient_<Area>.cs`, what it
      calls in `TableauApiClient.cs` (`buildUri`, `apiRequest`, the XML helpers), the types it sends and returns in
      `Models/`; for Vizportal, `VizPortal/VizPortalClient.cs` and its `Models/`;
    - the tests that exercise it: offline in `tests/Tableau.Api.Tests/`, live in `Tableau.Api.Tests/`;
