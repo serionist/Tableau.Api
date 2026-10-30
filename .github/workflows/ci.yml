@@ -167,8 +167,10 @@ jobs:
               if (-not $framework) { continue }
               foreach ($package in @($framework.topLevelPackages) + @($framework.transitivePackages)) {
                 if (-not $package -or -not $package.vulnerabilities) { continue }
-                $advisories = ($package.vulnerabilities | ForEach-Object { "$($_.severity) $($_.advisoryurl)" }) -join '; '
-                "$(Split-Path -Leaf $project.path) ($($framework.framework)): $($package.id) $($package.resolvedVersion): $advisories"
+                $advisories = ($package.vulnerabilities | ForEach-Object { "$($_.severity) $($_.advisoryurl)" }) `
+                  -join '; '
+                $where = "$(Split-Path -Leaf $project.path) ($($framework.framework))"
+                "${where}: $($package.id) $($package.resolvedVersion): $advisories"
               }
             }
           })
@@ -192,5 +194,6 @@ jobs:
           PACKAGE: ${{ needs.package.result }}
           WINDOWS: ${{ needs.windows.result }}
         run: |
-          echo "Checks (Linux): $CHECKS. Build, test and pack (Linux): $PACKAGE. Selftest and tests (Windows): $WINDOWS."
+          echo "Checks (Linux): $CHECKS. Build, test and pack (Linux): $PACKAGE."
+          echo "Selftest and tests (Windows): $WINDOWS."
           test "$CHECKS" = success && test "$PACKAGE" = success && test "$WINDOWS" = success

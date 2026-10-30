@@ -625,7 +625,8 @@ internal sealed record Endpoint(string Name, HttpMethod Method, string Template,
 - **`release/1.x` has its own `ci.yml`** (S2a): on PRs to the branch and on every push to it, so each commit on the
   line, a tagged one included, has a push run of its own.
 - **`pr-text.yml`:** `PR text` runs the gate's `text` lane on the title and description; it passes on Dependabot's PRs.
-- **`codeql.yml`:** csharp and actions, `security-extended`, on PRs, `main` and weekly.
+- **`codeql.yml`:** csharp and actions, `security-extended`, on PRs, `main`, weekly and by hand; from S3 the weekly run
+  also analyses `release/1.x`, in a job that checks it out and uploads to that branch.
 - **`dependabot.yml`:** nuget, github-actions and dotnet-sdk; weekly; a 7-day cooldown; minor and patch grouped.
   `dependabot-auto-merge.yml` turns on auto-merge for minor and patch once `CI` and `PR text` pass; a major waits for
   the maintainer.
@@ -699,10 +700,10 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
 | Step | Line | What | Closes on main | Issue | PR | Status |
 |---|---|---|---|---|---|---|
 | S0 | main | Harness and licence | (the licence part of F25) | #1 | #3 | done |
-| S1 | main | CI and open-source files | F25 | #13 | | in review |
-| S2a | 1.x | The `release/1.x` branch set up: CI, release, backstops, harness, metadata, package validation | none | #14 | | todo |
-| S2b | 1.x | The 1.2.6 fixes, and the release | none on main; the tracker's 1.2.6 column | #15 | | todo |
-| S3 | main | Security on main | F1 F2 F3 F6 F39 | | | todo |
+| S1 | main | CI and open-source files | F25 | #13 | #16 | done |
+| S2a | 1.x | The `release/1.x` branch set up: CI, release, backstops, harness, metadata, package validation | none | #14 | #20 | done |
+| S2b | 1.x | The 1.2.6 fixes, and the release | none on main; the tracker's 1.2.6 column | #15 | #21 | done: released as `v1.2.6` on 2026-10-30 |
+| S3 | main | Security on main | F1 F2 F3 F6 F39 | #23 | | in review |
 | S4 | main | Publish the review, after 1.2.6 | none | | | todo |
 | S5 | main | Build and layout for 2.0 | F24 F40 | | | todo |
 | S6 | main | Reformat, alone | none | | | todo |
@@ -1663,6 +1664,10 @@ and start the steps", and on the owner calls they have answered since (Q7 to Q9)
 | 2026-10-29 | plan | Plan review round 4 (Claude Opus 5.5, on `f1ce466`): approved, with 4 minors applied (Plan review, Round 4): the 2.0 path rule points at 1.2.6's (P28), the net48 test works out each row's outcome from 1.2.5's own `buildUri` (P29), the session reads a door PR's comments before merging (P30), and filter values on older .NET Framework targets are a known issue (P31). @serionist approved the plan (status `approved`). S1 is next. |
 | 2026-10-29 | S1 | Built on `13-ci-and-oss-files` for #13, with #14 and #15 opened for S2a and S2b: `ci.yml` (`Checks (Linux)`, `Build and pack (Linux)`, `CI`), `pr-text.yml` (`PR text`), `codeql.yml` (C# built by hand, the library alone, and actions), `dependabot.yml`, `dependabot-auto-merge.yml`, `eng/package-check.cs`, the issue forms, SECURITY.md, CONTRIBUTING.md, CHANGELOG.md, README.md, the package metadata, the two strings in the old tests, AGENTS.md. Departures: Dependabot has no `eng/` entry, since its NuGet updater reads no file-based app yet (dependabot/dependabot-core#15187) and eng/'s apps take no packages; the auto-merge job fails unless a ruleset on the base branch requires `CI`, because auto-merge with no required check merges at once; REVIEW.md question 1 and the review-code and finish-work skills drop their "until CI exists" wording, as the rule-file rule asks. The `DocumentationFile` paths that say netstandard2.0 stay: the pack carries the XML docs. Private vulnerability reporting and Dependabot alerts were already on. The PR is next. |
 | 2026-10-29 | S1 | review-code round 1 on `daf2486`: clean, six minors, all fixed (`docs/reviews/2026-10-29-ci-and-oss-files-code.md`). Two departures from the Design: a .NET SDK bump in `global.json` doesn't auto-merge, because it raises every developer's SDK floor and CI installs the newest 10.0 SDK either way; and CI is Linux only until S3, whose offline tests bring the Windows leg along with the gate's selftest on Windows. |
+| 2026-10-29 | S1 | Done: PR #16 merged as `1da97f3`, closing #13. Dependabot's first updates followed on `main`: the SDK to 10.0.402 (#17) and the NuGet group (#18). |
+| 2026-10-29 | S2a | Done: PR #20 merged into `release/1.x` as `41b57e5`, closing #14. The branch starts at `b23503e` and has CI (the gate, the build, the tests on Linux and on Windows with net48, the pack with package validation and ApiCompat against 1.2.5, the package check), `release.yml`, `pr-text.yml`, `codeql.yml`, main's backstops, a short AGENTS.md, and the offline harness: `FakeTableauServer` and five tests of unchanged behaviour. The old live suite is deleted on the line. One review-code round, clean, four minors fixed (`docs/reviews/2026-10-29-release-1x-setup-code.md` on that branch). |
+| 2026-10-30 | S2b | Done: PR #21 merged into `release/1.x` as `8635623`, closing #15, with the fixes of the 1.2.6 table and their offline tests (54 on net10.0, 60 on net48, the path rows also in AppDomains targeting .NET Framework 4.0, 4.6.1 and 4.8). Two review-code rounds (`docs/reviews/2026-10-30-1-2-6-fixes-code.md` on that branch): round 1 had one major, Tableau Cloud's 24-hour and 60-minute task intervals, which didn't parse, fixed with five minors; round 2 was clean. The live smoke check ran by hand on Tableau Server 2025.1.5 (REST API 3.25, driven as 3.14), signed in with a personal access token: projects and users listed, extract refresh tasks read, a project created, found by a filter and deleted. It ran on that server, not on the Developer Program site, and without the chunked publish and download; Tableau Cloud's task intervals are covered offline. `v1.2.6` was tagged, `release.yml` found the push run, a maintainer approved the `nuget` deployment, and nuget.org lists 1.2.6, with the GitHub release. #22 follows up a CI improvement. |
+| 2026-10-30 | S3 | Built on `23-security-on-main` for #23, from `origin/main` at `4ea869b`. One handler for both clients (`TableauHttp`): certificates validated unless `IgnoreSSLErrors` is set, no redirects. 1.2.6's `RequestPath`, query escaping, redirect exception, per-request token and base path, ported to every call site, main's `QueryView`, `QueryViewCrosstabExcel` and `QueryViewPermissions` included. `tests/Tableau.Api.Tests/` with 46 tests on net10.0: S2b's fake server with a TLS mode, the path rows over all of ASCII, `EveryMethodPathTests` (125 path parameters), queries, redirects, base paths, both clients against an untrusted certificate. The gate's `tests` check and its selftest; in CI the tests on Linux and Windows, and the weekly package audit and CodeQL scan of `release/1.x`; the rule files. Each fix group, broken on purpose in a scratch copy, failed its tests, except two no net10.0 test can show: the per-request token, since each request has its own client, and `buildUri`'s exact path check, since .NET 10 rewrites no escaped path. Departures: the status checks stay exact and the view filter prefix stays as it is, since any 2xx (F15) and `vf_` (F5) are later steps; the Vizportal client also keeps the base URL's path, follows no redirect and escapes the method name its public paging methods take; the test project stays out of the solution, whose old project has its name (MSB5004), so `dependabot.yml` names its folder; `codeql.yml` gains a run by hand; the selftest shows that a failed `dotnet test` fails the tests check and gate full, without running a failing project. F1, F2, F3, F6 and F39 turn done in the tracker when the PR merges. |
 
 ## For the maintainers
 
@@ -1684,7 +1689,7 @@ What the session cannot do, first what closes a security exposure. Kept current 
   rules for `release/1.x` (PRs only, squash, no force push, the two checks).
 - [ ] Check the `nuget` environment has what `NuGet/login` needs, such as a `NUGET_USER` secret with the nuget.org
   profile name of the owning account (`serionist`).
-- [ ] Approve the `nuget` deployment for `v1.2.6`.
+- [x] Approve the `nuget` deployment for `v1.2.6`. Approved; 1.2.6 is on nuget.org (2026-10-30).
 
 **After 1.2.6 is on nuget.org:**
 

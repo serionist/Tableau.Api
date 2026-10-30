@@ -18,8 +18,9 @@ work feels complete. `main` takes PRs only, and a maintainer squash-merges them 
    each public member it touches, `Tableau.Api/Models/how_to_generate_schema.txt` for the schema, `AGENTS.md` for a
    changed path, command or rule, and the plan when the work departed from it (where and why). A plan with a progress
    log gets the step's row. Write them the way `AGENTS.md` asks.
-2. **The gate:** `dotnet run eng/gate.cs -- full`. Fix every failure; never weaken a test, a check or a warning
-   setting to pass.
+2. **The gate:** `dotnet run eng/gate.cs -- full`, which runs the offline tests in `tests/Tableau.Api.Tests/`. A
+   change to a request, a model or the Vizportal client has a test there that fails without it. Fix every failure;
+   never weaken a test, a check or a warning setting to pass.
 3. **The live suite,** for a change to a request, a model or the Vizportal client, when the developer has a Tableau
    site they may change and a `.runsettings` file for it outside the clone (`AGENTS.md`, Build and test): run it with
    that file's full path, or until the test project builds, call the changed endpoints against that site from a
@@ -30,10 +31,10 @@ work feels complete. `main` takes PRs only, and a maintainer squash-merges them 
 4. **Commit:** a plain imperative subject that says what changed, a body that says why, `Refs #<n>`. No tool
    attribution: `commit-msg` refuses it.
 5. **Open a draft PR.** Write the body to `.local/pr-body.md` from `.github/pull_request_template.md`: what and why;
-   the plan, or `Trivial: <why>`; how it was tested (the gate, the live suite or why not); the review; the one-way
-   doors it touches, or "none"; `Closes #<n>`. Write the title, a blank line and the body to `.local/pr-text.md` and
-   check them with `dotnet run eng/gate.cs -- text --file .local/pr-text.md`. Push with `git push -u origin HEAD`
-   (`pre-push` runs gate quick), then
+   the plan, or `Trivial: <why>`; how it was tested (the gate and its test count, the live suite or why not); the
+   review; the one-way doors it touches, or "none"; `Closes #<n>`. Write the title, a blank line and the body to
+   `.local/pr-text.md` and check them with `dotnet run eng/gate.cs -- text --file .local/pr-text.md`. Push with
+   `git push -u origin HEAD` (`pre-push` runs gate quick), then
    `gh pr create --draft --title "<plain imperative sentence>" --body-file .local/pr-body.md`. The title becomes the
    commit subject on `main`. Say it's open and how to see it all: the PR's Files tab, or `git diff origin/main...HEAD`.
 6. **Review** with `review-code` until it is `clean`. Commit each round's fixes with gate quick passing, and the

@@ -48,7 +48,8 @@ namespace Tableau.Api.VizPortal
             var baseUrl = _tableauApiClient.BaseUrl;
             var c = new HttpClient(clientOptions)
             {
-                BaseAddress = new Uri($"{baseUrl.Scheme}://{baseUrl.Host}:{baseUrl.Port}{TableauHttp.BasePath(baseUrl)}vizportal/api/web/v1/"),
+                BaseAddress = new Uri(
+                    $"{baseUrl.Scheme}://{baseUrl.Host}:{baseUrl.Port}{TableauHttp.BasePath(baseUrl)}vizportal/api/web/v1/"),
                 Timeout = _tableauApiClient.Timeout
             };
             c.DefaultRequestHeaders.Add("X-Xsrf-Token", xrsf);

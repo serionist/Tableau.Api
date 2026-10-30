@@ -12,8 +12,8 @@ namespace Tableau.Api
     internal static class TableauHttp
     {
         /// <summary>
-        /// A handler that validates the server's certificate unless ignoreSslErrors is set, and follows no redirect, so a
-        /// request, its body, its token and its cookies go only to the host it was built for.
+        /// A handler that validates the server's certificate unless ignoreSslErrors is set, and follows no redirect, so
+        /// a request, its body, its token and its cookies go only to the host it was built for.
         /// </summary>
         public static HttpClientHandler CreateHandler(bool ignoreSslErrors, CookieContainer cookies = null)
         {
@@ -27,7 +27,9 @@ namespace Tableau.Api
 
         /// <summary>The base URL's path, ending in /, so a server behind a path prefix is reached under it.</summary>
         public static string BasePath(Uri baseUrl) =>
-            baseUrl.AbsolutePath.EndsWith("/", StringComparison.Ordinal) ? baseUrl.AbsolutePath : baseUrl.AbsolutePath + "/";
+            baseUrl.AbsolutePath.EndsWith("/", StringComparison.Ordinal)
+                ? baseUrl.AbsolutePath
+                : baseUrl.AbsolutePath + "/";
 
         /// <summary>
         /// The exception for a 3xx response, which is never followed. It names the scheme, host and port the redirect

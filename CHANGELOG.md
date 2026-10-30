@@ -10,8 +10,28 @@ same PR. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1
 older .NET stay on 1.2.x. The changes on `main` since 1.2.5, the Vizportal client among them, reach users in 2.0.0,
 and its migration guide will list every change from 1.2.5.
 
+### Security
+
+- **The Vizportal client validates server certificates as the REST client does:** only `IgnoreSSLErrors` turns the
+  check off. Both clients build their HTTP handler in one place, and neither follows a redirect.
+- **Request paths, queries and redirects follow 1.2.6's rules,** on every method `main` has, those 1.2.5 lacks among
+  them:
+  - each value in a request path is escaped and sent as one path segment, and a value that is empty or only dots
+    throws `ArgumentException` before anything is sent. The Vizportal method name that `PaginateRequest` and
+    `NextPageTokenRequest` take is such a value too;
+  - every query key and value is escaped; filter and sort expressions keep their `:` and `,` separators, and the parts
+    between them are escaped;
+  - a redirect is not followed: a 3xx response throws `TableauRequestException`, whose message names the scheme, host
+    and port it pointed to;
+  - the session token goes on each request, not on the HTTP client's default headers.
+
 ### Changed
 
+- **Values in paths and queries are escaped,** so a value the caller had already URL-encoded is encoded twice.
+- **The base URL's path is used,** by the REST and the Vizportal clients alike, so a server behind a path prefix,
+  such as `https://example.com/tableau/`, is reachable. A base URL must be the server's address, not a site's or a
+  view's link.
+- **A redirect fails,** where it was followed: use the address the exception names as the base URL.
 - **The licence is MIT.**
 - **The package's metadata:** a description that says what it is and ends "Not affiliated with or endorsed by
   Tableau or Salesforce."; the README packed into it; the project and repository links on GitHub; symbols as a
