@@ -37,6 +37,15 @@ and its migration guide will list every change from 1.2.5.
   Tableau or Salesforce."; the README packed into it; the project and repository links on GitHub; symbols as a
   `.snupkg`, which nuget.org's symbol server takes, with Source Link to the code on GitHub.
 
+### Fixed
+
+- **Vizportal's `QueryDatasources` reads data quality warnings:** `Datasource.DataQualityIndicators` is a
+  `DataQualityIndicator[]`, each with its id, category, type, message, owner, whether it is active and severe, and
+  when it was updated. It was a `string[]`, so a site with a warning on a published data source failed the whole
+  query with `JsonReaderException`, as on Tableau Server 2025.1.5.
+- **Vizportal's `QuerySubscriptionsForSchedule` reads a subscription to a flow:** `TargetType` gains `Flow`, after its
+  existing members. Without it, a schedule holding such a subscription failed with `JsonSerializationException`.
+
 ## [1.2.6] - 2026-10-30
 
 ### Security
