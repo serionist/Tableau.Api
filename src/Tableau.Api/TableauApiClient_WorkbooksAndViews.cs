@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -146,7 +147,7 @@ public partial class TableauApiClient
         return await (await apiRequest(
                 buildUri($"sites/{session.SiteId}/views/{viewId}/data",
                     filters.Select(e =>
-                        (e.filterName.StartsWith("vf_", StringComparison.CurrentCultureIgnoreCase)
+                        (e.filterName.StartsWith("vf_", StringComparison.OrdinalIgnoreCase)
                             ? e.filterName.Substring(3)
                             : e.filterName, e.filterValue)).ToArray()), HttpMethod.Get, 200, cancelToken, session))
             .ReadAsStreamAsync();
@@ -175,7 +176,7 @@ public partial class TableauApiClient
         if (imageWidth == TableauImageWidth.High_1568)
             args.Add(("resolution", "high"));
         args.AddRange(filters.Select(e =>
-            (!e.filterName.StartsWith("vf_", StringComparison.CurrentCultureIgnoreCase)
+            (!e.filterName.StartsWith("vf_", StringComparison.OrdinalIgnoreCase)
                 ? $"vf_{e.filterName}"
                 : e.filterName, e.filterValue)));
 
@@ -213,7 +214,7 @@ public partial class TableauApiClient
         };
         if (filters != null)
             args.AddRange(filters.Select(e =>
-                (!e.filterName.StartsWith("vf_", StringComparison.CurrentCultureIgnoreCase)
+                (!e.filterName.StartsWith("vf_", StringComparison.OrdinalIgnoreCase)
                     ? $"vf_{e.filterName}"
                     : e.filterName, e.filterValue)));
 
@@ -245,7 +246,7 @@ public partial class TableauApiClient
         var args = new List<(string, string)>();
         if (filters != null)
             args.AddRange(filters.Select(e =>
-               (!e.filterName.StartsWith("vf_", StringComparison.CurrentCultureIgnoreCase)
+               (!e.filterName.StartsWith("vf_", StringComparison.OrdinalIgnoreCase)
                    ? $"vf_{e.filterName}"
                    : e.filterName, e.filterValue)));
 
@@ -384,8 +385,8 @@ public partial class TableauApiClient
         checkParametersBetween((nameof(pageSize), pageSize, 1, 1000), (nameof(pageNumber), pageNumber, 1, int.MaxValue));
         var args = new List<(string, string)>()
         {
-            ("pageSize", pageSize.ToString()),
-            ("pageNumber", pageNumber.ToString())
+            ("pageSize", pageSize.ToString(CultureInfo.InvariantCulture)),
+            ("pageNumber", pageNumber.ToString(CultureInfo.InvariantCulture))
         };
         if (!string.IsNullOrEmpty(fieldsExpression))
             args.Add(("fields", fieldsExpression));
@@ -421,7 +422,8 @@ public partial class TableauApiClient
         var obj = await getResponseAsObject<paginationType, workbookListType>(
             await apiRequest(
                 buildUri($"sites/{session.SiteId}/users/{userId}/workbooks", ("ownedBy", isOwner.ToString()),
-                    ("pageSize", pageSize.ToString()), ("pageNumber", pageNumber.ToString())), HttpMethod.Get, 200,
+                    ("pageSize", pageSize.ToString(CultureInfo.InvariantCulture)),
+                    ("pageNumber", pageNumber.ToString(CultureInfo.InvariantCulture))), HttpMethod.Get, 200,
                 cancelToken, session));
         return (obj.Item1, obj.Item2.workbook);
     }
@@ -448,7 +450,7 @@ public partial class TableauApiClient
                 ("includeExtract", includeExtract.ToString())), HttpMethod.Get, 200, cancelToken, session));
 
         return (await resp.ReadAsStreamAsync(),
-            resp.Headers.ContentType.MediaType.Equals("application/xml", StringComparison.CurrentCultureIgnoreCase)
+            resp.Headers.ContentType.MediaType.Equals("application/xml", StringComparison.OrdinalIgnoreCase)
                 ? WorkbookFileType.twb
                 : WorkbookFileType.twbx);
     }
@@ -511,7 +513,7 @@ public partial class TableauApiClient
             200, cancelToken, session,
             getObjectAsRequestContent(new connectionType()
             {
-                serverPort = serverPort.ToString(),
+                serverPort = serverPort.ToString(CultureInfo.InvariantCulture),
                 serverAddress = serverAddress,
                 userName = userName,
                 password = password

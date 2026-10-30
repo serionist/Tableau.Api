@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -122,7 +123,7 @@ public partial class VizPortalClient
                     throw new TableauRequestException(resp.RequestMessage.RequestUri, resp.StatusCode,
                         new errorType()
                         {
-                            code = errObj.Value<int>("code").ToString(),
+                            code = errObj.Value<int>("code").ToString(CultureInfo.InvariantCulture),
                             summary = $"Tableau VizPortal API threw code {errObj.Value<int>("code")}",
                             detail = "No further information is provided by VizPortal"
                         });
@@ -217,7 +218,7 @@ public partial class VizPortalClient
         try
         {
             var jo = JObject.Parse(await resp.Content.ReadAsStringAsync());
-            var c = jo["result"]["errors"][0].Value<int>("code").ToString();
+            var c = jo["result"]["errors"][0].Value<int>("code").ToString(CultureInfo.InvariantCulture);
             det = new errorType()
             {
                 code = c,

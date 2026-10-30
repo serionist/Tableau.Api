@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Net;
 using System.Text;
 using Tableau.Api.Models;
@@ -45,7 +46,8 @@ public class TableauRequestException : Exception
             }
             if (HasDetails)
             {
-                ret += String.Format(", Internal Code: {0}, Summary: '{1}', Detailed info: '{2}'", Details.code, Details.summary, Details.detail);
+                ret += String.Format(CultureInfo.InvariantCulture, ", Internal Code: {0}, Summary: '{1}', Detailed info: '{2}'",
+                    Details.code, Details.summary, Details.detail);
             }
             return ret;
         }

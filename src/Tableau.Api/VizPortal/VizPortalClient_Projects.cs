@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using System.Threading.Tasks;
 using Tableau.Api.Exceptions;
 using Tableau.Api.Models;
@@ -29,7 +30,7 @@ public partial class VizPortalClient
         var req = await Request<ChangeProjectName, Empty>(session, "setProjectName",
             new ChangeProjectName()
             {
-                Id = projectId.ToString(),
+                Id = projectId.ToString(CultureInfo.InvariantCulture),
                 Name = newName
             });
     }
@@ -46,13 +47,13 @@ public partial class VizPortalClient
         var req = await Request<MoveProject, Empty>(session, "moveContentToContainer",
         new MoveProject()
         {
-            ContainerId = containerId.ToString(),
+            ContainerId = containerId.ToString(CultureInfo.InvariantCulture),
             ContainerType = "PROJECT",
             ContentItems = new[]
             {
                 new MoveProject.ProjectContentItems()
                 {
-                    ContentId = contentId.ToString(),
+                    ContentId = contentId.ToString(CultureInfo.InvariantCulture),
                     ContentType = "project",
                     MoveType = null
                 }
@@ -71,7 +72,7 @@ public partial class VizPortalClient
         var req = await Request<DeleteProject, Empty>(session, "deleteProjects",
             new DeleteProject()
             {
-                Ids = new[] { projectId.ToString() }
+                Ids = new[] { projectId.ToString(CultureInfo.InvariantCulture) }
             });
     }
 
@@ -87,7 +88,7 @@ public partial class VizPortalClient
         var req = await Request<ChangeProjectOwner, Empty>(session, "setProjectsOwner",
             new ChangeProjectOwner()
             {
-                Ids = new[] { projectId.ToString() },
+                Ids = new[] { projectId.ToString(CultureInfo.InvariantCulture) },
                 OwnerId = newOwnerId
             });
     }

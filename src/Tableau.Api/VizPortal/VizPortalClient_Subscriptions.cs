@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
@@ -76,8 +77,8 @@ public partial class VizPortalClient
         var req = await Request<ChangeSubscriptionFrequency, Empty>(session, "setSubscriptionsSchedule",
             new ChangeSubscriptionFrequency()
             {
-                ScheduleId = scheduleId.ToString(),
-                Ids = new[] { subscriptionId.ToString() },
+                ScheduleId = scheduleId.ToString(CultureInfo.InvariantCulture),
+                Ids = new[] { subscriptionId.ToString(CultureInfo.InvariantCulture) },
                 SubscribeOnExtractRefresh = subscribeOnExtractRefresh
             });
     }
@@ -93,7 +94,7 @@ public partial class VizPortalClient
         var req = await Request<DeleteSubscription, Empty>(session, "deleteSubscriptions",
             new DeleteSubscription()
             {
-                Ids = new[] { subscriptionId.ToString() }
+                Ids = new[] { subscriptionId.ToString(CultureInfo.InvariantCulture) }
             });
     }
 

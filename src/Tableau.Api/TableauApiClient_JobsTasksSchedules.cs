@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Net.Http;
 using System.Runtime.InteropServices;
@@ -107,7 +108,7 @@ public partial class TableauApiClient
             getObjectAsRequestContent(new scheduleType()
             {
                 name = name,
-                priority = priority.ToString(),
+                priority = priority.ToString(CultureInfo.InvariantCulture),
                 type = type,
                 frequency = frequency,
                 frequencySpecified = true,
@@ -287,7 +288,8 @@ public partial class TableauApiClient
         var ret = await getResponseAsObject<paginationType, extractListType>(
             await apiRequest(
                 buildUri($"sites/{session.SiteId}/schedules/{scheduleId}/extracts",
-                    ("pageSize", pageSize.ToString()), ("pageNumber", pageNumber.ToString())), HttpMethod.Get, 200,
+                    ("pageSize", pageSize.ToString(CultureInfo.InvariantCulture)),
+                    ("pageNumber", pageNumber.ToString(CultureInfo.InvariantCulture))), HttpMethod.Get, 200,
                 cancelToken, session));
         return (ret.Item1, ret.Item2.extract);
     }
@@ -313,7 +315,8 @@ public partial class TableauApiClient
         checkParametersBetween((nameof(pageSize), pageSize, 1, 1000), (nameof(pageNumber), pageNumber, 1, int.MaxValue));
         var ret = await getResponseAsObject<paginationType, scheduleListType>(
             await apiRequest(
-                buildUri($"schedules", ("pageSize", pageSize.ToString()), ("pageNumber", pageNumber.ToString())), HttpMethod.Get, 200,
+                buildUri($"schedules", ("pageSize", pageSize.ToString(CultureInfo.InvariantCulture)),
+                    ("pageNumber", pageNumber.ToString(CultureInfo.InvariantCulture))), HttpMethod.Get, 200,
                 cancelToken, session));
         return (ret.Item1, ret.Item2.schedule);
     }
@@ -351,7 +354,7 @@ public partial class TableauApiClient
             getObjectAsRequestContent(new scheduleType()
             {
                 name = newName,
-                priority = newPriority.ToString(),
+                priority = newPriority.ToString(CultureInfo.InvariantCulture),
                 type = type,
                 frequency = frequency,
                 frequencySpecified = true,

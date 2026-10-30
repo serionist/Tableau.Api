@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Net.Http;
 using System.Text;
 using System.Threading;
@@ -253,8 +254,9 @@ public partial class TableauApiClient
         checkNullParameters((nameof(session), session), (nameof(userId), userId));
         checkParametersBetween((nameof(pageSize), pageSize, 1, 1000), (nameof(pageNumber), pageNumber, 1, int.MaxValue));
         var ret = await getResponseAsObject<paginationType, groupListType>(await apiRequest(
-            buildUri($"sites/{session.SiteId}/users/{userId}/groups", ("pageSize", pageSize.ToString()),
-                ("pageNumber", pageNumber.ToString())), HttpMethod.Get, 200, cancelToken,
+            buildUri($"sites/{session.SiteId}/users/{userId}/groups",
+                ("pageSize", pageSize.ToString(CultureInfo.InvariantCulture)),
+                ("pageNumber", pageNumber.ToString(CultureInfo.InvariantCulture))), HttpMethod.Get, 200, cancelToken,
             session));
         return (ret.Item1, ret.Item2.group);
     }
@@ -279,8 +281,9 @@ public partial class TableauApiClient
         checkNullParameters((nameof(session), session), (nameof(groupId), groupId));
         checkParametersBetween((nameof(pageSize), pageSize, 1, 1000), (nameof(pageNumber), pageNumber, 1, int.MaxValue));
         var ret = await getResponseAsObject<paginationType, userListType>(await apiRequest(
-            buildUri($"sites/{session.SiteId}/groups/{groupId}/users", ("pageSize", pageSize.ToString()),
-                ("pageNumber", pageNumber.ToString())), HttpMethod.Get, 200, cancelToken,
+            buildUri($"sites/{session.SiteId}/groups/{groupId}/users",
+                ("pageSize", pageSize.ToString(CultureInfo.InvariantCulture)),
+                ("pageNumber", pageNumber.ToString(CultureInfo.InvariantCulture))), HttpMethod.Get, 200, cancelToken,
             session));
         return (ret.Item1, ret.Item2.user);
     }
@@ -308,8 +311,8 @@ public partial class TableauApiClient
         checkParametersBetween((nameof(pageSize), pageSize, 1, 1000), (nameof(pageNumber), pageNumber, 1, int.MaxValue));
         var args = new List<(string, string)>()
         {
-            ("pageSize", pageSize.ToString()),
-            ("pageNumber", pageNumber.ToString())
+            ("pageSize", pageSize.ToString(CultureInfo.InvariantCulture)),
+            ("pageNumber", pageNumber.ToString(CultureInfo.InvariantCulture))
         };
         if (!string.IsNullOrEmpty(fieldsExpression))
             args.Add(("fields", fieldsExpression));
@@ -344,8 +347,8 @@ public partial class TableauApiClient
         checkParametersBetween((nameof(pageSize), pageSize, 1, 1000), (nameof(pageNumber), pageNumber, 1, int.MaxValue));
         var args = new List<(string, string)>()
         {
-            ("pageSize", pageSize.ToString()),
-            ("pageNumber", pageNumber.ToString())
+            ("pageSize", pageSize.ToString(CultureInfo.InvariantCulture)),
+            ("pageNumber", pageNumber.ToString(CultureInfo.InvariantCulture))
         };
         if (!string.IsNullOrEmpty(filterExpression))
             args.Add(("filter", filterExpression));

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Net.Http;
 using System.Text;
 using System.Threading;
@@ -46,10 +47,10 @@ public partial class TableauApiClient
                 contentUrl = contentUrl,
                 adminMode = adminMode ?? siteTypeAdminMode.ContentOnly,
                 adminModeSpecified = adminMode.HasValue,
-                tierCreatorCapacity = tierCreatorCapacity?.ToString(),
-                tierExplorerCapacity = tierExplorerCapacity?.ToString(),
-                tierViewerCapacity = tierViewerCapacity?.ToString(),
-                storageQuota = storageQuotaMb?.ToString(),
+                tierCreatorCapacity = tierCreatorCapacity?.ToString(CultureInfo.InvariantCulture),
+                tierExplorerCapacity = tierExplorerCapacity?.ToString(CultureInfo.InvariantCulture),
+                tierViewerCapacity = tierViewerCapacity?.ToString(CultureInfo.InvariantCulture),
+                storageQuota = storageQuotaMb?.ToString(CultureInfo.InvariantCulture),
                 disableSubscriptions = disableSubscriptions ?? false,
                 disableSubscriptionsSpecified = disableSubscriptions.HasValue
             })));
@@ -135,7 +136,8 @@ public partial class TableauApiClient
         checkNullParameters((nameof(session), session));
         checkParametersBetween((nameof(pageSize), pageSize, 1, 1000), (nameof(pageNumber), pageNumber, 1, int.MaxValue));
         return await getResponseAsObject<paginationType, siteListType>(await apiRequest(
-            buildUri($"sites", ("pageSize", pageSize.ToString()), ("pageNumber", pageNumber.ToString())),
+            buildUri($"sites", ("pageSize", pageSize.ToString(CultureInfo.InvariantCulture)),
+                ("pageNumber", pageNumber.ToString(CultureInfo.InvariantCulture))),
             HttpMethod.Get, 200,
             cancelToken, session));
 
@@ -166,8 +168,8 @@ public partial class TableauApiClient
         checkParametersBetween((nameof(pageSize), pageSize, 1, 1000), (nameof(pageNumber), pageNumber, 1, int.MaxValue));
         var args = new List<(string, string)>()
         {
-            ("pageSize", pageSize.ToString()),
-            ("pageNumber", pageNumber.ToString())
+            ("pageSize", pageSize.ToString(CultureInfo.InvariantCulture)),
+            ("pageNumber", pageNumber.ToString(CultureInfo.InvariantCulture))
         };
         if (includeUsageStatistics.HasValue)
             args.Add(("includeUsageStatistics", includeUsageStatistics.Value.ToString()));
@@ -221,17 +223,17 @@ public partial class TableauApiClient
                 contentUrl = newContentUrl,
                 adminMode = newAdminMode ?? siteTypeAdminMode.ContentAndUsers,
                 adminModeSpecified = newAdminMode.HasValue,
-                tierExplorerCapacity = newTierExplorerCapacity?.ToString(),
-                tierViewerCapacity = newTierViewerCapacity?.ToString(),
-                tierCreatorCapacity = newTierCreatorCapacity?.ToString(),
+                tierExplorerCapacity = newTierExplorerCapacity?.ToString(CultureInfo.InvariantCulture),
+                tierViewerCapacity = newTierViewerCapacity?.ToString(CultureInfo.InvariantCulture),
+                tierCreatorCapacity = newTierCreatorCapacity?.ToString(CultureInfo.InvariantCulture),
                 state = newState ?? stateType.Active,
                 stateSpecified = newState.HasValue,
-                storageQuota = newStorageQuota?.ToString(),
+                storageQuota = newStorageQuota?.ToString(CultureInfo.InvariantCulture),
                 disableSubscriptions = newDisableSubscriptions ?? false,
                 disableSubscriptionsSpecified = newDisableSubscriptions.HasValue,
                 revisionHistoryEnabled = newRevisionHistoryEnabled ?? false,
                 revisionHistoryEnabledSpecified = newRevisionHistoryEnabled.HasValue,
-                revisionLimit = newRevisionLimit?.ToString()
+                revisionLimit = newRevisionLimit?.ToString(CultureInfo.InvariantCulture)
             })));
     }
 

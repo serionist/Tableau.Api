@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Tableau.Api.Models;
@@ -29,13 +30,13 @@ public partial class VizPortalClient
         var req = await Request<MoveContent, Empty>(session, "moveContentToContainer",
         new MoveContent()
         {
-            ContainerId = containerId.ToString(),
+            ContainerId = containerId.ToString(CultureInfo.InvariantCulture),
             ContainerType = "PROJECT",
             ContentItems = new[]
             {
                 new MoveContent.Content()
                 {
-                    ContentId = contentId.ToString(),
+                    ContentId = contentId.ToString(CultureInfo.InvariantCulture),
                     ContentType = "datasource",
                     MoveType = null
                 }
@@ -55,7 +56,7 @@ public partial class VizPortalClient
         var req = await Request<RenameContent, Empty>(session, "renameDatasource",
             new RenameContent()
             {
-                Id = datasourceId.ToString(),
+                Id = datasourceId.ToString(CultureInfo.InvariantCulture),
                 Name = newName
             });
     }
@@ -72,7 +73,7 @@ public partial class VizPortalClient
         var req = await Request<ChangeContentOwner, Empty>(session, "setDatasourcesOwner",
             new ChangeContentOwner()
             {
-                Ids = new[] { datasourceId.ToString() },
+                Ids = new[] { datasourceId.ToString(CultureInfo.InvariantCulture) },
                 OwnerId = newOwnerId
             });
     }
@@ -88,7 +89,7 @@ public partial class VizPortalClient
         var req = await Request<DeleteContent, Empty>(session, "deleteDatasources",
             new DeleteContent()
             {
-                Ids = new[] { datasourceId.ToString() }
+                Ids = new[] { datasourceId.ToString(CultureInfo.InvariantCulture) }
             });
     }
 

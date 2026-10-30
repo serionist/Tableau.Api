@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Tableau.Api.Exceptions;
@@ -27,7 +28,8 @@ public partial class VizPortalClient
     /// <returns></returns>
     /// <exception cref="TableauRequestException"></exception>
     public IAsyncEnumerable<GroupUser> QueryGroupUsers(
-        TableauSession session, int groupId) => queryGroupUsers(session, ("groupIds", groupId.ToString()));
+        TableauSession session, int groupId) =>
+        queryGroupUsers(session, ("groupIds", groupId.ToString(CultureInfo.InvariantCulture)));
 
     /// <summary>
     /// Delete a group
@@ -40,7 +42,7 @@ public partial class VizPortalClient
         var req = await Request<DeleteGroup, Empty>(session, "deleteGroups",
             new DeleteGroup()
             {
-                Ids = new[] { groupId.ToString() }
+                Ids = new[] { groupId.ToString(CultureInfo.InvariantCulture) }
             });
     }
 
@@ -56,9 +58,9 @@ public partial class VizPortalClient
         var req = await Request<GroupUserAction, Empty>(session, "updateUsersGroupMembership",
             new GroupUserAction()
             {
-                AddToGroupIds = new[] { groupId.ToString() },
+                AddToGroupIds = new[] { groupId.ToString(CultureInfo.InvariantCulture) },
                 RemoveFromGroupIds = Array.Empty<string>(),
-                UserIds = new string[] { userId.ToString() }
+                UserIds = new string[] { userId.ToString(CultureInfo.InvariantCulture) }
             });
     }
 
@@ -75,8 +77,8 @@ public partial class VizPortalClient
             new GroupUserAction()
             {
                 AddToGroupIds = Array.Empty<string>(),
-                RemoveFromGroupIds = new[] { groupId.ToString() },
-                UserIds = new string[] { userId.ToString() }
+                RemoveFromGroupIds = new[] { groupId.ToString(CultureInfo.InvariantCulture) },
+                UserIds = new string[] { userId.ToString(CultureInfo.InvariantCulture) }
             });
     }
 
