@@ -3,6 +3,9 @@
   <!-- The licence expression and the repository URLs are in Directory.Build.props, once for every project. -->
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
+    <!-- netstandard2.1 defaults to C# 8, and the request path handler needs C# 10. A fixed version, not latest, so a
+         newer SDK never changes what compiles. -->
+    <LangVersion>10</LangVersion>
     <Description>A .NET client for the Tableau REST API, on Tableau Server and Tableau Cloud, and for Vizportal, the undocumented API behind Tableau's web client. Not affiliated with or endorsed by Tableau or Salesforce.</Description>
     <PackageTags>Tableau, Tableau API, Tableau C#</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>

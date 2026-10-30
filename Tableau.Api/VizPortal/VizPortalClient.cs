@@ -42,12 +42,13 @@ namespace Tableau.Api.VizPortal
                 Domain = _tableauApiClient.BaseUrl.Host,
                 Secure = true
             });
-            var clientOptions = new HttpClientHandler() {AllowAutoRedirect = true, CookieContainer = cookieContainer};
-            //if (_tableauApiClient.IgnoreSSLErrors)
-                clientOptions.ServerCertificateCustomValidationCallback = (message, certificate2, arg3, arg4) => true;
+            // The same handler as the REST client's: the certificate is validated unless IgnoreSSLErrors is set, and no
+            // redirect is followed.
+            var clientOptions = TableauHttp.CreateHandler(_tableauApiClient.IgnoreSSLErrors, cookieContainer);
+            var baseUrl = _tableauApiClient.BaseUrl;
             var c = new HttpClient(clientOptions)
             {
-                BaseAddress = new Uri($"{_tableauApiClient.BaseUrl.Scheme}://{_tableauApiClient.BaseUrl.Host}:{_tableauApiClient.BaseUrl.Port}/vizportal/api/web/v1/"),
+                BaseAddress = new Uri($"{baseUrl.Scheme}://{baseUrl.Host}:{baseUrl.Port}{TableauHttp.BasePath(baseUrl)}vizportal/api/web/v1/"),
                 Timeout = _tableauApiClient.Timeout
             };
             c.DefaultRequestHeaders.Add("X-Xsrf-Token", xrsf);
@@ -88,8 +89,9 @@ namespace Tableau.Api.VizPortal
         }
         private async Task<JObject> Request(TableauSession session, string methodName, JObject parameters)
         {
-            var c = buildClient(session.Token);
-           
+            // Disposed after each request, as the REST client's is, so its connection doesn't wait for the finalizer.
+            using var c = buildClient(session.Token);
+
             try
             {
                 _tableauApiClient.Log?.Log(LogLevel.Information, $"Sending request to Tableau VizPortal. Method: {methodName}");
@@ -99,6 +101,8 @@ namespace Tableau.Api.VizPortal
                 var resp = await c.PostAsync(methodName,
                     new StringContent(reqStr
                         , Encoding.UTF8, "application/json"));
+                if (TableauHttp.IsRedirect(resp.StatusCode))
+                    throw TableauHttp.RedirectException(resp);
                 if ((int)resp.StatusCode != 200)
                     throw await buildException(resp);
                 _tableauApiClient.Log?.Log(LogLevel.Information, "Request successful");
