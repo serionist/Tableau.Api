@@ -41,7 +41,7 @@ compile, or may bind a value to the new parameter.
 | `CreateMonthlySchedule(session, name, priority, type, executionOrder, startTime, dayToRun, cancelToken)` | `dayToRun` is gone | Drop the argument |
 | `UpdateToMonthlySchedule(session, newName, newPriority, type, executionOrder, startTime, dayToRun, cancelToken)` | `dayToRun` is gone | Drop the argument |
 | `DownloadDataSource(session, datasourceId, includeExtract, cancelToken)` returns `Task<Stream>` | It returns `Task<(Stream stream, DatasourceFileType type)>` | Take `.stream` from the result; `.type` is the file's kind |
-| `SignInWithPAT(tokenName, token, siteContentUrl, cancelToken)` | `userIdToImpersonate` comes before `cancelToken` | Pass the token by name, `cancelToken: token` |
+| `SignInWithPAT(tokenName, token, siteContentUrl, cancelToken)` | `userIdToImpersonate` comes before `cancelToken` | Pass the cancellation token by name, `cancelToken: cancellationToken` |
 | `UpdateDataSource(session, datasourceId, newProjectId, newOwnerId, newCertificationStatus, newCertificationNote, cancelToken)` | `newName` comes before `cancelToken` | Pass the token by name |
 | `UpdateWorkbook(session, workbookId, newShowTabs, newProjectId, newOwnerId, cancelToken)` | `newName` comes before `cancelToken` | Pass the token by name |
 

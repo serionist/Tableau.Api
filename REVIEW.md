@@ -90,7 +90,7 @@ These decide how every other change is checked:
 - `AGENTS.md`, `REVIEW.md`, `.claude/` (`CLAUDE.md`, the settings, the skills), `.agents/`, `.mcp.json`;
 - `eng/`, `.githooks/`, `.gitleaks.toml`, `.github/`;
 - the `Directory.Build.props` files, `Directory.Packages.props`, `.editorconfig` and the csproj settings that make
-  warnings errors; `src/Tableau.Api/CompatibilitySuppressions.xml` and `dotnet-tools.json`;
+  warnings errors; `src/Tableau.Api/CompatibilitySuppressions.xml`, `.config/dotnet-tools.json`, and `Tableau.Api.slnx`, whose projects CI builds and tests;
 - `nuget.config` (its sources and their mapping), `global.json`, and the secrets block of `.gitignore`.
 
 Rules:

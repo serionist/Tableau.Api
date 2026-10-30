@@ -5,7 +5,7 @@
 // 2.0 breaks 1.2.5's public API on purpose, and every break is listed in eng/apicompat/1.2.5.xml, the ledger that
 // docs/migration-2.0.md is written from. Package validation can't list them: across the change of target, from
 // netstandard2.0 to net10.0, it only says that netstandard2.0 is gone. So this compares the DLLs themselves, with the
-// ApiCompat tool (dotnet-tools.json) in assembly mode:
+// ApiCompat tool (.config/dotnet-tools.json) in assembly mode:
 // - 1.2.5's lib/netstandard2.0/Tableau.Api.dll, from its package on nuget.org, checked against the SHA-512 release/1.x
 //   pins for it, with the assemblies it compiles against: netstandard2.0 and Microsoft.Extensions.Logging 2.1.1, as
 //   eng/apicompat/Baseline.csproj restores them;
@@ -167,7 +167,8 @@ static string References(JsonDocument msbuild) => string.Join(',', msbuild.RootE
 // A reference folder or assembly the tool can't find is only a warning, and the comparison then passes without it.
 static bool Incomplete(string output) => output.Contains("Could not", StringComparison.Ordinal);
 
-static string Normalized(string text) => text.TrimStart('﻿').ReplaceLineEndings("\n");
+// One final newline, as .editorconfig asks of every file, so an editor that adds or drops it changes nothing.
+static string Normalized(string text) => text.TrimStart('﻿').ReplaceLineEndings("\n").TrimEnd('\n') + "\n";
 
 // Each suppression as one line: its diagnostic and its target.
 static List<string> Entries(string path) =>

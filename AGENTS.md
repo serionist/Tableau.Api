@@ -32,7 +32,7 @@ Newtonsoft.Json and Microsoft.Extensions.Logging.
 | `.agents/skills/` | links to `.claude/skills/<name>` for Codex, written into git's index by `dotnet run eng/gate.cs -- link` |
 | `AGENTS.md`, `REVIEW.md` | this file; what a review finding is, and the questions every review answers |
 | `.mcp.json` | Microsoft Learn and Context7 over HTTP; `.claude/settings.local.json.example` turns them on |
-| `Directory.Build.props`, `Directory.Packages.props`, `dotnet-tools.json`, `global.json`, `nuget.config` | what every project shares: net10.0, Nullable, XML docs, warnings as errors, the analyzers and the code style in the build, the package metadata, the MIT licence expression, NuGet audit, a `packages.lock.json` beside each project, locked in CI; every package's version; the ApiCompat tool; the .NET 10 SDK, and Microsoft.Testing.Platform for `dotnet test`; nuget.org as the only package source |
+| `Directory.Build.props`, `Directory.Packages.props`, `.config/dotnet-tools.json`, `global.json`, `nuget.config` | what every project shares: net10.0, Nullable, XML docs, warnings as errors, the analyzers and the code style in the build, the package metadata, the MIT licence expression, NuGet audit, a `packages.lock.json` beside each project, locked in CI; every package's version; the ApiCompat tool; the .NET 10 SDK, and Microsoft.Testing.Platform for `dotnet test`; nuget.org as the only package source |
 | `.gitleaks.toml`, `.editorconfig`, `.gitattributes`, `.gitignore` | the secret scan: gitleaks' own rules, and any exception with its reason; the code style and the analyzer rules, the old files' relaxed in its TableauLegacy section; LF everywhere; what git ignores, secrets first |
 | `LICENSE`, `README.md`, `SECURITY.md`, `CONTRIBUTING.md`, `CHANGELOG.md` | MIT; what users read first, also packed into the package; how to report a vulnerability, and the supported versions; the short path for a contributor; what changed, under Unreleased until a release |
 
@@ -46,7 +46,7 @@ PowerShell. The `--` after `eng/gate.cs` is needed: without it `dotnet run` take
 | What | Command |
 |---|---|
 | once per clone | `dotnet run eng/gate.cs -- setup` (hooks, `git blame`, skill links) |
-| the library | `dotnet build src/Tableau.Api/Tableau.Api.csproj`: 0 warnings, and every warning is an error. Its package: `dotnet pack src/Tableau.Api/Tableau.Api.csproj -c Release -o artifacts/packages`, then `dotnet run eng/package-check.cs -- artifacts/packages` and `dotnet run eng/apicompat.cs` (`-- --update` rewrites the ledger after a break a maintainer agreed) |
+| the library | `dotnet build src/Tableau.Api/Tableau.Api.csproj`: 0 warnings, and every warning is an error. Its package, into an emptied `artifacts/packages` (each commit packs a new version): `dotnet pack src/Tableau.Api/Tableau.Api.csproj -c Release -o artifacts/packages`, then `dotnet run eng/package-check.cs -- artifacts/packages` and `dotnet run eng/apicompat.cs` (`-- --update` rewrites the ledger after a break a maintainer agreed) |
 | the offline tests | `dotnet test --project tests/Tableau.Api.Tests/Tableau.Api.Tests.csproj` |
 | the gate | `dotnet run eng/gate.cs -- quick` (selftest, build, AGENTS.md, skills, links, hooks, attribution, secrets); `full` adds the offline tests; `text --file -` checks a PR's title and description: no attribution, and the issue named |
 | the live suite | `dotnet test --project Tableau.Api.Tests --settings <full path outside the clone>.runsettings`, once issue #2 moves it on |
