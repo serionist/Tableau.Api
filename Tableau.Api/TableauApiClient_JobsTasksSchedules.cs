@@ -368,7 +368,8 @@ namespace Tableau.Api
         {
             throw new NotSupportedException(
                 "Tableau.Api 1.x can't update a schedule: Tableau updates one by its id, which the UpdateTo*Schedule "
-                + "methods don't take, and they created a new schedule instead. Delete the schedule and create it again.");
+                + "methods don't take, and they created a new schedule instead. Delete the schedule and create it again, "
+                + "then add its tasks to it again.");
         }
 
 

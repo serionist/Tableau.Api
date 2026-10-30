@@ -143,7 +143,8 @@ namespace Tableau.Api
             if (!string.Equals(uri.AbsolutePath, path, StringComparison.Ordinal))
                 throw new ArgumentException(
                     $"The request path '{path}' would be sent as '{uri.AbsolutePath}' by this platform's URI parsing, so it "
-                    + "is not sent. A value in it holds characters that this .NET Framework target rewrites.");
+                    + "is not sent. A value or the base URL's path holds characters that this .NET Framework target "
+                    + "rewrites.");
             return uri;
         }
 
@@ -218,8 +219,8 @@ namespace Tableau.Api
                         var status = (int)resp.StatusCode;
                         if (status >= 300 && status < 400)
                             throw buildRedirectException(resp);
-                        // Tableau answers some calls with another 2xx than its reference gives, such as Tableau Cloud's
-                        // 200 for a subscription Tableau Server answers with 201.
+                        // Tableau answers some calls with another 2xx than the call names, such as 201 for a schedule
+                        // created where 1.2.5 named 200.
                         if (status < 200 || status >= 300)
                             throw await buildException(resp);
                         Log?.Log(LogLevel.Information, "Request successful");

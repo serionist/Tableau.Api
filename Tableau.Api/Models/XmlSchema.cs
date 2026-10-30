@@ -2969,6 +2969,12 @@ namespace Tableau.Api.Models
         /// <remarks/>
         [System.Xml.Serialization.XmlEnumAttribute("30")]
         Item30,
+
+        // Added by hand after the generated members, so no member's value moves: a value Tableau Cloud sends for an
+        // hourly task, which the 3.29 schema lacks.
+        /// <remarks/>
+        [System.Xml.Serialization.XmlEnumAttribute("60")]
+        Item60,
     }
 
     /// <remarks/>
@@ -3001,6 +3007,12 @@ namespace Tableau.Api.Models
         /// <remarks/>
         [System.Xml.Serialization.XmlEnumAttribute("12")]
         Item12,
+
+        // Added by hand after the generated members, so no member's value moves: a value Tableau Cloud sends for a
+        // daily task, which the 3.29 schema lacks.
+        /// <remarks/>
+        [System.Xml.Serialization.XmlEnumAttribute("24")]
+        Item24,
     }
 
     /// <remarks/>

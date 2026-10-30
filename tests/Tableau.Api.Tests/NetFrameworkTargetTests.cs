@@ -14,8 +14,9 @@ namespace Tableau.Api.Tests;
 /// The path rows on .NET Framework as apps that target older versions get it. An app's target decides how
 /// <see cref="Uri"/> parses, so each row runs in an AppDomain whose target is 4.0, 4.6.1 or 4.8. On each, a row is
 /// sent as exactly its escaped path, or refused before anything is sent. A refusal is allowed only where 1.2.5's own
-/// buildUri, run on the same value in the same domain, made a path that names another resource: so no call that
-/// reached its resource in 1.2.5 starts to throw.
+/// buildUri, run on the same value in the same domain, made a path that names another resource, or for a value made
+/// only of dots, which is refused on every target. So a call 1.2.5 sent to its resource never starts to throw, except
+/// one whose value is only dots: three or more of them, since 1.2.5 sent neither "." nor ".." to its resource.
 /// </summary>
 [TestClass]
 public sealed class NetFrameworkTargetTests
@@ -43,6 +44,7 @@ public sealed class NetFrameworkTargetTests
 
         var failures = new List<string>();
         var refusedByCheck = new List<string>();
+        var dotsReached125 = new List<string>();
         var rows = 0;
         var sentExactly = 0;
         foreach (var value in PathRows.All())
@@ -59,8 +61,12 @@ public sealed class NetFrameworkTargetTests
 
             if (PathRows.IsRefused(value))
             {
+                // Refused on every target, whatever 1.2.5 did. 1.2.5's own argument check refused an empty value before
+                // it built a path, so only values of dots count as ones 1.2.5 may have sent to their resource.
                 if (thrown != nameof(ArgumentException) || sent.Count != 0)
                     failures.Add($"{PathRows.Show(value)}: expected ArgumentException and no request; {thrown ?? "returned"}, {sent.Count} sent");
+                else if (reached125 && value.Length > 0)
+                    dotsReached125.Add(value);
             }
             else if (thrown is null && sent.Count == 1 && sent[0] == $"GET {path} HTTP/1.1")
             {
@@ -81,7 +87,10 @@ public sealed class NetFrameworkTargetTests
             + $"{PathRows.DotOnly().Count()} refused as empty or dots; {refusedByCheck.Count} refused by the path check, "
             + "each where 1.2.5 made a path naming another resource:");
         foreach (var row in refusedByCheck) TestContext.WriteLine("  " + row);
+        var dots = string.Join(", ", dotsReached125.Select(PathRows.Show));
+        TestContext.WriteLine("Refused though 1.2.5 sent them to their resource: " + dots);
         Assert.IsEmpty(failures, $"{failures.Count} of {rows} rows:\n" + string.Join("\n", failures));
+        Assert.IsTrue(dotsReached125.All(value => value.Length >= 3), "1.2.5 sent \".\" or \"..\" to its resource: " + dots);
     }
 
     // Query values as each target sends them: a view filter value with a colon and a comma, and a filter expression,

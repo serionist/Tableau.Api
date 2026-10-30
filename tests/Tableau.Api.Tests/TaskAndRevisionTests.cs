@@ -1,6 +1,7 @@
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Tableau.Api.Models;
 using Tableau.Api.Tests.Fakes;
 
 namespace Tableau.Api.Tests;
@@ -26,6 +27,33 @@ public sealed class TaskAndRevisionTests
         CollectionAssert.AreEqual(new[] { "t1", "t2" }, refreshes.Select(task => task.id).ToArray());
         CollectionAssert.AreEqual(new[] { "f1" }, flows.Select(task => task.id).ToArray());
         Assert.IsEmpty(schedules);
+    }
+
+    // Tableau Cloud's tasks carry their schedule, whose daily interval may be 24 hours and hourly one 60 minutes.
+    [TestMethod]
+    public async Task TableauCloudTasksWithA24HourOrA60MinuteIntervalParse()
+    {
+        using var server = FakeTableauServer.Start();
+        var client = Fixtures.Client(server);
+        var session = Fixtures.Session();
+        const string daily = "<extractRefresh id=\"t1\" priority=\"50\" consecutiveFailedCount=\"0\" type=\"RefreshExtractTask\">"
+            + "<schedule frequency=\"Daily\" nextRunAt=\"2026-06-08T04:50:00Z\"><frequencyDetails start=\"05:00:00\"><intervals>"
+            + "<interval hours=\"24\"/><interval weekDay=\"Monday\"/></intervals></frequencyDetails></schedule>"
+            + "<workbook id=\"w1\"/></extractRefresh>";
+        const string hourly = "<extractRefresh id=\"t2\" priority=\"50\" consecutiveFailedCount=\"0\" type=\"RefreshExtractTask\">"
+            + "<schedule frequency=\"Hourly\" nextRunAt=\"2026-06-08T05:00:00Z\"><frequencyDetails start=\"00:00:00\" end=\"00:00:00\">"
+            + "<intervals><interval minutes=\"60\"/><interval weekDay=\"Tuesday\"/></intervals></frequencyDetails></schedule>"
+            + "<datasource id=\"d1\"/></extractRefresh>";
+        server.Map("GET", TasksPath, FakeResponse.Xml(200, $"<tasks><task>{daily}</task><task>{hourly}</task></tasks>"));
+        server.Map("GET", TasksPath + "/t1", FakeResponse.Xml(200, $"<task>{daily}</task>"));
+
+        var (refreshes, _, _) = await client.GetExtractRefreshTasks(session);
+        var task = await client.GetExtractRefreshTask(session, "t1");
+
+        CollectionAssert.AreEqual(new[] { "t1", "t2" }, refreshes.Select(refresh => refresh.id).ToArray());
+        Assert.AreEqual(intervalTypeHours.Item24, refreshes[0].schedule.frequencyDetails.intervals[0].hours);
+        Assert.AreEqual(intervalTypeMinutes.Item60, refreshes[1].schedule.frequencyDetails.intervals[0].minutes);
+        Assert.AreEqual(intervalTypeHours.Item24, task.schedule.frequencyDetails.intervals[0].hours);
     }
 
     [TestMethod]

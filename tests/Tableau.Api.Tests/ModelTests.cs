@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -32,35 +34,71 @@ public sealed class ModelTests
         Assert.AreEqual(siteRoleType.SupportUser, users[2].siteRole);
     }
 
+    // Every member 1.2.6 appends to an enum, as its XML value, which the responses below carry.
+    private static readonly (Enum Member, string Xml)[] Appended =
+    [
+        (siteUserAuthSettingType.OpenID, "OpenID"), (siteUserAuthSettingType.TableauIDWithMFA, "TableauIDWithMFA"),
+        (siteRoleType.SupportUser, "SupportUser"),
+        (jobTypeType.BroadcastPost, "BroadcastPost"), (jobTypeType.CreateSiteUsersCsv, "CreateSiteUsersCsv"),
+        (jobTypeType.EmptyRecycleBin, "EmptyRecycleBin"), (jobTypeType.LinkUserIdsUpdate, "LinkUserIdsUpdate"),
+        (jobTypeType.RefreshThumbnails, "RefreshThumbnails"), (jobTypeType.ResyncTCMUsersCsv, "ResyncTCMUsersCsv"),
+        (projectTypeContentPermissions.LockedToProjectWithoutNested, "LockedToProjectWithoutNested"),
+        (scheduleTypeType.DataAcceleration, "DataAcceleration"),
+        (intervalTypeHours.Item24, "24"), (intervalTypeMinutes.Item60, "60"),
+        (capabilityTypeName.AiAccess, "AiAccess"), (capabilityTypeName.Execute, "Execute"),
+        (capabilityTypeName.ExtractRefresh, "ExtractRefresh"), (capabilityTypeName.Overwrite, "Overwrite"),
+        (capabilityTypeName.PulseMetricDefine, "PulseMetricDefine"), (capabilityTypeName.RunExplainData, "RunExplainData"),
+        (capabilityTypeName.SaveAs, "SaveAs"), (capabilityTypeName.VizqlDataApiAccess, "VizqlDataApiAccess"),
+        (capabilityTypeName.WebAuthoringForFlows, "WebAuthoringForFlows"),
+    ];
+
     [TestMethod]
-    public async Task AJobAProjectAScheduleAndCapabilitiesWithNewValuesParse()
+    public async Task EveryAppendedEnumMemberParses()
     {
         using var server = FakeTableauServer.Start();
         var client = Fixtures.Client(server);
         var session = Fixtures.Session();
-        server.Map("GET", SitePath + "/jobs/j1", FakeResponse.Xml(200, "<job id=\"j1\" type=\"RefreshThumbnails\"/>"));
+        string[] Values<T>() => [.. Appended.Where(pair => pair.Member is T).Select(pair => pair.Xml)];
+        server.Map("GET", SitePath + "/users", FakeResponse.Xml(200,
+            "<pagination pageNumber=\"1\" pageSize=\"100\" totalAvailable=\"3\"/><users>"
+            + string.Concat(Values<siteUserAuthSettingType>().Select(v => $"<user id=\"u-{v}\" siteRole=\"Viewer\" authSetting=\"{v}\"/>"))
+            + string.Concat(Values<siteRoleType>().Select(v => $"<user id=\"u-{v}\" siteRole=\"{v}\"/>")) + "</users>"));
+        var jobs = Values<jobTypeType>();
+        foreach (var type in jobs)
+            server.Map("GET", SitePath + "/jobs/" + type, FakeResponse.Xml(200, $"<job id=\"{type}\" type=\"{type}\"/>"));
         server.Map("GET", SitePath + "/projects", FakeResponse.Xml(200,
             "<pagination pageNumber=\"1\" pageSize=\"100\" totalAvailable=\"1\"/><projects>"
-            + "<project id=\"p1\" name=\"Sales\" contentPermissions=\"LockedToProjectWithoutNested\"/></projects>"));
+            + string.Concat(Values<projectTypeContentPermissions>().Select(v => $"<project id=\"p1\" contentPermissions=\"{v}\"/>"))
+            + "</projects>"));
         server.Map("GET", ApiPath + "/schedules", FakeResponse.Xml(200,
             "<pagination pageNumber=\"1\" pageSize=\"100\" totalAvailable=\"1\"/><schedules>"
-            + "<schedule id=\"s1\" name=\"Acceleration\" type=\"DataAcceleration\"/></schedules>"));
+            + string.Concat(Values<scheduleTypeType>().Select(v => $"<schedule id=\"s1\" type=\"{v}\"><frequencyDetails start=\"00:00:00\"><intervals>"
+                + string.Concat(Values<intervalTypeHours>().Select(h => $"<interval hours=\"{h}\"/>"))
+                + string.Concat(Values<intervalTypeMinutes>().Select(m => $"<interval minutes=\"{m}\"/>"))
+                + "</intervals></frequencyDetails></schedule>"))
+            + "</schedules>"));
         server.Map("GET", SitePath + "/datasources/d1/permissions", FakeResponse.Xml(200,
             "<permissions><datasource id=\"d1\"/><granteeCapabilities><user id=\"u1\"/><capabilities>"
-            + "<capability name=\"Read\" mode=\"Allow\"/><capability name=\"SaveAs\" mode=\"Allow\"/>"
-            + "<capability name=\"VizqlDataApiAccess\" mode=\"Deny\"/></capabilities></granteeCapabilities></permissions>"));
+            + string.Concat(Values<capabilityTypeName>().Select(v => $"<capability name=\"{v}\" mode=\"Allow\"/>"))
+            + "</capabilities></granteeCapabilities></permissions>"));
 
-        var job = await client.QueryJob(session, "j1");
+        var parsed = new List<Enum>();
+        var (_, users) = await client.GetUsersOnSite(session);
+        parsed.AddRange(users.Where(user => user.authSettingSpecified).Select(user => (Enum)user.authSetting));
+        parsed.AddRange(users.Where(user => user.siteRole == siteRoleType.SupportUser).Select(user => (Enum)user.siteRole));
+        foreach (var type in jobs) parsed.Add((await client.QueryJob(session, type)).type);
         var (_, projects) = await client.QueryProjects(session);
+        parsed.AddRange(projects.Select(project => (Enum)project.contentPermissions));
         var (_, schedules) = await client.QuerySchedules(session);
+        parsed.AddRange(schedules.Select(schedule => (Enum)schedule.type));
+        var intervals = schedules.Single().frequencyDetails.intervals;
+        parsed.AddRange(intervals.Where(interval => interval.hoursSpecified).Select(interval => (Enum)interval.hours));
+        parsed.AddRange(intervals.Where(interval => interval.minutesSpecified).Select(interval => (Enum)interval.minutes));
         var permissions = await client.QueryDataSourcePermissions(session, "d1");
+        parsed.AddRange(permissions.granteeCapabilities.Single().capabilities.Select(capability => (Enum)capability.name));
 
-        Assert.AreEqual(jobTypeType.RefreshThumbnails, job.type);
-        Assert.AreEqual(projectTypeContentPermissions.LockedToProjectWithoutNested, projects[0].contentPermissions);
-        Assert.AreEqual(scheduleTypeType.DataAcceleration, schedules[0].type);
-        CollectionAssert.AreEqual(
-            new[] { capabilityTypeName.Read, capabilityTypeName.SaveAs, capabilityTypeName.VizqlDataApiAccess },
-            permissions.granteeCapabilities[0].capabilities.Select(capability => capability.name).ToArray());
+        Assert.HasCount(22, Appended);
+        CollectionAssert.AreEquivalent(Appended.Select(pair => pair.Member).ToArray(), parsed.ToArray());
     }
 
     [TestMethod]

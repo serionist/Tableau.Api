@@ -25,13 +25,20 @@ a release turns that section into its own, dated (docs/releasing.md). The format
 
 - **Values in paths and queries are escaped,** so a value the caller had already URL-encoded is now encoded twice,
   whether a filter or a path value: a tag, a site name, a content URL.
-- **A redirect fails** with `TableauRequestException`, where 1.2.5 followed it.
+- **A path value made only of dots is refused** on every platform, three dots or more included, which 1.2.5 sent as
+  written. 1.2.5 never sent `.` or `..` to the resource they named.
+- **The base URL's path is used.** 1.2.5 ignored it, so a base URL holding a site or view link, such as
+  `https://tableau.example.com/t/finance/`, or the API's path, such as `https://tableau.example.com/api/`, worked
+  there. Now the base URL must be the server's address: `https://tableau.example.com/`.
+- **A redirect fails** with `TableauRequestException`, where 1.2.5 followed it. A server that redirects `http` to
+  `https`, or one host name to another, now fails every call: use the address the message names as the base URL.
+  1.2.5 followed a 301 or 302 on sign-in by sending a GET in place of the POST.
 - **Any 2xx status is a success,** where 1.2.5 wanted the one status each call named.
 - **A schedule time outside a day throws `ArgumentOutOfRangeException`** before anything is sent: a start or end time
   runs from 00:00:00 up to but not including 24:00:00. 1.2.5 wrapped 25:00 round to 01:00.
 - **The `UpdateTo*Schedule` methods throw `NotSupportedException`** before anything is sent. Tableau updates a
-  schedule by its id, which they don't take, and 1.2.5 created a second schedule instead. Delete the schedule and
-  create it again; updating one comes in 2.0.
+  schedule by its id, which they don't take, and 1.2.5 created a second schedule instead. Delete the schedule, create
+  it again, then add its tasks to it again; updating one comes in 2.0.
 - **The licence is MIT.**
 - **The package's metadata:** a description that says what it is and ends "Not affiliated with or endorsed by
   Tableau or Salesforce."; the README packed into it; the project and repository links on GitHub; symbols as a
@@ -48,11 +55,11 @@ a release turns that section into its own, dated (docs/releasing.md). The format
 - **View filters apply to view data and view images:** each name gets the `vf_` prefix unless it has it, as on PDFs.
   1.2.5 took the prefix off, so Tableau did not read them as view filters.
 - **`QueryViewPDF` with no filters** sends the request; 1.2.5 threw `ArgumentNullException`.
-- **A call Tableau answers with another 2xx than 1.2.5 expected returns its result,** such as `CreateSubscription` on
-  Tableau Cloud, which answers 200 where Tableau Server answers 201. 1.2.5 threw after the call had succeeded.
+- **A call Tableau answers with another 2xx than 1.2.5 expected returns its result,** where 1.2.5 threw after the call
+  had succeeded. Creating a schedule, below, is one.
 - **Creating a schedule returns it** on the 201 Tableau answers with, where 1.2.5 threw after Tableau had created it.
-  Its start and end times go as `HH:mm:ss` with no UTC offset, and a monthly schedule sends its day from `dayToRun`,
-  which 1.2.5 ignored.
+  Its start and end times go as `HH:mm:ss` with no UTC offset, which Tableau applies in the server's time zone, and a
+  monthly schedule sends its day from `dayToRun`, which 1.2.5 ignored.
 - **`GetExtractRefreshTasks` returns the site's tasks,** each by the kind of item it holds, and empty arrays for a site
   with none. 1.2.5 threw in both cases.
 - **`GetExtractRefreshTask` calls `tasks/extractRefreshes/{id}`,** the path Tableau documents; 1.2.5 called
@@ -60,18 +67,19 @@ a release turns that section into its own, dated (docs/releasing.md). The format
 - **`GetDataSourceRevisions` and `GetWorkbookRevisions` send `pageSize` and `pageNumber`,** which 1.2.5 checked and
   then left out, so every call returned the first page.
 - **Responses with values Tableau has added since 1.2.5's schema parse:** `OpenID` and `TableauIDWithMFA` as a user's
-  auth setting, and the values Tableau's REST API 3.29 schema lists for site roles, schedule types, project content
-  permissions, job types and capability names. 1.2.5 failed the whole response on one of them. Each is added after
-  the existing members, so no member's value changes.
+  auth setting; a task interval of 24 hours or 60 minutes, which Tableau Cloud sends; and the values Tableau's REST
+  API 3.29 schema lists for site roles, schedule types, project content permissions, job types and capability names.
+  1.2.5 failed the whole response on one of them, such as a Tableau Cloud task list with a task that runs once a
+  day. Each is added after the existing members, so no member's value changes.
 - **`TableauSession.UserName` holds the name the session signed in with:** the user name, the token's name for a
   personal access token, and after `SwitchSite` the name of the session it switched from. 1.2.5 left it null.
 
 ### Known issues
 
 - **On .NET Framework, apps that target a version older than 4.7.2 refuse some path values.** Those targets' URI
-  parsing changes some paths after they are escaped, so a call whose path would change throws `ArgumentException`
-  before anything is sent. Such a call did not reach the resource it named in 1.2.5 either. Apps that target 4.7.2 or
-  later, and .NET Core and .NET 5 or later, are not affected.
+  parsing changes some paths after they are escaped, so a call whose path, the base URL's path included, would change
+  throws `ArgumentException` before anything is sent. Such a call did not reach the resource it named in 1.2.5
+  either. Apps that target 4.7.2 or later, and .NET Core and .NET 5 or later, are not affected.
 - **On .NET Framework, apps that target 4.5 to 4.7.1 send an escaped colon in a query unescaped** when the request URI
   holds a non-ASCII character, as 1.2.5 did. The same goes for `!`, `'`, `(`, `)` and `*`; commas stay escaped. So a
   colon in a view filter's value reaches Tableau as a plain colon when the URI also holds an accented letter. Apps
