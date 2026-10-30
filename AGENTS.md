@@ -6,7 +6,7 @@ Codex reads it directly; the gate caps it at 150 lines.
 ## What this is
 
 A .NET client for Tableau's REST API and its internal Vizportal API, published on nuget.org as `Tableau.Api` (last
-release 1.2.5, 2021, built for netstandard2.0). `main` targets netstandard2.1, on Newtonsoft.Json and
+release 1.2.6, 2026-10-30, built for netstandard2.0, from `release/1.x`). `main` targets netstandard2.1, on Newtonsoft.Json and
 Microsoft.Extensions.Logging.
 
 - **`TableauApiClient`:** the REST API, one partial class per area (`TableauApiClient_<Area>.cs`). It sends and reads
@@ -100,14 +100,14 @@ The skills in `.claude/skills/` run this loop: `start-work` (1 to 3), `review-pl
 
 ## One-way doors
 
-Users depend on these from 1.2.5 on nuget.org. Change one only in a PR that names it in its title, after a
+Users depend on these from 1.2.x on nuget.org. Change one only in a PR that names it in its title, after a
 maintainer agrees in its issue; the other can object on the PR before it merges.
 
 - the NuGet id `Tableau.Api`;
 - the root namespace `Tableau.Api`, and the namespaces under it;
 - the public API of `TableauApiClient`, `VizPortalClient` and the `Models` types users get back
   (`Tableau.Api.Models`, `Tableau.Api.VizPortal.Models`): names, parameters, defaults, return types;
-- the target frameworks: 1.2.5 ships netstandard2.0, which .NET Framework 4.6.1 and later load; `main` already
+- the target frameworks: 1.2.x ships netstandard2.0, which .NET Framework 4.6.1 and later load; `main` already
   targets netstandard2.1 (`e19a822`), which .NET Framework can't;
 - the Tableau versions it claims: REST API 2.0 and up, a version above 3.14 used as 3.14 with a warning
   (`_minVersion`, `_maxVersion` in `TableauApiClient.cs`), on Tableau Server and Tableau Cloud.
