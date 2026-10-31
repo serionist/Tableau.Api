@@ -327,7 +327,7 @@ try
         new() { Filter = TableauFilter.Eq(WorkbookField.Tags, "finance") }, cancellationToken))
     {
         await using var download = await tableau.Workbooks.DownloadAsync(workbook.Id!, cancellationToken: cancellationToken);
-        await download.SaveToFileAsync(Path.Combine("out", download.FileName), cancellationToken);
+        await download.SaveToFileAsync(Path.Combine("out", download.FileName ?? "workbook.twbx"), cancellationToken: cancellationToken);
     }
 }
 catch (TableauException e) when (e.Kind == TableauErrorKind.RateLimited)
@@ -422,7 +422,9 @@ internal sealed record Endpoint(string Name, HttpMethod Method, string Template,
 
 **Logging (F36):**
 
-- `Microsoft.Extensions.Logging.Abstractions` only, with `LoggerMessage` source-generated methods.
+- `Microsoft.Extensions.Logging.Abstractions` only, with `LoggerMessage` source-generated methods. No dependency may
+  change how a caller's app builds: Microsoft.Extensions.Telemetry.Abstractions, under Microsoft.Extensions.Http.Resilience,
+  turns off the runtime's `LoggerMessage` generator in every app that takes it, so S10 runs Polly.Core alone (#41).
 - Request lines at Debug, with query values redacted. A failure the caller receives is not logged above Debug.
   Cancellation is never an error.
 - Never logged: tokens, PATs, JWTs, passwords, cookies, `X-Tableau-Auth`, bodies. A test reads every log line the
@@ -430,49 +432,58 @@ internal sealed record Endpoint(string Name, HttpMethod Method, string Template,
 
 ### Resilience and downloads (S10)
 
-As S10 built it (#41):
+As S10 built it (#41, PR #42):
 
-- **Pipeline:** Microsoft.Extensions.Http.Resilience's `ResilienceHandler` over a Polly pipeline the client builds
-  from its read-only options (`Pipeline/TableauResilience.cs`), not `AddResilienceHandler`, which would register
-  services and telemetry in the caller's container and log each retry as a warning. Two handlers, the retries and
-  `TableauAttemptHandler`, sit closest to the connection in every client: the named `HttpClient` from DI, the one
+- **Pipeline:** Polly.Core's retry, built from the client's read-only options (`Pipeline/TableauResilience.cs`) and run
+  by a handler of the library's own, `TableauResilienceHandler`, which also times each attempt and reads its answer.
+  Not Microsoft.Extensions.Http.Resilience: its `Microsoft.Extensions.Telemetry.Abstractions` turns off the runtime's
+  `LoggerMessage` generator in every app that takes the package, and `AddResilienceHandler` would register services
+  and telemetry in the caller's container and log each retry as a warning (the maintainer's call on PR #42). The
+  handler sits closest to the connection in every client: the named `HttpClient` from DI, the one
   `TableauClient.Create` builds, and an invoker over a caller's `HttpClient`, each attempt a copy of the request sent
-  through it. The caller configures it with `MaxRetries` and `MaxRetryAfter`, or turns it off and adds their own.
+  through it, without the request's options. The caller configures it with `MaxRetries` and `MaxRetryAfter`, or turns
+  it off and adds their own.
 - **Retries:** only for descriptors marked idempotent, which the request carries in its options. Never publish, create
-  or run-now. 408, 429, 5xx, a connection that failed or broke off and an attempt that timed out; not a refused
-  certificate or another failure sending again won't mend. Three by default, jittered exponential back-off from about
-  two seconds, at most 30. Logged at Debug.
-- **429:** honours `Retry-After`, as a delay or a date, or the wait in Tableau's 429 body when the header is missing.
-  Tableau documents neither; the one wording found, in a report against Tableau's own Python client
-  (tableau/server-client-python#952), is a detail "Too many requests for 'api.rest.refresh_extracts'. Please retry
-  after 29 minutes." under code 429000, so the body is read loosely: "retry after", a number, and seconds, minutes or
-  hours. Above `MaxRetryAfter` (two minutes by default) it does not wait: it throws `RateLimited` with `RetryAfter`.
-  A 503's `Retry-After` is honoured and capped the same way.
-- **Timeouts:** `RequestTimeout` per attempt, which `TableauAttemptHandler` makes cover the answer as well as its
-  headers by reading it within the attempt (a success whole, an error's first 64 KB); a transfer (`TransferKind`) has
-  no attempt timeout, and `TransferTimeout` covers all of it, its attempts, the waits and, for a download, reading the
-  file, with no limit by default. A timeout is `Timeout`, with a cancellation as its cause, never the caller's.
+  or run-now. 408, 429, 5xx, a connection that failed or broke off, and the library's own attempt timeout; not a
+  refused certificate, a proxy's 407, or another failure sending again won't mend, and not a handler's own exception,
+  a timeout or a cancellation of its own among them. Three by default, jittered exponential back-off from about two
+  seconds, at most 30. Logged at Debug.
+- **429 and 503:** a 429's or a 503's `Retry-After`, as a delay or a date, or a 429 body's wait when the header is
+  missing, is waited out; another status's `Retry-After` is left to the back-off. Tableau documents neither; the one
+  wording found, in a report against Tableau's own Python client (tableau/server-client-python#952), is a detail "Too
+  many requests for 'api.rest.refresh_extracts'. Please retry after 29 minutes." under code 429000, so the body is read
+  loosely: "retry after", a number, and seconds, minutes or hours. Above `MaxRetryAfter` (two minutes by default) it
+  does not wait: a 429 throws `RateLimited` and a 503 `Http`, each with `RetryAfter`.
+- **Timeouts:** `RequestTimeout` per attempt, timed by the handler on the client's clock, covering the answer as well
+  as its headers by reading it within the attempt (a success whole, an error's first 64 KB); a transfer
+  (`TransferKind`) has no attempt timeout, and `TransferTimeout` covers all of it, its attempts, the waits and, for a
+  download, reading the file, with no limit by default. A timeout is `Timeout`, with a cancellation as its cause, never
+  the caller's cancellation; a handler's own timeout or cancellation is `Http`, with it as the cause.
 - **No circuit breaker or concurrency limiter** by default: one client talks to one server, and a breaker opening on a
   burst of 5xx surprises batch jobs.
 - **The builder:** `ConfigurePrimaryHandler(Action<SocketsHttpHandler>)` runs on the library's handler, then the
-  library's rules are set again (no redirects, no cookies, its certificate callback; a chain policy the caller set is
-  kept); `AddHttpMessageHandler(Func<IServiceProvider, DelegatingHandler>)` adds the caller's handlers outside the
-  retries, the first outermost. One action per name sets them all, registered by the first `AddTableauClient` of the
-  name, so a second keeps what the first added (S9's note).
-- **Downloads (F17, F42):** sent with `ResponseHeadersRead` and returned at the headers. `TableauDownload`
-  (`IDisposable`, `IAsyncDisposable`) owns the response and the transfer timeout, and has:
+  library's rules are set again on the handler's own copy of its TLS options, so options shared with another handler
+  stay as set: no redirects, no cookies, its certificate callback (a caller's callback replaced; a chain policy the
+  caller set used as set, its flags able to loosen the check). `AddHttpMessageHandler(Func<IServiceProvider,
+  DelegatingHandler>)` adds the caller's handlers outside the retries, the first outermost. One action per name sets
+  them all, registered by the first `AddTableauClient` of the name, so a second keeps what the first added (S9's note).
+- **Downloads (F17, F42):** sent with `ResponseHeadersRead` and returned at the headers, after reading up to 8 bytes when
+  neither the name nor the media type tells the kind. Only a `TransferKind.Download` descriptor is taken.
+  `TableauDownload` (`IDisposable`, `IAsyncDisposable`) owns the response and the transfer timeout, and has:
   - a forward-only `Content` stream that honours its read's token, the call's and `TransferTimeout`;
   - `FileName` from `Content-Disposition`'s raw text, since Tableau's documented `name="tableau_workbook";
-    filename="..."` has no disposition type and .NET's typed header refuses it: `filename*` first, the part after the
-    last `/` or `\`, without control, format and Windows-invalid characters or trailing dots and spaces, a device name
-    prefixed, at most 255 characters;
-  - `ContentType`, `Length` when known, and `Kind` from the name's extension, else the media type, else the first bytes
-    (a zip's, a PDF's or a PNG's signature, read ahead and given back);
-  - `SaveToFileAsync`, through a temporary file beside the target, refusing to replace a file unless asked;
+    filename="..."` has no disposition type and .NET's typed header refuses it: `filename*` first, then `filename`,
+    the part after the last `/` or `\`, without control, format, private-use and separator characters or what Windows
+    refuses, cut to 255 bytes of UTF-8 with a short extension kept, then trimmed of leading whitespace and trailing
+    whitespace, dots and spaces, and a device name prefixed;
+  - `ContentType`, `Length` when known (Tableau Server sends a workbook chunked, with none), and `Kind` from the
+    name's extension, else the media type, else the first bytes (a zip's, a PDF's or a PNG's signature, read ahead and
+    given back);
+  - `SaveToFileAsync`, through a temporary file beside the target, refusing a folder and a file it would replace
+    unless asked, and open to a second try when the first couldn't open its file;
   - a public constructor over a stream, for a mock of a download method.
 
   A response without Content-Type works.
-
 ### Sessions and sign-in (S11)
 
 - **Credentials** (`TableauCredentials`), each with a delegate overload so a secret can come from a vault:
@@ -711,7 +722,7 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
 | Behaviour | Gates throw before sending; redirects only to the same origin; plain http refused; any 2xx succeeds | Set `AllowInsecureHttp` or `AllowUnsupportedServerVersion` where meant |
 | TLS switch | `IgnoreSSLErrors` becomes `DangerousAcceptAnyServerCertificate` | Rename |
 | Vizportal | Never shipped in 1.x. On main it moves to `client.VizPortal`, with tokens and `int` ids | The guide's Vizportal page |
-| Dependencies | Newtonsoft.Json and `Microsoft.Extensions.Logging` leave. Added: `Microsoft.Extensions.Logging.Abstractions`, `.Http`, `.Http.Resilience`, `.Options` and `.DependencyInjection.Abstractions` (10.x) | None |
+| Dependencies | Newtonsoft.Json and `Microsoft.Extensions.Logging` leave. Added: `Microsoft.Extensions.Logging.Abstractions`, `.Http`, `.Options` and `.DependencyInjection.Abstractions` (10.x), and Polly.Core (8.x) for the retries; not `Microsoft.Extensions.Http.Resilience`, whose `Microsoft.Extensions.Telemetry.Abstractions` turns off the runtime's `LoggerMessage` generator in every app that takes it (S10) | None |
 
 **One-way doors from 2.0.0** (AGENTS.md's list, from S5 and finished in S18):
 
@@ -739,7 +750,7 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
 | S7 | main | Test platform and coverage | F26 F28 | #34 | #35 | done: squash `4ba9b69` |
 | S8 | main | Models, generator, AOT | F14 F23 F50 | #37 | #38 | done: squash `ffc43f5` |
 | S9 | main | Client core | F4 F16 F18 F20 F21 F22 F35 F36 F37 F38 F46 F47 F48 | #39 | #40 | done: squash `18c8404` |
-| S10 | main | Resilience and downloads | F17 F19 F42 | #41 | | in review |
+| S10 | main | Resilience and downloads | F17 F19 F42 | #41 | #42 | in review |
 | S11 | main | Sessions and the live suite | F27 F34 | | | todo |
 | S12 | main | Port: server, sites, projects, users, groups, favorites; paging and filters | F13 F33 | | | todo |
 | S13 | main | Port: permissions, tags, metadata (REST and GraphQL) | F8 F44 | | | todo |
@@ -1131,7 +1142,10 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
 - **Scope:**
   - their sub-clients; `Page<T>`, `ListAsync`, `ListPageAsync`, `TableauFilter`, `TableauSort` and typed fields;
   - the old Sites, Projects, UsersAndGroups and Favorites partials deleted, with `DeleteProject2`;
-  - live fixtures; the migration name map's rows.
+  - live fixtures; the migration name map's rows;
+  - each descriptor's `Idempotent` set by what the call does, not its method, since the retries read it (S10): a PUT
+    that updates a resource is idempotent, but Append to File Upload, a PUT that adds a chunk (S17), is not, and is
+    never retried.
 - **Findings:** F13, F33. Update User also gains the documented `email`, `idpConfigurationId`, `language` and `locale`.
 - **Tests:**
   - **Every method:** verb, path, query, golden body and status; fixture parse; an empty list gives `[]`; the gate
@@ -1734,7 +1748,8 @@ and start the steps", and on the owner calls they have answered since (Q7 to Q9)
 | 2026-10-31 | S9 | Draft PR #40. review-code round 1, three fresh reviewers on `ae98f14`: one major, eleven minors, all fixed on the branch, and every improvement taken; the coordinator keeps the record, `docs/reviews/2026-10-31-client-core-code.md`. **The major:** `TableauClient` was `IAsyncDisposable` alone, so a container's synchronous `Dispose` of a scope or the provider that had made one threw and left the rest undisposed; it is `IDisposable` too, in the standard pattern, with tests of a synchronous scope and provider. **Minors:** the named client's handler is built from the name's read-only state, not the options monitor, so a reload can't reach a later handler; the handlers an app gives every `HttpClient` (`ConfigureHttpClientDefaults`) are cleared from the named client; a redirect a caller's own handler followed says the request went there; an error body whose strings can't be read gives the status alone; concurrent first calls share one negotiation, on no caller's token, and a failure is kept by none; a LUID must be the value itself, not one `Guid` parsing forgives; CHANGELOG's 1.2.6 section is restored and its bullets unglued; the revocation tests name the revoked leaf by its own serial, a first byte from 0x01 to 0xFF; every `RecordingLogger` is checked at the suite's end for secrets and for a 2.0 line showing a query value, a redirect among the logged calls; a redirect to another host on the same port is refused; both lens files name the 2.0 surface under public-api. **Improvements:** the conventions test finds the sub-clients from `TableauClient`'s properties; a revocation answer is waited for 10 seconds at most (`UrlRetrievalTimeout`); the floor's and an unreadable version's exceptions are logged as the pipeline's are and carry the call's method; the design above shows what S9 built; S10, S11 and S17 hold the notes the review left; AGENTS.md keeps the old client's "on Tableau Server and Tableau Cloud". Tests 299 to 313; coverage 93.96% of lines and 92.48% of branches, the floors unchanged. |
 | 2026-10-31 | S9 | review-code round 2 on `b8f2232`: every round 1 fix confirmed, each with a test that fails on its revert; one new minor and four improvements, all taken. **The minor:** a negotiation that failed after every caller had stopped waiting stayed in the state, so the next call got its failure without asking the server. The negotiation now lets go of itself before it fails, and a failure nobody awaits is observed; a test cancels the only caller, lets the fake answer 503, and sees the next call ask again, and fails with the fix taken out. **Improvements:** an app's default handlers registered after `AddTableauClient` don't reach the client either (a row); the design says `ApiVersion` null where it said `Negotiate`; AGENTS.md names the packages the library depends on; S10's scope notes that the per-name handler clear runs where it is registered. Tests 313 to 315. |
 | 2026-10-31 | S9 | Done: PR #40 merged as `18c8404`, closing #39, with both doors and their departures agreed on #39. |
-| 2026-10-31 | S10 | Built on `41-resilience-downloads` for #41, from `origin/main` at `18c8404`; @serionist agreed on #41 to its doors, the resilience option names and the builder's handler hooks, and `TableauDownload`. **Resilience** (`Pipeline/TableauResilience.cs`): Microsoft.Extensions.Http.Resilience's `ResilienceHandler` over a Polly pipeline built from the read-only options, a retry around an attempt timeout, on the state's `TimeProvider` (the container's under DI); not `AddResilienceHandler`, whose registration puts services and telemetry in the caller's container and logs each retry as a warning. `TableauAttemptHandler`, inside the retries, reads a success whole and an error's first 64 KB within the attempt, so `RequestTimeout` covers the answer and an answer that breaks off is retried. Retries only for idempotent descriptors, carried in the request's options: 408, 429, 5xx, a connection that failed (not a refused certificate or another failure sending again won't mend), an attempt that timed out; three by default, jittered back-off from about two seconds, at most 30, logged at Debug. The server's wait, `Retry-After` as a delay or a date or a 429 body's "retry after N minutes", is waited out up to `MaxRetryAfter`; a longer one fails at once, `RateLimited` for a 429 with `RetryAfter`. A transfer has no attempt timeout and `TransferTimeout` covers all of it, a download's reading included. A timeout's cause is a cancellation, never Polly's exception; a caller's handler that throws fails the call as `Http`. **One chain everywhere:** the named `HttpClient`'s handlers are the caller's, outermost, then the library's two; `Create` builds the same two over its `SocketsHttpHandler`; the constructor over a caller's `HttpClient` sends each attempt through it as a copy of the request, so its handlers run inside the retries, which its doc says. One action per name sets the primary handler and the handlers, registered by the first `AddTableauClient` of the name, so a second keeps what the first added; `ConfigurePrimaryHandler` runs on the library's handler before its rules are set again (no redirects, no cookies, its certificate callback; a chain policy the caller set kept). **Downloads:** `TableauDownload`, `TableauFileKind`, the pipeline's `DownloadAsync` (the download methods come with their areas, from S12); `Content-Disposition` read raw, since Tableau's documented `name="tableau_workbook"; filename="..."` has no disposition type and .NET's typed header refuses it. **Looked up:** Learn on Microsoft.Extensions.Http.Resilience (the handler, `AddResilienceHandler`, the standard handler's predicates, Retry-After, the static-client pattern), IHttpClientFactory (`ConfigurePrimaryHttpMessageHandler`, `ConfigureAdditionalHttpMessageHandlers`, the obsolete `ConfigureHttpMessageHandlerBuilder`, handler order), Polly's retry and timeout options and `TimeProvider`; Tableau documents no 429 body or `Retry-After`, and the one wording found is a detail "Please retry after 29 minutes." under code 429000 (tableau/server-client-python#952), so the body is read loosely. **AOT:** a probe published natively with `ResilienceHandler`, a retry, a timeout and the request's options: no warning; the AOT app now retries a 503, downloads and saves a file, and calls through a DI client with `ConfigurePrimaryHandler` and a handler of the caller's, published natively on win-x64 with no warning, 16 MB, every check passed. **Live check,** Tableau Server 2025.1 (REST API 3.25), read-only, by a scratch program outside the clone that printed shapes only: the 2.0 client negotiated through the new chain; two workbooks' downloads answered `Content-Disposition: name="tableau_workbook"; filename="<name>.twbx"`, which .NET's typed header refuses and the library reads, `application/octet-stream`, and no `Content-Length`. A first run signed in with JSON but read XML, so it could not sign out; that session ends on its own. **Tests:** 315 to 438; coverage 94.67% of lines and 93.81% of branches, the floors rise to 94% and 93%. A caller's `HttpClient` with a resilience handler of its own showed that a copy carrying the request's options hands the client's resilience context to it, and the client's next attempt then sends the copy without its body: the copy takes no options, and a test sends a body through both. **Departures,** in the PR's door list: `Kind` also from the media type and from a PDF's or a PNG's signature, since an export sends no file name; a public constructor of `TableauDownload` over a stream, for a mock of a download method; the builder's methods return the builder; `MaxRetryAfter` caps a 503's `Retry-After` too. |
+| 2026-10-31 | S10 | Built on `41-resilience-downloads` for #41, from `origin/main` at `18c8404`; @serionist agreed on #41 to its doors, the resilience option names and the builder's handler hooks, and `TableauDownload`. **Resilience** (`Pipeline/TableauResilience.cs`): Microsoft.Extensions.Http.Resilience's `ResilienceHandler` over a Polly pipeline built from the read-only options, a retry around an attempt timeout, on the state's `TimeProvider` (the container's under DI); not `AddResilienceHandler`, whose registration puts services and telemetry in the caller's container and logs each retry as a warning. `TableauAttemptHandler`, inside the retries, reads a success whole and an error's first 64 KB within the attempt, so `RequestTimeout` covers the answer and an answer that breaks off is retried. Retries only for idempotent descriptors, carried in the request's options: 408, 429, 5xx, a connection that failed (not a refused certificate or another failure sending again won't mend), an attempt that timed out; three by default, jittered back-off from about two seconds, at most 30, logged at Debug. The server's wait, `Retry-After` as a delay or a date or a 429 body's "retry after N minutes", is waited out up to `MaxRetryAfter`; a longer one fails at once, `RateLimited` for a 429 with `RetryAfter`. A transfer has no attempt timeout and `TransferTimeout` covers all of it, a download's reading included. A timeout's cause is a cancellation, never Polly's exception; a caller's handler that throws fails the call as `Http`. **One chain everywhere:** the named `HttpClient`'s handlers are the caller's, outermost, then the library's two; `Create` builds the same two over its `SocketsHttpHandler`; the constructor over a caller's `HttpClient` sends each attempt through it as a copy of the request, so its handlers run inside the retries, which its doc says. One action per name sets the primary handler and the handlers, registered by the first `AddTableauClient` of the name, so a second keeps what the first added; `ConfigurePrimaryHandler` runs on the library's handler before its rules are set again (no redirects, no cookies, its certificate callback; a chain policy the caller set kept). **Downloads:** `TableauDownload`, `TableauFileKind`, the pipeline's `DownloadAsync` (the download methods come with their areas, from S12); `Content-Disposition` read raw, since Tableau's documented `name="tableau_workbook"; filename="..."` has no disposition type and .NET's typed header refuses it. **Looked up:** Learn on Microsoft.Extensions.Http.Resilience (the handler, `AddResilienceHandler`, the standard handler's predicates, Retry-After, the static-client pattern), IHttpClientFactory (`ConfigurePrimaryHttpMessageHandler`, `ConfigureAdditionalHttpMessageHandlers`, the obsolete `ConfigureHttpMessageHandlerBuilder`, handler order), Polly's retry and timeout options and `TimeProvider`; Tableau documents no 429 body or `Retry-After`, and the one wording found is a detail "Please retry after 29 minutes." under code 429000 (tableau/server-client-python#952), so the body is read loosely. **AOT:** a probe published natively with `ResilienceHandler`, a retry, a timeout and the request's options: no warning; the AOT app now retries a 503, downloads and saves a file, and calls through a DI client with `ConfigurePrimaryHandler` and a handler of the caller's, published natively on win-x64 with no warning, 16 MB, every check passed. **Live check,** Tableau Server 2025.1 (REST API 3.25), read-only, by a scratch program outside the clone that printed shapes only: the 2.0 client negotiated through the new chain; two workbooks' downloads answered `Content-Disposition: name="tableau_workbook"; filename="<name>.twbx"`, which .NET's typed header refuses and the library reads, `application/octet-stream`, and no `Content-Length`. A first run signed in with JSON but read XML, so it could not sign out; that session ends on its own. **Tests:** 315 to 438; coverage 94.67% of lines and 93.81% of branches, the floors rise to 94% and 93%. A caller's `HttpClient` with a resilience handler of its own showed that a copy carrying the request's options hands the client's resilience context to it, and the client's next attempt then sends the copy without its body: the copy takes no options, and a test sends a body through both. **Departures,** in the PR's door list, agreed by @serionist on #41: `Kind` also from the media type and from a PDF's or a PNG's signature, since an export sends no file name; a public constructor of `TableauDownload` over a stream, for a mock of a download method; the builder's methods return the builder; `MaxRetryAfter` caps a 503's `Retry-After` too; `ConfigurePrimaryHandler`'s certificate rule replaces a caller's callback and uses a caller's chain policy as set; a read of `Content` that breaks off or times out throws `TableauException`. |
+| 2026-10-31 | S10 | Draft PR #42. review-code round 1, by fresh reviewers: one blocker and fourteen minors, all fixed on the branch, with the maintainer's calls. **The blocker:** `TableauHandler.Create` set the library's TLS rules in place on `SslClientAuthenticationOptions` a `ConfigurePrimaryHandler` action gave it, so two clients sharing one, one with `DangerousAcceptAnyServerCertificate`, both took the one resolved last, and an app's own handler sharing it lost its callback; the rules are now set on a copy the handler holds alone, member by member as the runtime's own clone copies them, with a test of two clients in both orders and one that counts the 15 members. **Polly.Core alone,** the maintainer's call: Microsoft.Extensions.Http.Resilience brought `Microsoft.Extensions.Telemetry.Abstractions`, which turns off the runtime's `LoggerMessage` generator in every app that takes it, and 16 packages in all; a handler of the library's own, `TableauResilienceHandler`, now runs Polly.Core 8.9.0's retry, times each attempt on the client's clock and reads its answer, and the library's lock file falls from 33 packages to 17. **Minors:** the docs say a caller's chain policy is used as set, its flags able to loosen the check; `Retry-After` is honoured on a 429 and a 503 only, another status left to the back-off; a handler's own timeout or cancellation fails the call as `Http` with it as the cause, the library's own attempt timeout told apart by an internal exception; two tests now fail without what they claim (the disposed handler, the answer read whole); a file name is cut to 255 bytes of UTF-8 on a character's boundary before it is trimmed and checked for a device name; an empty `filename*` leaves `filename`; a save refuses a folder before reading, documents `UnauthorizedAccessException`, and may be tried again when it couldn't open its file; the pipeline takes only a download descriptor for a download; a 5 MB download is sent chunked, as Tableau Server sends one; the guide and the changelog say a 503 over the cap is `Http`, and which old downloads gave a kind. **Improvements taken:** a proxy's 407 isn't retried; `AddHttpMessageHandler` advises retrying only safe methods; the waits' tests measure from the retry's log line; the public constructor parses its `Content-Type`; a break-off while reading ahead says "broke off after N bytes"; the download docs name the read-ahead and the cleaning rules; `SaveToFileAsync`'s example falls back when `FileName` is null; S12 marks Append to File Upload non-idempotent. Tests 438 to 470; coverage 94.73% of lines and 93.78% of branches, the floors unchanged; the native AOT app stays warning-free, 15.9 MB. |
 
 ## For the maintainers
 

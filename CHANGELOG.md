@@ -63,10 +63,11 @@ and [the migration guide](docs/migration-2.0.md) lists every change from 1.2.5 a
     that weakens the client.
   - **Retries:** a call that is safe to send twice, such as a read, is sent again after a 408, a 429, a 5xx, a
     connection that failed or an attempt longer than `RequestTimeout`: `MaxRetries` times, three by default, 0 for
-    none, with jittered back-off. A publish, a create or a run is sent once. The client waits as the server asks, by
-    `Retry-After` or the wait a 429's body names, up to `MaxRetryAfter`, two minutes by default; a longer wait throws
-    `RateLimited` at once, with `RetryAfter`. The same retries run from DI, from `TableauClient.Create` and over an
-    `HttpClient` of your own; no Polly type is in the API.
+    none, with jittered back-off. A publish, a create or a run is sent once. After a 429 or a 503 the client waits as
+    the server asks, by `Retry-After` or the wait a 429's body names, up to `MaxRetryAfter`, two minutes by default; a
+    longer wait fails at once, a 429 as `RateLimited` and a 503 as `Http`, each with `RetryAfter`. The same retries
+    run from DI, from `TableauClient.Create` and over an `HttpClient` of your own, on Polly.Core from a handler of the
+    library's own; no Polly type is in the API.
   - **Timeouts:** `RequestTimeout` limits each attempt of a call, its answer read whole within it;
     `TransferTimeout` limits a download or an upload as a whole, reading the file included.
   - **The builder** `AddTableauClient` returns has `ConfigurePrimaryHandler`, for a proxy, a client certificate or a
@@ -100,7 +101,8 @@ and [the migration guide](docs/migration-2.0.md) lists every change from 1.2.5 a
 - **`TableauApiClient.ServerInfo` is gone:** use `TableauClient.Server.GetInfoAsync`, which returns the 2.0 model
   `ServerInfo` (the migration guide).
 - **The package depends on Microsoft.Extensions' abstractions,** 10.0.14: Logging.Abstractions, Options,
-  DependencyInjection.Abstractions and Http, in place of Microsoft.Extensions.Logging 2.2.0.
+  DependencyInjection.Abstractions and Http, in place of Microsoft.Extensions.Logging 2.2.0; and on Polly.Core 8.9.0,
+  for the retries, which brings no other package.
 - **The licence is MIT.**
 - **The package's metadata:** a description that says what it is and ends "Not affiliated with or endorsed by
   Tableau or Salesforce."; the README packed into it; the project and repository links on GitHub; symbols as a

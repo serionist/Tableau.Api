@@ -87,16 +87,20 @@ What changes for a caller who moves a call over:
 - **Options** can't change once a client is built from them.
 - **Retries:** 1.2.5 sent each call once. A call that is safe to send twice, such as a read, is now sent again after
   a 408, a 429, a 5xx, a connection that failed or an attempt longer than `RequestTimeout`, three times by default
-  (`MaxRetries`; 0 turns them off). A 429 or 503 is waited out as the server asks, up to `MaxRetryAfter`, two minutes
-  by default; a longer wait throws `TableauErrorKind.RateLimited` at once, with `RetryAfter`. A publish, a create or a
-  run is never sent twice. Retries of your own, such as a resilience handler on every `HttpClient`, don't reach the
-  client: set `MaxRetries` to 0 and add yours with `AddTableauClient(...).AddHttpMessageHandler(...)`.
+  (`MaxRetries`; 0 turns them off). A 429's or a 503's wait, by `Retry-After` or a 429's body, is waited out up to
+  `MaxRetryAfter`, two minutes by default; a longer one fails at once, a 429 as `TableauErrorKind.RateLimited` and a
+  503 as `TableauErrorKind.Http`, each with `RetryAfter`. A publish, a create or a run is never sent twice. Retries of
+  your own, such as a resilience handler on every `HttpClient`, don't reach the client: set `MaxRetries` to 0 and add
+  yours with `AddTableauClient(...).AddHttpMessageHandler(...)`, retrying only GET, HEAD, PUT and DELETE.
 - **Timeouts:** `RequestTimeout` limits each attempt, two minutes by default; a download or an upload has
   `TransferTimeout` instead, for the whole of it, with no limit by default.
 - **Downloads,** as their areas move over: a `TableauDownload`, returned once the headers have come, whose `Content`
   streams from the server, where 1.2.5 read the whole file into memory first. Dispose it; `SaveToFileAsync` writes it
-  to a file. Its `FileName` is cleaned to a name alone, and `Kind` says what it is, as the `DatasourceFileType` beside
-  the stream of the old `DownloadDataSource` did.
+  to a file. Its `FileName` is cleaned to a name alone, and `Kind` says what it is, as the `WorkbookFileType` beside
+  the stream of 1.2.x's `DownloadWorkbook` did: `twb` is `TableauFileKind.Workbook`, `twbx` is `PackagedWorkbook`.
+  1.2.x's `DownloadDataSource` returned the stream alone; `main`'s returned a `DatasourceFileType` beside it, whose
+  `hyper`, `tds` and `tdsx` are `Hyper`, `DataSource` and `PackagedDataSource`, and whose `tde`, an extract Tableau no
+  longer makes, is `Unknown`.
 
 | 1.2.5 | 2.0 | How to move over |
 |---|---|---|
@@ -108,5 +112,5 @@ What changes for a caller who moves a call over:
 |---|---|---|
 | Microsoft.Extensions.Logging | 2.1.1 | 10.0.14, through Microsoft.Extensions.Http; the library itself references Microsoft.Extensions.Logging.Abstractions alone |
 | Microsoft.Extensions.Http, .Options, .DependencyInjection.Abstractions | none | 10.0.14, for `AddTableauClient` and the client's options |
-| Microsoft.Extensions.Http.Resilience | none | 10.11.0, for the client's retries and attempt timeout, with Polly.Core 8 under it; none of its types is in the library's API, and the library registers none of its services |
+| Polly.Core | none | 8.9.0, for the client's retries, run by a handler of the library's own; none of its types is in the library's API, and it brings no other package |
 | Newtonsoft.Json | none | 13.0.4, for the Vizportal client |
