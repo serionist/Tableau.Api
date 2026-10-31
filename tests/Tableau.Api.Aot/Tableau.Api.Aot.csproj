@@ -12,13 +12,18 @@
     <IlcTreatWarningsAsErrors>true</IlcTreatWarningsAsErrors>
     <!-- The runtime CI publishes it for, so a restore without one brings its packages. -->
     <RuntimeIdentifiers>linux-x64</RuntimeIdentifiers>
-    <!-- No lock file: its own packages are the SDK's native AOT compiler, at the SDK's own runtime version, so a lock
-         file would fail a locked restore at every SDK patch. The library's lock file holds the rest. -->
+    <!-- No lock file: among its packages is the SDK's native AOT compiler, at the SDK's own runtime version, so a lock
+         file would fail a locked restore at every SDK patch. The library's lock file holds the library's packages, and
+         Directory.Packages.props the configuration binder's version. -->
     <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
+    <!-- The client's options are bound from configuration by the binder's source generator, as a caller's AOT app
+         binds them. -->
+    <EnableConfigurationBindingGenerator>true</EnableConfigurationBindingGenerator>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Tableau.Api\Tableau.Api.csproj" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
   </ItemGroup>
 
   <ItemGroup>

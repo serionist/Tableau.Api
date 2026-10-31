@@ -22,9 +22,11 @@ internal sealed class FakeResponse
         200 => "OK",
         201 => "Created",
         202 => "Accepted",
+        203 => "Non-Authoritative Information",
         204 => "No Content",
         301 => "Moved Permanently",
         302 => "Found",
+        303 => "See Other",
         307 => "Temporary Redirect",
         308 => "Permanent Redirect",
         400 => "Bad Request",
@@ -32,7 +34,10 @@ internal sealed class FakeResponse
         403 => "Forbidden",
         404 => "Not Found",
         409 => "Conflict",
+        429 => "Too Many Requests",
         500 => "Internal Server Error",
+        502 => "Bad Gateway",
+        503 => "Service Unavailable",
         _ => "Status",
     };
 
@@ -69,6 +74,15 @@ internal sealed class FakeResponse
     /// <summary>A body with the Content-Type given, as a download or a proxy's error page comes.</summary>
     public static FakeResponse Content(int status, string contentType, string body) =>
         new(status, contentType, Encoding.UTF8.GetBytes(body));
+
+    /// <summary>A body of bytes with the Content-Type given, such as a certificate revocation list.</summary>
+    public static FakeResponse Bytes(int status, string contentType, byte[] body) => new(status, contentType, body);
+
+    /// <summary>The fixture file from Fixtures/, as Tableau sends JSON.</summary>
+    public static FakeResponse Fixture(int status, string file) => Json(status, ModelFixtures.Text(file));
+
+    /// <summary>This response with one more header line.</summary>
+    public FakeResponse WithHeader(string name, string value) => new(Status, ContentType, Body, [.. Headers, new(name, value)]);
 
     /// <summary>What a request with no route gets: a 404 that names it, so the failing test says which.</summary>
     public static FakeResponse NoRoute(RecordedRequest request) =>

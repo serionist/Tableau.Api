@@ -17,6 +17,7 @@ using Microsoft.Extensions.Logging;
 using Tableau.Api.Attributes;
 using Tableau.Api.Exceptions;
 using Tableau.Api.Models;
+using Tableau.Api.Pipeline;
 using Tableau.Api.VizPortal;
 
 namespace Tableau.Api;

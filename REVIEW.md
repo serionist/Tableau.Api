@@ -43,7 +43,8 @@ Each is a yes or no; a "no" is a finding.
    version, or Tableau Cloud) with what it could not show? Does the coverage gate pass without a lower floor or a wider
    exclusion? Do tests use invented data and delete what they create on the site?
 4. Does each request match Tableau's REST API reference for its method, path (`sites/{site-id}/...`), query, body and
-   expected status, and does its `[ApiVersion]` name the version the reference gives?
+   expected status, and do its `Endpoints` descriptor (the 2.0 client) or its `[ApiVersion]` (the old one) name the
+   version and the deployments the reference gives?
 5. No password, token or runsettings in code, tests, logs, exception messages, docs, commits or the PR?
 6. Do the public members of `TableauApiClient`, `VizPortalClient` and the `Models` types stay as they were, or does the
    change name the one it breaks, in `eng/apicompat/1.2.5.xml` and `docs/migration-2.0.md`?
@@ -64,7 +65,7 @@ Each is a yes or no; a "no" is a finding.
 - **Authentication** (`TableauApiClient_Authentication.cs`, `TableauSession`): a password, a personal access token
   and a session token travel only in a request body or the `X-Tableau-Auth` header, never in a URL; impersonation
   (`userIdToImpersonate`) reaches only the sign-in that asked for it; `SignOut` still ends the session.
-- **Logging** (`Log?.Log...`): no password, token, cookie or request body that holds one, in any level; a logged URL
+- **Logging** (`Log?.Log...`, `TableauLog`): no password, token, cookie or request body that holds one, in any level; a logged URL
   holds no secret.
 - **URLs** (`buildUri`): every value in a path or a query is escaped; `filter` and `sort` pass through as the caller
   wrote them, so a value inside them is the caller's to escape; a new endpoint keeps the base URL's scheme, host and
@@ -79,8 +80,11 @@ Each is a yes or no; a "no" is a finding.
   id from `InitiateFileUpload` reaches the publish; each stream is disposed by whoever owns it, the caller's by the
   caller.
 - **Pagination, cancellation, versions:** page size 1 to 1,000, page number from 1, every page reachable; every public
-  async method takes the `CancellationToken?` last and passes it to the request; a new endpoint carries `[ApiVersion]`,
-  and `[OnPremiseOnly]` when Tableau Cloud lacks it.
+  async method takes its token last and passes it to the request: `CancellationToken cancellationToken = default` on the
+  2.0 client, which `ConventionsTests` checks, `CancellationToken?` on the old one; a new 2.0 endpoint has its
+  descriptor in `Endpoints`, with the version the reference gives and `Server` alone when Tableau Cloud lacks it (an old
+  one carries `[ApiVersion]`, and `[OnPremiseOnly]`); a call below its version or on the wrong deployment throws before
+  sending.
 - **Vizportal** (`src/Tableau.Api/VizPortal/`): an internal, unversioned API, so the PR names the Tableau version it was
   checked on; the session token goes only in the `workgroup_session_id` cookie, with an `X-Xsrf-Token` that matches
   its cookie; certificate validation follows the caller's `IgnoreSSLErrors`.
