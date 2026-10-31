@@ -28,8 +28,9 @@ work feels complete. `main` takes PRs only, and a maintainer squash-merges them 
    clone (a connected app's, or a personal access token's), or where none does yet, the changed endpoints called from a
    scratch program outside the clone. A live test makes its objects in the run's project, which the suite deletes; with
    `TABLEAU_RECORD=1` it writes each JSON body, scrubbed, for a fixture. `live.yml` runs the `Live` tests on the
-   maintainers' Tableau Server from `main`, by hand and nightly, never on a PR: after a merge, check its next run. A change to what only Tableau Server has also runs its
-   `ServerOnly` tests by hand on a Tableau Server, with `TABLEAU_SERVER_ONLY=1`. Note Tableau Server and its version,
+   maintainers' Tableau Server from `main`, by hand and nightly, never on a PR: after a merge, check its next run. A
+   change to what only Tableau Server has also runs its `ServerOnly` tests by hand on a Tableau Server, with
+   `TABLEAU_SERVER_ONLY=1`. Note Tableau Server and its version,
    or Tableau Cloud, what passed, which failures `main` has too on the same site, and what Tableau Cloud couldn't
    show. Never read, print or log those settings, and never run against a site the developer did not name. No site:
    say so; the PR says it did not run.

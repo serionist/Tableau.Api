@@ -71,7 +71,7 @@ Taken by @serionist: D1 to D10 on 2026-10-28, D11 on 2026-10-29.
 | D6 | net10.0 only | .NET Framework and older users stay on 1.2.x, which gets security fixes only. | S1, S5 |
 | D7 | JSON on the wire | System.Text.Json with source-generated models; `IsAotCompatible`, with an AOT smoke-test project in CI like WriteableFileProviders' `tests/WriteableFileProviders.Aot`. XML stays only where Tableau requires it, such as the multipart publish payload, and is written with `XmlWriter`. The models are generated from the newest published xsd by a repeatable generator in `eng/`, never hand-patched, and a CI check proves the generated file is current. How the generator works is under Design. | S8, S17 |
 | D8 | A modern client | DI registration with options and IHttpClientFactory typed clients. One session manager for every sign-in Tableau has now: PAT, connected-app JWT (direct trust and OAuth 2.0 trust), unified access tokens (Cloud), password with impersonation (Server); one sign-in at a time, sign in again on expiry, thread-safe. The client is bound to its session, with an explicit session API kept for multi-site work. `IAsyncEnumerable` paging and a typed filter and sort builder. A `CancellationToken` last on every method, `ConfigureAwait(false)`, nullable annotations, consistent `...Async` names and return shapes. Resilience: retry only idempotent calls, honour 429 and `Retry-After`, long timeouts for downloads and publishing, streamed downloads. No cross-host redirects with credentials; TLS validation always on unless explicitly turned off. One exception type with the details. Server-vs-Cloud and API-version gates that work, with the version read from Server Info. The Cloud schedule model from API 3.20. The supported floor: the maintained Server versions (about 2024.2, REST 3.23) and Cloud, older versions on opt-in (RD8). | S9 to S15 |
-| D9 | Tests | Offline tests with a fake server or `HttpMessageHandler` on every PR, with a coverage floor enforced in CI (WriteableFileProviders' `eng/coverage-gate.cs` is the model). A live suite, nightly and on dispatch, against a free Tableau Developer Program site, signed in through a direct-trust connected app from a reviewed GitHub environment; never on PRs from forks. Server-only features are tested by hand, and the PR says so. The old live tests' coverage is kept or replaced. | S2a, S2b, S7, S11, S12 to S17 |
+| D9 | Tests | Offline tests with a fake server or `HttpMessageHandler` on every PR, with a coverage floor enforced in CI (WriteableFileProviders' `eng/coverage-gate.cs` is the model). A live suite, nightly and on dispatch, against a free Tableau Developer Program site, signed in through a direct-trust connected app from a reviewed GitHub environment; never on PRs from forks. #43 replaced the Developer Program site with the maintainers' own Tableau Server (S11). Server-only features are tested by hand, and the PR says so. The old live tests' coverage is kept or replaced. | S2a, S2b, S7, S11, S12 to S17 |
 | D10 | New endpoints | The high-value ones from the research's ranked list in 2.0.0, the rest as follow-up issues. The four NuGet_Prod metadata methods (F44) are in 2.0.0. | S11 to S17, Research tracker |
 | D11 | Standing approval to merge, with limits | The session squash-merges each step's PR once CI is green and `review-code` is clean, without waiting for a maintainer. Three things still need a maintainer: a one-way door follows AGENTS.md's rule, a PR "that names it in its title, after a maintainer agrees in its issue; the other can object on the PR before it merges" (worded so by #11, after Q9), and before merging a door PR the session reads its comments and stops on any maintainer's objection; a release tag's publish is approved by a maintainer in the `nuget` environment; and a PR whose review records a loosened check (REVIEW.md, The harness), a `wontfix` blocker or an added ignore among them, waits for a maintainer's agreement in that PR. This is an exception, for the steps of #2, to AGENTS.md's "a maintainer squash-merges" (Q8, 2026-10-29; the third limit from P20 in plan review round 2). | every step |
 
@@ -498,16 +498,21 @@ As S11 built it (#43, the door agreed there):
     `jti`, `aud` "tableau", `sub` and `scp` as an array;
   - `Jwt(token)` for OAuth 2.0 trust and any JWT minted elsewhere; `UnifiedAccessToken(token)`, Cloud only, 3.27,
     signed in with `isUat`.
-  - Each kind is its own Sign In descriptor (password 1.0; a PAT 3.6; a JWT 3.17; a UAT 3.27 Cloud; impersonation
-    Server), so the gates refuse a kind the server or its deployment lacks before any secret is read.
+  - Each kind is its own Sign In descriptor (password 1.0; a PAT 3.6, impersonating 3.11, Tableau Server 2021.1 with
+    `tsm authentication pat-impersonation enable`; a JWT 3.17; a UAT 3.27 Cloud; impersonation Server), so the gates
+    refuse a kind the server or its deployment lacks before any secret is read. A password's or a PAT's sign-in is
+    retried like a read; a JWT's never, since Tableau refuses a `jti` it has seen and a late attempt may pass `exp`.
+  - An impersonating sign-in that comes back as another user is signed out and fails as `Authentication`.
 - **The session manager** (`Pipeline/TableauSessions.cs`), one per named client, in its state:
   - signs in on the first call that needs a session (a descriptor's `NeedsSession`), one sign-in at a time under a
     `SemaphoreSlim`, and holds the session and when to renew it as one immutable record, swapped whole;
   - callers that arrived before a sign-in failed take its failure rather than trying again each, so 20 calls with a
     wrong password make one refused sign-in, not 20 for a lockout to count;
-  - signs in again five minutes before the session's `ExpiresAt`, or at half its life when that is shorter; `ExpiresAt`
-    is 240 minutes on Server and 120 on Cloud, or sooner when a PAT's `estimatedTimeToExpiration` (`DAYS:HH:MM`, the
-    token's own lifetime) says the token expires first;
+  - signs in again five minutes before the session's own lifetime is up, 240 minutes on Server and 120 on Cloud;
+    `ExpiresAt` shows that, or a PAT's sooner end by its `estimatedTimeToExpiration` (`DAYS:HH:MM`, the token's own
+    lifetime), whose end then comes as a 401: renewing by the token's time would sign in on every call in its last
+    minutes, each ending the session before. A renewal that fails before `ExpiresAt` leaves the call in the session it
+    has, and is tried again a minute later;
   - signs in again once after a 401 to a call in its own session, unless another call already did, and sends the call
     again, an upload's excepted;
   - a client from `Create` or the constructor over an `HttpClient` signs its session out when disposed, never throwing,
@@ -672,13 +677,20 @@ As S11 built it (#43, the door agreed there):
     `TABLEAU_LIVE_SECRET_VALUE`, `TABLEAU_LIVE_USER`), or by hand with a PAT (`TABLEAU_LIVE_PAT_NAME`,
     `TABLEAU_LIVE_PAT_SECRET`); `TABLEAU_LIVE_SITE` unset is the default site. Its session tests run one at a time,
     since one PAT allows one session.
-  - Every object is made in a project named after the run and deleted in cleanup; leftovers older than a day with the
-    prefix are swept. Tableau Server lists a project from its index, a second behind a create and minutes behind a
-    delete, so the suite waits for a new one and the sweep passes over one already gone.
-  - With `TABLEAU_RECORD=1` each JSON body goes through `FixtureRecorder`, scrubbed of tokens, LUIDs, names, emails and
-    hosts, into a folder outside `Fixtures/`, for a maintainer to read and copy in.
-  - It never runs on PRs, so forks never see its secrets; the log check counts a line holding a live secret, and shows
-    none.
+  - Every object is made in a project named after the run and deleted in cleanup; leftovers older than a day are swept,
+    and only a top-level project with the suite's description and a run's exact name counts as one. Tableau Server
+    lists a project from its index, a second behind a create and minutes behind a delete, so the suite waits for a new
+    one and the sweep passes over one already gone.
+  - Every live client sends through one `HttpClient` that keeps each session token it carries, renewals included, for
+    the log check, and is disposed after the cleanup's client signs out through it.
+  - With `TABLEAU_RECORD=1` each JSON body goes through `FixtureRecorder`, which fails closed: every string is invented
+    but a LUID (mapped), a date, a number, a version, a time span and a short list of enumerations and messages; a key
+    naming a token, a secret, a password, a JWT or a keychain, and everything under a secret's or a keychain's, goes;
+    the run's host and settings are replaced; a body that isn't JSON is not written. At the suite's end a file still
+    holding a live secret or setting is deleted and named. The folder is outside `Fixtures/`, for a maintainer to read
+    and copy in.
+  - It never runs on PRs, so forks never see its secrets; in a run that reached a site, the log check counts the lines
+    it finds and shows none.
 
 ### CI and release
 
@@ -781,7 +793,7 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
 | S8 | main | Models, generator, AOT | F14 F23 F50 | #37 | #38 | done: squash `ffc43f5` |
 | S9 | main | Client core | F4 F16 F18 F20 F21 F22 F35 F36 F37 F38 F46 F47 F48 | #39 | #40 | done: squash `18c8404` |
 | S10 | main | Resilience and downloads | F17 F19 F42 | #41 | #42 | done: squash `54b6764` |
-| S11 | main | Sessions and the live suite | F27 F34 | #43 | | in review |
+| S11 | main | Sessions and the live suite | F27 F34 | #43 | #44 | in review |
 | S12 | main | Port: server, sites, projects, users, groups, favorites; paging and filters | F13 F33 | | | todo |
 | S13 | main | Port: permissions, tags, metadata (REST and GraphQL) | F8 F44 | | | todo |
 | S14 | main | Port: workbooks, views, data sources, revisions | F5 F7 F32 | | | todo |
@@ -1461,14 +1473,14 @@ Status: `todo`, `done` (with the PR) or `wontfix` (with the reason). No finding 
 | F24 | Target, version and package validation set once; the breaks listed | S5 | no | done |
 | F25 | Licence, README, CONTRIBUTING, SECURITY, true package metadata | S1 | the 1.2.6 package gets the metadata | todo |
 | F26 | Tests that build, run offline and cover the API | S7 | 1.x gets its own offline suite | done |
-| F27 | The session's user name set after sign-in | S11 | yes | done (#43): `TableauSession.UserName` |
+| F27 | The session's user name set after sign-in | S11 | yes | done (#44): `TableauSession.UserName` |
 | F28 | Invariant culture and ordinal comparisons, tested under sv-SE and tr-TR | S7 | no (Q5) | done |
 | F29 | The Vizportal schedule check sends camelCase | S16 | n/a | todo |
 | F30 | Chunks read from any stream, asynchronously | S17 | no | todo |
 | F31 | Add Workbook to Schedule returns the task; Add Data Source to Schedule | S15 | no; a known issue | todo |
 | F32 | Updates omit nested elements the caller did not set | S14 | no (Q5) | todo |
 | F33 | Update User sends the documented attributes | S12 | no | todo |
-| F34 | A session lifecycle: expiry, signing in again, no token in `ToString` | S11 | no | done (#43): the session manager |
+| F34 | A session lifecycle: expiry, signing in again, no token in `ToString` | S11 | no | done (#44): the session manager |
 | F35 | One exception type with the details (D8) | S9 | no | done |
 | F36 | Logging without secrets or noise; Abstractions only | S9 | no | done |
 | F37 | `ConfigureAwait(false)` on every await | S9 | no | done: CA2007 an error outside TableauLegacy |
@@ -1783,6 +1795,7 @@ and start the steps", and on the owner calls they have answered since (Q7 to Q9)
 | 2026-10-31 | S10 | review-code round 2 on `dd567cf`: every round 1 fix holds; five minors and eight improvements, all taken. **Minors:** two comments outlived the switch to Polly.Core (`CallerClientHandler`'s options, `TableauClientState.Resilience`); the advice to a caller's own retrying handler now says GET and HEAD, or a call known safe to send twice, never a POST nor Append to File Upload's PUT, and that the client's attempt timeout runs inside it; a DI handler's exception shaped as an `HttpClient` timeout is `Http`, since only a caller's `HttpClient` has a timeout of its own; a save cancelled before it starts no longer blocks a later one; `ClientFixtures.ClosedPort()` holds its port with a socket bound and never listening, since a freed port went to a parallel test's server and failed a test once in twelve coverage runs (a connection to it is refused at once on Linux, after Windows' usual two seconds there). **Improvements:** the waits' upper bounds have ten seconds' room; a 503 whose body names a wait is left to the back-off; a dead branch in the name cut goes, and the device rule's second trim is pinned; the guide links `main`'s `DownloadDataSource`; blank lines between members restored. Tests 472 to 475; ten runs with coverage in a row, as the gate runs them, all passed; 94.74% of lines and 94.09% of branches on Windows, the floors unchanged. |
 | 2026-10-31 | S10 | Done: PR #42 merged as `54b6764`, closing #41, with its doors and their departures agreed on #41. |
 | 2026-10-31 | S11 | Built on `43-sessions-live-suite` for #43, from `origin/main` at `54b6764`; @serionist agreed on #43 to its door, the credentials and session API, and chose his own Tableau Server for the live suite over a Developer Program site. **Sessions** (Design, Sessions and sign-in): `TableauCredentials` with its five kinds and their vault overloads; `TableauSession`; `client.Sessions` (`SessionsClient`) and `client.WithSession`; credentials on `Create`, the `HttpClient` constructor and `UseCredentials`; the session manager, `Pipeline/TableauSessions.cs`; eight descriptors (Sign In by kind, Sign Out, Switch Site), `NeedsSession`, `KeepsBody` and `{siteId}` in the pipeline. `TableauApiClient`'s `SignIn`, `SignInWithPAT`, `SignOut` and `SwitchSite` are deleted: three more breaks in the ledger (22), `SignInWithPAT`'s 1.2.5 signature being listed already; the old files name `Models.TableauSession`, since a `TableauSession` in `Tableau.Api` would otherwise bind every old method to the new record. **Looked up:** the REST reference's Sign In, Sign Out and Switch Site (bodies, `isUat` from 3.27, impersonation Server only, Switch Site 2.6 and Server only, a token valid 240 minutes on Server and 120 on Cloud); `estimatedTimeToExpiration` is a PAT's own lifetime, `DAYS:HH:MM`, returned to a PAT sign-in alone, and the live server sent `363:10:35`; the direct-trust JWT's header and claims, Server and Cloud; connected-app scopes (none for sign-in and sign-out from 2023.2; `tableau:content:read` for reads, `tableau:projects:*` for projects); unified access tokens; `HMACSHA256.HashData`, `Base64Url`, `IHttpClientFactory`'s handler lifetimes, and `ServiceProvider.Dispose` throwing on a service that is `IAsyncDisposable` alone. **The live suite:** `live.yml` (by hand from `main`, nightly once `TABLEAU_LIVE_NIGHTLY` is `true`, in `tableau-live`, one run at a time); `LiveSite.cs` (the settings, the sign-in, the run's project and its sweep); `FixtureRecorder.cs` (`TABLEAU_RECORD=1`); `ServerOnlySessionTests` for impersonation and Switch Site by hand; one `[AssemblyCleanup]`, `SuiteCleanup`, which deletes the run's project, then checks every log line, a live secret's counted and never shown. **Live check,** Tableau Server 2025.1 (REST API 3.25), the default site, a PAT from outside the clone: the four `Live` tests passed, sign-outs checked by a refused token; the run's project made, listed and deleted. It showed that a PAT's two sessions end each other, so the session tests run one at a time, and that the server lists a project a second behind a create and minutes behind a delete. A recording run wrote 19 fixtures, none holding the secret, the token's name, the host, a LUID, an email or a token. Not run: Switch Site (one site) and the password sign-ins (no password); the first direct-trust run comes from `main` after the merge. **Tests:** 475 to 551; coverage 95.01% of lines and 94.56% of branches on Windows; the line floor rises to 95%. The native AOT app signs in through its fixtures, mints a JWT, binds a session and signs out: published natively on win-x64 with no warning, 16 MB. **Departures,** in the PR's door list: `ExpiresAt` takes a PAT's `estimatedTimeToExpiration` only when sooner than the deployment's lifetime; `TableauSession`'s six members are `required` init, so a test can make one, and `WithSession` refuses one without a token; `Jwt` and `UnifiedAccessToken` take only a delegate; `UseCredentials` keeps the last given; a DI name's session is never signed out, the container's disposal included; sign-in descriptors are idempotent. |
+| 2026-11-01 | S11 | Draft PR #44. review-code round 1: no blocker or major, eleven minors, all fixed, and the maintainer took all fifteen improvements; @serionist agreed on #43 to the eight departures and to a narrower eighth, a JWT's sign-in never retried. **Fixes:** a JWT's or a unified access token's sign-in is never sent twice, since Tableau refuses a `jti` it has seen; PAT impersonation needs REST API 3.11 (Tableau Server 2021.1, `tsm authentication pat-impersonation enable`), and an impersonating sign-in that comes back as another user is signed out and refused; a session is renewed by its own lifetime, its `ExpiresAt` still showing a PAT's sooner end, which comes as a 401, so a token's last minutes don't sign in on every call; the half-life rule goes with it; a cancelled sign-in is pinned as no failure for the callers waiting; the live suite keeps every token its clients carry, renewals included, through one `HttpClient` disposed after the cleanup signs out; in a run that reached a site the log check counts lines and shows none; the sweep deletes only a top-level project with the suite's description and a run's exact name; the recorder fails closed, takes secret keys by pattern and the run's settings everywhere, writes nothing for a body that isn't JSON, and the suite's end deletes and names a file still holding a live value; the migration guide and CHANGELOG say an area not yet ported can't get a session on `main`. **Improvements:** `TableauRequest` prints no token; a sign-in a caller's handler sent elsewhere says to rotate the credentials; a renewal that fails before `ExpiresAt` leaves the call in its session and is tried again a minute later; the sign-out of a sent token keeps its caller's time, so a dispose stays within ten seconds; tests of `Dispose` under a single-threaded context, of the sweep's rules and of the scrubber over the schema's 13 secrets. Tests 551 to 577. |
 
 ## For the maintainers
 
@@ -1797,7 +1810,7 @@ What the session cannot do, first what closes a security exposure. Kept current 
 
 **For S1, S2a and S2b:**
 
-- [ ] Join the Tableau Developer Program and get its site; note its renewal date. S2b's live smoke run needs it, with
+- [ ] Join the Tableau Developer Program and get its site; note its renewal date. Not needed for the live suite: #43 runs it on the maintainers' own Tableau Server instead. S2b's live smoke run needs it, with
   a PAT kept in environment variables for a short program outside the clone.
 - [ ] After S1: make `CI` and `PR text` required on the `main` ruleset, or tell the session to apply it through the
   API. Until then `dependabot-auto-merge.yml` fails on Dependabot's PRs and merges none. Before S2a's PR: the same

@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Tableau.Api.Pipeline;
+using Tableau.Api.Rest.Models;
 
 namespace Tableau.Api.Tests;
 
@@ -41,11 +42,19 @@ public sealed class LiveSessionTests
         await using var client = LiveSite.Client(null);
         var session = LiveSite.Saw(await SignedInAsync(() => client.Sessions.SignInAsync(LiveSite.Credentials())));
         await using var bound = client.WithSession(session);
-
-        var info = await bound.Server.GetInfoAsync();
-        var project = await LiveSite.ProjectAsync(bound);
-        var listed = await LiveSite.ListedAsync(bound, project);
-        await bound.Sessions.SignOutAsync(session);
+        ServerInfo info;
+        Project listed;
+        try
+        {
+            info = await bound.Server.GetInfoAsync();
+            var project = await LiveSite.ProjectAsync(bound);
+            listed = await LiveSite.ListedAsync(bound, project);
+        }
+        finally
+        {
+            // A session held by hand is its holder's to end, whatever failed.
+            await bound.Sessions.SignOutAsync(session);
+        }
 
         Assert.IsFalse(string.IsNullOrEmpty(info.ProductVersion?.Value));
         Assert.AreEqual(LiveSite.ProjectName, listed.Name, "the sweep finds a run's project by its prefix");
@@ -92,10 +101,17 @@ public sealed class ServerOnlySessionTests
 
         var session = LiveSite.Saw(await client.Sessions.SignInAsync(TableauCredentials.Password(TableauSite.Setting(User),
             LiveSite.Secret(Password), impersonated)));
-        await client.Sessions.SignOutAsync(session);
+        try
+        {
+            await LiveSite.RunProjectsAsync(client.WithSession(session));
+        }
+        finally
+        {
+            await client.Sessions.SignOutAsync(session);
+        }
 
         Assert.IsTrue(string.Equals(impersonated, session.UserId, StringComparison.OrdinalIgnoreCase), "the session acts as the user impersonated");
-        await ClientFixtures.FailsAsync(TableauErrorKind.Authentication, () => client.Sessions.SignOutAsync(session));
+        await ClientFixtures.FailsAsync(TableauErrorKind.Authentication, () => LiveSite.RunProjectsAsync(client.WithSession(session)));
     }
 
     [SiteTest(TableauSite.ServerOnly, [ServerUrl, User, Password, OtherSite]), TestCategory(TableauSite.ServerOnly)]
@@ -106,19 +122,27 @@ public sealed class ServerOnlySessionTests
             LiveSite.Secret(Password))));
 
         var other = LiveSite.Saw(await client.Sessions.SwitchSiteAsync(first, TableauSite.Setting(OtherSite)));
-        await client.Sessions.SignOutAsync(other);
+        try
+        {
+            await LiveSite.RunProjectsAsync(client.WithSession(other));
+        }
+        finally
+        {
+            await client.Sessions.SignOutAsync(other);
+        }
 
         Assert.AreEqual(TableauSite.Setting(OtherSite), other.SiteContentUrl);
         Assert.AreNotEqual(first.SiteId, other.SiteId);
         Assert.AreEqual(first.UserName, other.UserName);
-        await ClientFixtures.FailsAsync(TableauErrorKind.Authentication, () => client.Sessions.SignOutAsync(first));
-        await ClientFixtures.FailsAsync(TableauErrorKind.Authentication, () => client.Sessions.SignOutAsync(other));
+        await ClientFixtures.FailsAsync(TableauErrorKind.Authentication, () => LiveSite.RunProjectsAsync(client.WithSession(first)));
+        await ClientFixtures.FailsAsync(TableauErrorKind.Authentication, () => LiveSite.RunProjectsAsync(client.WithSession(other)));
     }
 
-    private static TableauClient Client() => TableauClient.Create(new TableauClientOptions
+    // Over the suite's HttpClient, so every token it carries is kept for the log check.
+    private static TableauClient Client() => LiveSite.Client(null, new TableauClientOptions
     {
         ServerUrl = new Uri(TableauSite.Setting(ServerUrl)),
         Site = Environment.GetEnvironmentVariable("TABLEAU_SERVER_ONLY_SITE") ?? "",
         Deployment = TableauDeployment.Server,
-    }, loggerFactory: Fixtures.Log.Factory);
+    });
 }

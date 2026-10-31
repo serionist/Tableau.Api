@@ -12,8 +12,9 @@
 #   which is the default site.
 # - One run at a time: the suite makes a project named after the run and deletes it at the end, and deletes what an
 #   earlier run left behind more than a day ago.
-# - The suite's log check fails on any log line holding a setting's secret or a session's token, and names no such
-#   line, since this log is public.
+# - The suite's log check fails on any log line holding a setting's secret or a token any of its clients carried, and
+#   on one holding an invented secret or a query value; in a run that reached a site it counts such lines and shows
+#   none, since a line may hold a live value no list names, such as a JWT the client minted, and this log is public.
 name: Live
 
 on:

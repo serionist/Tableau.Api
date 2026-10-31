@@ -108,6 +108,25 @@ public sealed partial class LogTests
     }
 
     [TestMethod]
+    public void AfterARunThatReachedASiteTheCheckCountsLinesAndShowsNone()
+    {
+        string[] live = ["live-token-value"];
+        var jwt = $"Debug: Tableau client prod: {Fixtures.JwtStart}.minted.jwt";
+        var query = "Debug: Tableau client prod: GET /api/3.25/items?filter=email:eq:ada@invented.example";
+
+        var offline = Assert.ThrowsExactly<InvalidOperationException>(() => CheckLines([jwt], [], reachedSite: false));
+        var quiet = Assert.ThrowsExactly<InvalidOperationException>(() => CheckLines([jwt], live, reachedSite: true));
+        var quietQuery = Assert.ThrowsExactly<InvalidOperationException>(() => CheckLines([query], live, reachedSite: true));
+        var leak = Assert.ThrowsExactly<InvalidOperationException>(() => CheckLines(["Debug: live-token-value"], live, reachedSite: true));
+
+        Assert.Contains(jwt, offline.Message, "offline, the line is shown");
+        Assert.DoesNotContain(Fixtures.JwtStart, quiet.Message);
+        Assert.DoesNotContain("ada@invented.example", quietQuery.Message);
+        Assert.DoesNotContain("live-token-value", leak.Message);
+        CheckLines(["Debug: Tableau client prod: GET /api/3.25/items?filter=*** answered 200 in 3 ms"], live, reachedSite: true);
+    }
+
+    [TestMethod]
     public void TheQueryCheckFindsAValueShown()
     {
         string[] lines =
@@ -124,22 +143,31 @@ public sealed partial class LogTests
     /// <summary>
     /// The same for every line any logger in the suite took, once every test has run: no secret in any, and no query
     /// value but <c>***</c> in a line of the 2.0 client. A site's own secrets and tokens, from the live suite, are checked
-    /// too, and a line that holds one is counted, never shown, since the run's log is public.
+    /// too. In a run that reached a site, every failure gives a count and shows no line: a line there may hold a live
+    /// value no list names, such as a JWT the client minted, and the run's log is public.
     /// </summary>
-    /// <param name="live">The live suite's secrets: its settings' and its sessions' tokens.</param>
-    internal static void NoLogLineInTheSuiteHoldsASecretOrAQueryValue(IReadOnlyCollection<string> live)
+    /// <param name="live">The live suite's secrets: its settings' and every session token its clients carried.</param>
+    /// <param name="reachedSite">Whether the run reached a site: a live setting was read, or a site test's switch is set.</param>
+    internal static void NoLogLineInTheSuiteHoldsASecretOrAQueryValue(IReadOnlyCollection<string> live, bool reachedSite) =>
+        CheckLines([.. RecordingLogger.All.Append(Fixtures.Log).Distinct().SelectMany(log => log.Lines)], live, reachedSite);
+
+    /// <summary>The check over the lines given.</summary>
+    internal static void CheckLines(List<string> lines, IReadOnlyCollection<string> live, bool reachedSite)
     {
-        var lines = RecordingLogger.All.Append(Fixtures.Log).Distinct().SelectMany(log => log.Lines).ToList();
         var leaking = lines.Count(line => live.Any(secret => line.Contains(secret, StringComparison.Ordinal)));
         if (leaking > 0)
             throw new InvalidOperationException($"{leaking} log line(s) hold a secret or a token of the live site; they are not shown here.");
         var holding = lines.Where(line => Fixtures.Secrets.Any(secret => line.Contains(secret, StringComparison.Ordinal))).ToList();
         if (holding.Count > 0)
-            throw new InvalidOperationException($"{holding.Count} log line(s) hold a secret:\n" + string.Join("\n", holding));
+            throw new InvalidOperationException($"{holding.Count} log line(s) hold a secret" + Shown(holding, reachedSite));
         var shown = QueryValuesShown(lines).ToList();
         if (shown.Count > 0)
-            throw new InvalidOperationException($"{shown.Count} log line(s) of the 2.0 client show a query value:\n" + string.Join("\n", shown));
+            throw new InvalidOperationException($"{shown.Count} log line(s) of the 2.0 client show a query value" + Shown(shown, reachedSite));
     }
+
+    // The lines themselves, offline; nothing of them in a run that reached a site.
+    private static string Shown(List<string> lines, bool reachedSite) =>
+        reachedSite ? "; this run reached a site, so they are not shown here." : ":\n" + string.Join("\n", lines);
 
     [System.Text.RegularExpressions.GeneratedRegex(@"/[^\s?()']*\?(?<query>[^\s)']+)", System.Text.RegularExpressions.RegexOptions.CultureInvariant)]
     private static partial System.Text.RegularExpressions.Regex QueryPattern();

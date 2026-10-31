@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Tableau.Api.Pipeline;
@@ -25,18 +26,26 @@ namespace Tableau.Api.Tests;
 /// (TABLEAU_LIVE_PAT_NAME and TABLEAU_LIVE_PAT_SECRET), which signing in with ends any other session of the token.
 /// </para>
 /// <para>
+/// Every live client sends through one HttpClient, which follows no redirect and keeps no cookies, and which keeps each
+/// session token it carries, a renewal's among them, for the log check. With TABLEAU_RECORD=1 it sends through a
+/// <see cref="FixtureRecorder"/> too. The suite's cleanup disposes it, after the cleanup's own client has signed out.
+/// </para>
+/// <para>
 /// The run's project is named <see cref="ProjectPrefix"/> and the run, made by the first test that needs it and deleted
-/// when the suite ends. Before it is made, projects with the prefix older than a day, which a run that broke off left
-/// behind, are deleted. With TABLEAU_RECORD=1 every call goes through a <see cref="FixtureRecorder"/>.
+/// when the suite ends. Before it is made, the suite's projects older than a day, which a run that broke off left behind,
+/// are deleted: a top-level project with the suite's description and a run's name, nothing else.
 /// </para>
 /// </remarks>
-internal static class LiveSite
+internal static partial class LiveSite
 {
     public const string ServerUrl = "TABLEAU_LIVE_SERVER_URL";
     public const string Site = "TABLEAU_LIVE_SITE";
 
-    /// <summary>What every run's project is named first, so the sweep finds a run's leftovers and nothing else.</summary>
+    /// <summary>What every run's project is named first.</summary>
     public const string ProjectPrefix = "Tableau.Api live run ";
+
+    /// <summary>The description every run's project has, which the sweep also asks of a project before it deletes one.</summary>
+    public const string ProjectDescription = "Made by Tableau.Api's live suite; deleted when the run ends.";
 
     /// <summary>The scopes the suite's connected app asks for: to read content, and to make and delete its projects.</summary>
     public static readonly string[] Scopes = ["tableau:content:read", "tableau:projects:*"];
@@ -50,10 +59,18 @@ internal static class LiveSite
     public static readonly Endpoint DeleteProject = new("Delete Project", HttpMethod.Delete, "{version}/sites/{siteId}/projects/{projectId:luid}",
         new Version(2, 0), TableauDeployments.Both, Idempotent: true, TransferKind.None);
 
-    private static readonly ConcurrentBag<string> _secrets = [];
+    /// <summary>The settings whose values name the site or the sign-in without being secrets.</summary>
+    private static readonly string[] _knownSettings =
+    [
+        Site, "TABLEAU_LIVE_USER", "TABLEAU_LIVE_PAT_NAME", "TABLEAU_LIVE_CLIENT_ID", "TABLEAU_LIVE_SECRET_ID", "TABLEAU_SERVER_ONLY_SITE",
+        "TABLEAU_SERVER_ONLY_USER", "TABLEAU_SERVER_ONLY_OTHER_SITE",
+    ];
+
+    private static readonly ConcurrentDictionary<string, byte> _secrets = new(StringComparer.Ordinal);
     private static readonly SemaphoreSlim _projectLock = new(1, 1);
-    private static readonly Lazy<HttpClient> _recording = new(Recording);
+    private static readonly Lazy<HttpClient> _http = new(Http);
     private static string? _projectId;
+    private static string? _recorded;
 
     /// <summary>The run's name: CI's run and attempt, or the time and a random part here.</summary>
     public static string Run { get; } = Environment.GetEnvironmentVariable("GITHUB_RUN_ID") is { Length: > 0 } run
@@ -64,10 +81,21 @@ internal static class LiveSite
     public static string ProjectName => ProjectPrefix + Run;
 
     /// <summary>
-    /// Every live secret the suite held, its settings' and its sessions' tokens: no log line may hold one, and a failure
-    /// that finds one names no line.
+    /// Every live secret the suite held, its settings' and every session token its clients carried: no log line may hold
+    /// one, and a failure that finds one names no line.
     /// </summary>
-    public static IReadOnlyCollection<string> Secrets => _secrets;
+    public static IReadOnlyCollection<string> Secrets => [.. _secrets.Keys];
+
+    /// <summary>The values of the settings that name the site, its server or the sign-in, set or not.</summary>
+    public static IReadOnlyCollection<string> Known =>
+    [
+        .. _knownSettings.Select(Environment.GetEnvironmentVariable).OfType<string>().Where(value => value.Length > 0),
+        .. new[] { ServerUrl, "TABLEAU_SERVER_ONLY_SERVER_URL" }.Select(Environment.GetEnvironmentVariable)
+            .Where(value => Uri.TryCreate(value, UriKind.Absolute, out _)).Select(value => new Uri(value!).Host),
+    ];
+
+    /// <summary>The folder the recorder wrote to in this run, or null when it recorded nothing.</summary>
+    public static string? Recorded => _recorded;
 
     /// <summary>The site's content URL: unset or empty is the default site.</summary>
     public static string SiteContentUrl => Environment.GetEnvironmentVariable(Site) ?? "";
@@ -94,18 +122,16 @@ internal static class LiveSite
     }
 
     /// <summary>
-    /// A client of the site, with the credentials given: built by <see cref="TableauClient.Create"/>, or with
-    /// TABLEAU_RECORD=1 over the recorder's HttpClient.
+    /// A client of the site with the credentials given, over the suite's HttpClient: it owns its session and signs it out
+    /// when disposed, as one from <see cref="TableauClient.Create"/> does.
     /// </summary>
-    public static TableauClient Client(TableauCredentials? credentials) =>
-        Environment.GetEnvironmentVariable("TABLEAU_RECORD") == "1"
-            ? new TableauClient(_recording.Value, Options(), credentials, Fixtures.Log.Factory)
-            : TableauClient.Create(Options(), credentials, Fixtures.Log.Factory);
+    public static TableauClient Client(TableauCredentials? credentials, TableauClientOptions? options = null) =>
+        new(_http.Value, options ?? Options(), credentials, Fixtures.Log.Factory);
 
     /// <summary>Keeps a session's token for the log check, and returns the session.</summary>
     public static TableauSession Saw(TableauSession session)
     {
-        if (session.Token is { } token) _secrets.Add(token);
+        if (session.Token is { } token) _secrets.TryAdd(token, 0);
         return session;
     }
 
@@ -118,7 +144,7 @@ internal static class LiveSite
 
     /// <summary>
     /// The run's project, made by the first caller after the leftovers of earlier runs are swept, in the session of the
-    /// client given, which must have credentials.
+    /// client given.
     /// </summary>
     public static async Task<string> ProjectAsync(TableauClient client, CancellationToken cancellationToken = default)
     {
@@ -129,7 +155,7 @@ internal static class LiveSite
             await SweepAsync(client, cancellationToken);
             var made = await client.Pipeline.SendAsync(CreateProject, new TableauRequest(Body: new TsRequest
             {
-                Project = new Project { Name = ProjectName, Description = "Made by Tableau.Api's live suite; deleted when the run ends." },
+                Project = new Project { Name = ProjectName, Description = ProjectDescription },
             }), static body => body.Project, "project", cancellationToken);
             return _projectId = made.Id ?? throw new InvalidOperationException("Create Project answered no id.");
         }
@@ -139,10 +165,22 @@ internal static class LiveSite
         }
     }
 
-    /// <summary>Every project whose name starts with the prefix, page by page.</summary>
+    /// <summary>
+    /// Whether a project is one of the suite's: top-level, with the suite's description and a run's name, the prefix and
+    /// then CI's run and attempt or a local run's time and random part. Any other project is left alone, whatever its name.
+    /// </summary>
+    public static bool IsRunProject(Project project) =>
+        project.ParentProjectId is null && project.Description == ProjectDescription && project.Name is { } name && RunName().IsMatch(name);
+
+    /// <summary>Whether the sweep deletes a project: one of the suite's, made more than a day before <paramref name="now"/>.</summary>
+    public static bool IsLeftover(Project project, DateTimeOffset now) =>
+        IsRunProject(project) && project.Id is not null && project.CreatedAt is { } created && created < now.AddDays(-1);
+
+    /// <summary>Every project of the suite's (<see cref="IsRunProject"/>), page by page.</summary>
     /// <remarks>
-    /// Tableau Server lists a project from its search index, which takes a second or so to show one just made and to drop
-    /// one just deleted: the sweep, which takes projects a day old, never meets that, and <see cref="ListedAsync"/> waits.
+    /// Tableau Server lists a project from its search index: a project just made shows a second or so later, and one just
+    /// deleted stays for minutes. <see cref="ListedAsync"/> waits for a new one, and the sweep passes over one that is
+    /// gone already.
     /// </remarks>
     public static async Task<List<Project>> RunProjectsAsync(TableauClient client, CancellationToken cancellationToken = default)
     {
@@ -153,7 +191,7 @@ internal static class LiveSite
                 ("pageSize", "1000"), ("pageNumber", page.ToString(CultureInfo.InvariantCulture)))),
                 static body => body, "projects", cancellationToken);
             var projects = body.Projects ?? [];
-            found.AddRange(projects.Where(project => project.Name?.StartsWith(ProjectPrefix, StringComparison.Ordinal) == true));
+            found.AddRange(projects.Where(IsRunProject));
             if (projects.Count < 1000 || page * 1000 >= (body.Pagination?.TotalAvailable ?? 0)) return found;
         }
     }
@@ -175,20 +213,33 @@ internal static class LiveSite
         if (_projectId is not { } id) return;
         await using var client = Client(Credentials());
         await client.Pipeline.SendAsync(DeleteProject, new TableauRequest(PathValues: [id]), default);
+        if (client.Pipeline.State.Sessions.Current is { } session) Saw(session);
         _projectId = null;
-        if (_recording.IsValueCreated) _recording.Value.Dispose();
+    }
+
+    /// <summary>Disposes the suite's HttpClient, once every live client has signed out through it.</summary>
+    public static void DisposeHttp()
+    {
+        if (_http.IsValueCreated) _http.Value.Dispose();
+    }
+
+    /// <summary>A setting that holds a secret, kept for the log check.</summary>
+    internal static string Secret(string name)
+    {
+        var value = TableauSite.Setting(name);
+        _secrets.TryAdd(value, 0);
+        return value;
     }
 
     // Projects a run left behind, more than a day old, so one still running elsewhere keeps its own.
     private static async Task SweepAsync(TableauClient client, CancellationToken cancellationToken)
     {
-        var dayAgo = DateTimeOffset.UtcNow.AddDays(-1);
-        foreach (var leftover in await RunProjectsAsync(client, cancellationToken))
+        var now = DateTimeOffset.UtcNow;
+        foreach (var leftover in (await RunProjectsAsync(client, cancellationToken)).Where(project => IsLeftover(project, now)))
         {
-            if (leftover.CreatedAt is not { } created || created >= dayAgo || leftover.Id is not { } id) continue;
             try
             {
-                await client.Pipeline.SendAsync(DeleteProject, new TableauRequest(PathValues: [id]), cancellationToken);
+                await client.Pipeline.SendAsync(DeleteProject, new TableauRequest(PathValues: [leftover.Id!]), cancellationToken);
             }
             catch (TableauException e) when (e.Kind == TableauErrorKind.NotFound)
             {
@@ -197,34 +248,52 @@ internal static class LiveSite
         }
     }
 
-    /// <summary>A setting that holds a secret, kept for the log check.</summary>
-    internal static string Secret(string name)
+    // One chain for every live client: the token watcher outermost, then the recorder when recording, then the connection.
+    private static HttpClient Http()
     {
-        var value = TableauSite.Setting(name);
-        _secrets.Add(value);
-        return value;
-    }
-
-    private static HttpClient Recording()
-    {
-        var folder = Environment.GetEnvironmentVariable("TABLEAU_RECORD_DIR") is { Length: > 0 } dir
-            ? dir
-            : Path.Combine(AppContext.BaseDirectory, "recorded");
-        var host = new Uri(TableauSite.Setting(ServerUrl)).Host;
-        FixtureRecorder? recorder = null;
+        HttpMessageHandler? connection = null;
+        HttpMessageHandler? chain = null;
         try
         {
-            recorder = new FixtureRecorder(folder, new FixtureScrubber([host]))
+            connection = new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false };
+            chain = connection;
+            connection = null;
+            if (Environment.GetEnvironmentVariable("TABLEAU_RECORD") == "1")
             {
-                InnerHandler = new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false },
-            };
-            var http = new HttpClient(recorder, disposeHandler: true) { Timeout = Timeout.InfiniteTimeSpan };
-            recorder = null;
+                _recorded = Environment.GetEnvironmentVariable("TABLEAU_RECORD_DIR") is { Length: > 0 } dir
+                    ? dir
+                    : Path.Combine(AppContext.BaseDirectory, "recorded");
+                chain = new FixtureRecorder(_recorded, new FixtureScrubber([new Uri(TableauSite.Setting(ServerUrl)).Host], Known))
+                {
+                    InnerHandler = chain,
+                };
+            }
+            chain = new TokenWatcher(token => _secrets.TryAdd(token, 0)) { InnerHandler = chain };
+            var http = new HttpClient(chain, disposeHandler: true) { Timeout = Timeout.InfiniteTimeSpan };
+            chain = null;
             return http;
         }
         finally
         {
-            recorder?.Dispose();
+            connection?.Dispose();
+            chain?.Dispose();
+        }
+    }
+
+    [GeneratedRegex(@"^Tableau\.Api live run (?:[0-9]+-[0-9]+|local-[0-9]{8}-[0-9]{6}-[0-9a-f]{4})$", RegexOptions.CultureInvariant)]
+    private static partial Regex RunName();
+
+    /// <summary>Keeps each session token a request carries, in <c>X-Tableau-Auth</c>.</summary>
+    private sealed class TokenWatcher(Action<string> saw) : DelegatingHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (request.Headers.TryGetValues("X-Tableau-Auth", out var tokens))
+            {
+                foreach (var token in tokens)
+                    saw(token);
+            }
+            return base.SendAsync(request, cancellationToken);
         }
     }
 }

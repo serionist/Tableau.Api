@@ -16,7 +16,9 @@ namespace Tableau.Api.Tests;
 /// <summary>
 /// A handler the live suite sends through when TABLEAU_RECORD is 1: it writes each JSON body, request and answer, to a
 /// file in a folder outside Fixtures/, scrubbed first by <see cref="FixtureScrubber"/>, for a maintainer to read and copy
-/// into Fixtures/ with its manifest entry. It writes nothing it hasn't scrubbed, and the bodies it passes on are as sent.
+/// into Fixtures/ with its manifest entry. It writes nothing it hasn't scrubbed, nothing for a body labelled JSON that
+/// doesn't parse, and the bodies it passes on are as sent. At the suite's end <see cref="DeleteHolding"/> scans what it
+/// wrote for every live secret and setting.
 /// </summary>
 /// <param name="folder">Where the files go: TABLEAU_RECORD_DIR, or recorded/ beside the test assembly, under bin/, which git ignores.</param>
 /// <param name="scrubber">The run's scrubber, so a LUID keeps one invented value across files.</param>
@@ -41,44 +43,74 @@ internal sealed class FixtureRecorder(string folder, FixtureScrubber scrubber) :
         return response;
     }
 
+    /// <summary>
+    /// Deletes each file in <paramref name="folder"/> that holds one of <paramref name="secrets"/> anywhere, or one of
+    /// <paramref name="known"/> as a whole word, and returns their names, never the values.
+    /// </summary>
+    public static IReadOnlyList<string> DeleteHolding(string folder, IEnumerable<string> secrets, IEnumerable<string> known)
+    {
+        if (!Directory.Exists(folder)) return [];
+        var secretList = secrets.Where(secret => secret.Length > 0).ToList();
+        var patterns = known.Where(value => value.Length > 0).Select(FixtureScrubber.Word).ToList();
+        var holding = new List<string>();
+        foreach (var file in Directory.GetFiles(folder))
+        {
+            var text = File.ReadAllText(file);
+            if (!secretList.Any(secret => text.Contains(secret, StringComparison.Ordinal)) && !patterns.Any(pattern => pattern.IsMatch(text)))
+                continue;
+            File.Delete(file);
+            holding.Add(Path.GetFileName(file));
+        }
+        return holding;
+    }
+
     private static bool IsJson(HttpContent content) =>
         content.Headers.ContentType?.MediaType?.EndsWith("json", StringComparison.OrdinalIgnoreCase) == true;
 
     private async Task WriteAsync(string file, string body)
     {
+        if (scrubber.Scrub(body) is not { } scrubbed) return;
         Directory.CreateDirectory(folder);
-        await File.WriteAllTextAsync(Path.Combine(folder, file), scrubber.Scrub(body), new UTF8Encoding(false)).ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(folder, file), scrubbed, new UTF8Encoding(false)).ConfigureAwait(false);
     }
 }
 
 /// <summary>
-/// Takes out of Tableau's JSON what a fixture must not hold: tokens, passwords and secrets; LUIDs, each the same invented
-/// LUID wherever it recurs, so the fixture's ids still meet; names, content URLs and descriptions; email addresses; and
-/// host names, the site's own and any in a URL. What remains is the shape, and values that say nothing of the site.
+/// Takes out of Tableau's JSON what a fixture must not hold, failing closed: every string is invented but a LUID, mapped
+/// to the same invented LUID wherever it recurs so a fixture's ids still meet; a date, a number, a version, a time span
+/// or a boolean; and the value of a key on a short list of enumerations and messages, in which host names, emails,
+/// LUIDs and the run's known values are still replaced. A key that names a token, a secret, a password, a JWT or a
+/// keychain gives its value away as <c>invented-</c> and the key, and every string under a key that names a secret or a
+/// keychain goes too.
 /// </summary>
 /// <param name="hosts">The host names to take out wherever they appear, such as the server's.</param>
-internal sealed partial class FixtureScrubber(IEnumerable<string> hosts)
+/// <param name="known">
+/// The run's values that name the site or the sign-in without being secrets, taken out wherever they appear as a word:
+/// the site, the user, a token's name, a connected app's client id and secret id.
+/// </param>
+internal sealed partial class FixtureScrubber(IEnumerable<string> hosts, IEnumerable<string>? known = null)
 {
-    private static readonly HashSet<string> _secrets = new(StringComparer.OrdinalIgnoreCase)
+    // Enumerations and messages that say what happened, not to whom: kept, scrubbed within.
+    private static readonly HashSet<string> _keep = new(StringComparer.OrdinalIgnoreCase)
     {
-        "token", "password", "jwt", "personalAccessTokenSecret", "secret", "secretValue", "apiToken", "credentialsToken",
-    };
-
-    private static readonly HashSet<string> _names = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "name", "contentUrl", "fullName", "displayName", "ownerName", "userName", "personalAccessTokenName", "description",
-        "domainName", "siteName", "projectName", "workbookName", "datasourceName", "viewName", "serverName", "serverAddress",
-        "userId", "sub", "subscriptionSubject", "subject", "message", "tag", "label",
+        "summary", "contentPermissions", "siteRole", "authSetting", "state", "status", "type", "mode", "adminMode", "role",
+        "licensingRole", "frequency", "executionOrder", "jobType", "method", "priority",
     };
 
     private readonly string[] _hosts = [.. hosts.Where(host => host.Length > 0)];
+    private readonly Regex[] _known = [.. (known ?? []).Where(value => value.Length > 0).Distinct(StringComparer.Ordinal).Select(Word)];
     private readonly Dictionary<string, string> _luids = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _values = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _emails = new(StringComparer.OrdinalIgnoreCase);
     private readonly Lock _lock = new();
 
-    /// <summary>The JSON, scrubbed and indented; text that isn't JSON is scrubbed as text.</summary>
-    public string Scrub(string json)
+
+    /// <summary>A value as a whole word: not inside a longer run of letters and digits.</summary>
+    public static Regex Word(string value) =>
+        new($"(?<![A-Za-z0-9]){Regex.Escape(value)}(?![A-Za-z0-9])", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
+    /// <summary>The JSON, scrubbed and indented; null for text that isn't JSON, so nothing is written for it.</summary>
+    public string? Scrub(string json)
     {
         lock (_lock)
         {
@@ -89,13 +121,16 @@ internal sealed partial class FixtureScrubber(IEnumerable<string> hosts)
             }
             catch (JsonException)
             {
-                return Text(json);
+                return null;
             }
-            return Node(node, null)?.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) ?? "null";
+            return Node(node, null, secret: false)?.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) ?? "null";
         }
     }
 
-    /// <summary>A request path as a file name's part: its LUIDs and names invented, its separators dashes.</summary>
+    /// <summary>
+    /// A request path as part of a file's name: its LUIDs, host names and the run's known values replaced as in a body,
+    /// then every run of other characters than letters, digits and dots as one dash.
+    /// </summary>
     public string Slug(string path)
     {
         lock (_lock)
@@ -105,36 +140,38 @@ internal sealed partial class FixtureScrubber(IEnumerable<string> hosts)
         }
     }
 
-    private JsonNode? Node(JsonNode? node, string? property) => node switch
+    private JsonNode? Node(JsonNode? node, string? key, bool secret) => node switch
     {
-        JsonObject obj => new JsonObject(obj.Select(pair => KeyValuePair.Create(pair.Key, Node(pair.Value, pair.Key)))),
-        JsonArray array => new JsonArray([.. array.Select(item => Node(item, property))]),
-        JsonValue value when value.TryGetValue<string>(out var text) => JsonValue.Create(Value(property, text)),
+        JsonObject obj => new JsonObject(obj.Select(pair =>
+            KeyValuePair.Create(pair.Key, Node(pair.Value, pair.Key, secret || SecretTree().IsMatch(pair.Key))))),
+        JsonArray array => new JsonArray([.. array.Select(item => Node(item, key, secret))]),
+        JsonValue value when value.TryGetValue<string>(out var text) => JsonValue.Create(Value(key, text, secret)),
         _ => node?.DeepClone(),
     };
 
-    private string Value(string? property, string text)
+    private string Value(string? key, string text, bool secret)
     {
         if (text.Length == 0) return text;
-        if (property is not null && _secrets.Contains(property)) return "invented-" + property;
-        if (property is not null && _names.Contains(property) && !LuidPattern().IsMatch(text))
-        {
-            if (!_values.TryGetValue(text, out var invented))
-                _values[text] = invented = string.Create(CultureInfo.InvariantCulture, $"invented-{property}-{_values.Count + 1}");
-            return invented;
-        }
-        return Text(text);
+        if (secret || (key is not null && SecretKey().IsMatch(key))) return "invented-" + (key ?? "value");
+        if (LuidPattern().IsMatch(text) && LuidPattern().Match(text).Length == text.Length) return Luid(text);
+        if (SaysNothing().IsMatch(text)) return text;
+        if (key is not null && _keep.Contains(key)) return Text(text);
+        if (!_values.TryGetValue(text, out var invented))
+            _values[text] = invented = string.Create(CultureInfo.InvariantCulture, $"invented-{key ?? "value"}-{_values.Count + 1}");
+        return invented;
     }
 
-    // LUIDs, emails, URLs' hosts and the site's hosts, wherever they are in a text.
+    private string Luid(string luid)
+    {
+        if (!_luids.TryGetValue(luid, out var invented))
+            _luids[luid] = invented = string.Create(CultureInfo.InvariantCulture, $"00000000-0000-4000-8000-{_luids.Count + 1:x12}");
+        return invented;
+    }
+
+    // LUIDs, emails, URLs' hosts, the site's hosts and the run's known values, wherever they are in a text.
     private string Text(string text)
     {
-        text = LuidPattern().Replace(text, match =>
-        {
-            if (!_luids.TryGetValue(match.Value, out var invented))
-                _luids[match.Value] = invented = string.Create(CultureInfo.InvariantCulture, $"00000000-0000-4000-8000-{_luids.Count + 1:x12}");
-            return invented;
-        });
+        text = LuidPattern().Replace(text, match => Luid(match.Value));
         text = EmailPattern().Replace(text, match =>
         {
             if (!_emails.TryGetValue(match.Value, out var invented))
@@ -144,8 +181,21 @@ internal sealed partial class FixtureScrubber(IEnumerable<string> hosts)
         text = UrlHostPattern().Replace(text, match => match.Groups["scheme"].Value + "tableau.example.com");
         foreach (var host in _hosts)
             text = text.Replace(host, "tableau.example.com", StringComparison.OrdinalIgnoreCase);
+        foreach (var known in _known)
+            text = known.Replace(text, "invented");
         return text;
     }
+
+    [GeneratedRegex("token|secret|password|jwt|keychain", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex SecretKey();
+
+    [GeneratedRegex("secret|keychain", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex SecretTree();
+
+    // A date, a number, a version, a time span or a boolean, which name no one.
+    [GeneratedRegex(@"^(?:\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})?)?|-?\d+(?:\.\d+)*|\d+:\d{2}(?::\d{2})?|true|false)$",
+        RegexOptions.CultureInvariant)]
+    private static partial Regex SaysNothing();
 
     [GeneratedRegex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", RegexOptions.CultureInvariant)]
     private static partial Regex LuidPattern();
