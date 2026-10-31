@@ -98,6 +98,21 @@ public sealed class ClientRedirectTests
     }
 
     [TestMethod]
+    public async Task ARedirectToAnotherHostOnTheSamePortIsRefused()
+    {
+        using var server = FakeTableauServer.Start();
+        server.Map("GET", ItemsPath, FakeResponse.Redirect(302, $"http://localhost:{server.BaseUrl.Port}{MovedPath}"));
+        server.Map("GET", MovedPath, ClientFixtures.ServerInfo());
+        await using var client = ClientFixtures.Client(server);
+
+        var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.Redirect,
+            () => ClientFixtures.SendAsync(client, ClientFixtures.Endpoint("{version}/items"), new TableauRequest(Token: Fixtures.SessionToken)));
+
+        Assert.Contains($"a redirect to http://localhost:{server.BaseUrl.Port}, another origin", thrown.Message);
+        Assert.HasCount(1, server.Requests);
+    }
+
+    [TestMethod]
     public async Task ARedirectFromHttpsToHttpIsRefused()
     {
         using var server = FakeTableauServer.StartTls();
@@ -175,6 +190,8 @@ public sealed class ClientRedirectTests
 
         var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.Redirect, () => client.Server.GetInfoAsync());
 
-        Assert.Contains($"its HttpClient's handler followed a redirect to http://127.0.0.1:{other.BaseUrl.Port}", thrown.Message);
+        Assert.Contains($"was redirected by the HttpClient's own handler, which sent the request, its headers and its body on to http://127.0.0.1:{other.BaseUrl.Port}", thrown.Message);
+        Assert.DoesNotContain("nothing was sent", thrown.Message);
+        Assert.HasCount(1, other.Requests);
     }
 }

@@ -69,7 +69,7 @@ internal sealed class TableauPipeline(HttpClient http, TableauClientState state)
                 + "so it was not sent.")
             { Method = endpoint.Method });
         }
-        var version = await state.ApiVersionAsync(this, cancellationToken).ConfigureAwait(false);
+        var version = await state.ApiVersionAsync(this, endpoint, cancellationToken).ConfigureAwait(false);
         if (version < endpoint.MinVersion)
         {
             throw Failed(endpoint, null, new TableauException(TableauErrorKind.UnsupportedApiVersion,
@@ -143,12 +143,19 @@ internal sealed class TableauPipeline(HttpClient http, TableauClientState state)
             var response = await SendOnceAsync(method, uri, path, body, token, cancellationToken).ConfigureAwait(false);
             try
             {
-                // A caller's HttpClient may follow redirects itself; then the answer came from wherever it went.
+                // A caller's HttpClient may follow redirects itself; then the answer came from wherever it went, and the
+                // request, its headers and its body went there too, which this can only report.
                 if (response.RequestMessage?.RequestUri is { } answered && !RequestUri.SameOrigin(answered, uri))
                 {
-                    throw RedirectRefused(endpoint, path, response,
-                        $"its HttpClient's handler followed a redirect to {RequestUri.Origin(answered)}: give the client an "
-                        + "HttpClient whose handler follows none");
+                    throw new TableauException(TableauErrorKind.Redirect,
+                        $"{endpoint.Name} ({endpoint.Method} {path}) was redirected by the HttpClient's own handler, which sent "
+                        + $"the request, its headers and its body on to {RequestUri.Origin(answered)}. Give the client an "
+                        + "HttpClient whose handler follows no redirect (AllowAutoRedirect = false).")
+                    {
+                        StatusCode = response.StatusCode,
+                        Method = endpoint.Method,
+                        RequestPath = path,
+                    };
                 }
                 var status = (int)response.StatusCode;
                 if (status is < 300 or > 399) return response;
@@ -284,8 +291,10 @@ internal sealed class TableauPipeline(HttpClient http, TableauClientState state)
                 return (Text(error, "code"), Text(error, "summary"), Text(error, "detail"));
             return (Text(root, "httpErrorCode"), Text(root, "message"), null);
         }
-        catch (JsonException)
+        catch (Exception e) when (e is JsonException or InvalidOperationException)
         {
+            // Not JSON, or JSON whose strings hold what no string can, such as a lone surrogate or bytes that aren't
+            // UTF-8, which GetString refuses: the error is the status alone, with the body kept.
             return default;
         }
 

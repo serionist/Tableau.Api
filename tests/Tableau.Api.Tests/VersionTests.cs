@@ -180,6 +180,51 @@ public sealed class VersionTests
     }
 
     [TestMethod]
+    public async Task ConcurrentFirstCallsShareOneFailedNegotiationAndALaterCallAsksAgain()
+    {
+        using var server = FakeTableauServer.Start();
+        var answers = 0;
+        server.Map("GET", ClientFixtures.NegotiationPath, _ =>
+        {
+            System.Threading.Thread.Sleep(300);
+            return System.Threading.Interlocked.Increment(ref answers) == 1
+                ? FakeResponse.Text(503, "invented outage")
+                : ClientFixtures.ServerInfo("3.25");
+        });
+        server.Map("GET", ClientFixtures.ServerInfoPath, ClientFixtures.ServerInfo());
+        await using var client = ClientFixtures.Client(server, version: null);
+
+        var calls = Enumerable.Range(0, 10).Select(_ => client.Server.GetInfoAsync()).ToList();
+        foreach (var call in calls)
+            await ClientFixtures.FailsAsync(TableauErrorKind.Http, () => call);
+        await client.Server.GetInfoAsync();
+
+        Assert.AreEqual(2, server.Requests.Count(request => request.Path == ClientFixtures.NegotiationPath));
+        Assert.AreEqual(1, server.Requests.Count(request => request.Path == ClientFixtures.ServerInfoPath));
+    }
+
+    [TestMethod]
+    public async Task OneCallersCancellationFailsNoOtherCallWaitingOnTheNegotiation()
+    {
+        using var server = FakeTableauServer.Start();
+        server.Map("GET", ClientFixtures.NegotiationPath, _ =>
+        {
+            System.Threading.Thread.Sleep(500);
+            return ClientFixtures.ServerInfo("3.25");
+        });
+        server.Map("GET", ClientFixtures.ServerInfoPath, ClientFixtures.ServerInfo());
+        await using var client = ClientFixtures.Client(server, version: null);
+        using var cancel = new System.Threading.CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+
+        var cancelled = client.Server.GetInfoAsync(cancel.Token);
+        var waiting = client.Server.GetInfoAsync();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => cancelled);
+        Assert.AreEqual("3.25", (await waiting).RestApiVersion);
+        Assert.AreEqual(1, server.Requests.Count(request => request.Path == ClientFixtures.NegotiationPath));
+    }
+
+    [TestMethod]
     public async Task AServerInfoWithoutAVersionIsAnInvalidResponse()
     {
         using var server = FakeTableauServer.Start();

@@ -24,16 +24,17 @@ public sealed class ConventionsTests
 
     private static readonly HashSet<string> _objectMembers = new(StringComparer.Ordinal)
     {
-        "Equals", "GetHashCode", "ToString", "GetType", "Deconstruct", "PrintMembers", "<Clone>$", "DisposeAsync",
+        "Equals", "GetHashCode", "ToString", "GetType", "Deconstruct", "PrintMembers", "<Clone>$", "Dispose", "DisposeAsync",
     };
 
     [TestMethod]
     public void TheRootListHoldsTheClientAndItsSubClients()
     {
-        var types = TwoPointZeroTypes().Select(type => type.FullName).ToList();
+        var types = TwoPointZeroTypes().ToList();
 
-        CollectionAssert.IsSubsetOf(new[] { typeof(TableauClient).FullName, typeof(ServerClient).FullName, typeof(TableauException).FullName },
-            types);
+        CollectionAssert.IsSubsetOf(new[] { typeof(TableauClient), typeof(TableauException) }, types);
+        CollectionAssert.IsSubsetOf(_subClients.ToList(), types);
+        CollectionAssert.Contains(_subClients.ToList(), typeof(ServerClient));
     }
 
     [TestMethod]
@@ -122,9 +123,11 @@ public sealed class ConventionsTests
             Assert.AreSame(property.GetValue(client), property.GetValue(client), property.Name);
     }
 
-    private static bool IsSubClient(Type type) =>
-        type.Namespace == "Tableau.Api" && type.Name.EndsWith("Client", StringComparison.Ordinal) && type != typeof(TableauClient)
-        && type != typeof(TableauApiClient);
+    /// <summary>The sub-clients: the types of TableauClient's public properties, whatever their names or namespaces.</summary>
+    private static readonly HashSet<Type> _subClients =
+        [.. typeof(TableauClient).GetProperties(BindingFlags.Instance | BindingFlags.Public).Select(property => property.PropertyType)];
+
+    private static bool IsSubClient(Type type) => _subClients.Contains(type);
 
     private static bool IsAsyncShape(Type type) =>
         type == typeof(Task) || type == typeof(ValueTask)

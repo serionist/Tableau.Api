@@ -87,6 +87,88 @@ public sealed class DependencyInjectionTests
     }
 
     [TestMethod]
+    public async Task ASyncScopeAndASyncProviderDisposeTheirClients()
+    {
+        using var server = FakeTableauServer.Start();
+        server.Map("GET", ClientFixtures.ServerInfoPath, ClientFixtures.ServerInfo());
+        var services = Services();
+        services.AddTableauClient(options => Copy(ClientFixtures.Options(server), options));
+        services.AddTableauClient("prod", options => Copy(ClientFixtures.Options(server), options));
+        var provider = services.BuildServiceProvider();
+        TableauClient scoped;
+        TableauClient keyed;
+        using (var scope = provider.CreateScope())
+        {
+            scoped = scope.ServiceProvider.GetRequiredService<TableauClient>();
+            keyed = scope.ServiceProvider.GetRequiredKeyedService<TableauClient>("prod");
+            await scoped.Server.GetInfoAsync();
+        }
+        var root = provider.GetRequiredKeyedService<TableauClient>("prod");
+
+        provider.Dispose();
+
+        await Assert.ThrowsExactlyAsync<ObjectDisposedException>(() => scoped.Server.GetInfoAsync());
+        await Assert.ThrowsExactlyAsync<ObjectDisposedException>(() => keyed.Server.GetInfoAsync());
+        await Assert.ThrowsExactlyAsync<ObjectDisposedException>(() => root.Server.GetInfoAsync());
+    }
+
+    [TestMethod]
+    public async Task OptionsChangedAfterTheFirstClientReachNoClientOrHandler()
+    {
+        using var server = FakeTableauServer.Start();
+        using var elsewhere = FakeTableauServer.Start();
+        server.Map("GET", ClientFixtures.ServerInfoPath, ClientFixtures.ServerInfo());
+        var target = server;
+        var services = Services();
+        services.AddTableauClient("prod", options =>
+        {
+            Copy(ClientFixtures.Options(target), options);
+            options.DangerousAcceptAnyServerCertificate = !ReferenceEquals(target, server);
+        });
+        await using var provider = services.BuildServiceProvider();
+        await using (var scope = provider.CreateAsyncScope())
+            await scope.ServiceProvider.GetRequiredKeyedService<TableauClient>("prod").Server.GetInfoAsync();
+
+        // A reload: the monitor forgets the name, and makes its options again from the configuration as it is now.
+        target = elsewhere;
+        provider.GetRequiredService<IOptionsMonitorCache<TableauClientOptions>>().TryRemove("prod");
+        var reloaded = provider.GetRequiredService<IOptionsMonitor<TableauClientOptions>>().Get("prod");
+        await using (var scope = provider.CreateAsyncScope())
+            await scope.ServiceProvider.GetRequiredKeyedService<TableauClient>("prod").Server.GetInfoAsync();
+        var builder = provider.GetRequiredService<Microsoft.Extensions.Http.HttpMessageHandlerBuilder>();
+        builder.Name = TableauServiceCollectionExtensions.HttpClientName("prod");
+        foreach (var action in provider.GetRequiredService<IOptionsMonitor<Microsoft.Extensions.Http.HttpClientFactoryOptions>>()
+                     .Get(builder.Name).HttpMessageHandlerBuilderActions)
+            action(builder);
+
+        Assert.IsTrue(reloaded.DangerousAcceptAnyServerCertificate);
+        Assert.HasCount(2, server.Requests);
+        Assert.IsEmpty(elsewhere.Requests);
+        using var handler = (SocketsHttpHandler)builder.PrimaryHandler;
+        Assert.IsNull(handler.SslOptions.RemoteCertificateValidationCallback, "a handler made after the reload took the reloaded options");
+    }
+
+    [TestMethod]
+    public async Task HandlersAnAppGivesEveryHttpClientDontReachTheTableauClient()
+    {
+        using var server = FakeTableauServer.Start();
+        server.Map("GET", ClientFixtures.ServerInfoPath, ClientFixtures.ServerInfo());
+        var services = Services();
+        services.ConfigureHttpClientDefaults(builder => builder.AddHttpMessageHandler(() => new RefusingHandler()));
+        services.AddTableauClient("prod", options => Copy(ClientFixtures.Options(server), options));
+        services.AddHttpClient("other");
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+
+        await scope.ServiceProvider.GetRequiredKeyedService<TableauClient>("prod").Server.GetInfoAsync();
+        using var other = provider.GetRequiredService<IHttpClientFactory>().CreateClient("other");
+
+        Assert.HasCount(1, server.Requests);
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => other.GetAsync(new Uri(server.BaseUrl, ClientFixtures.ServerInfoPath)));
+        Assert.HasCount(1, server.Requests);
+    }
+
+    [TestMethod]
     public async Task TheNamedHttpClientsHandlerFollowsNoRedirectAndKeepsNoCookies()
     {
         using var server = FakeTableauServer.Start();
@@ -204,6 +286,13 @@ public sealed class DependencyInjectionTests
             string.Join("\n", log.Lines));
         Assert.IsFalse(log.Lines.Any(line => line.Contains("Start processing HTTP request", StringComparison.Ordinal)),
             "the HttpClient factory's own request lines are off");
+    }
+
+    /// <summary>A handler an app might give every HttpClient, which fails any request that reaches it.</summary>
+    private sealed class RefusingHandler : DelegatingHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, System.Threading.CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("An app's default handler ran.");
     }
 
     private static ServiceCollection Services()

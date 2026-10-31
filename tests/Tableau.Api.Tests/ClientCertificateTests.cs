@@ -94,16 +94,26 @@ public sealed class ClientCertificateTests
         Assert.IsNull(handler.SslOptions.RemoteCertificateValidationCallback);
         Assert.AreEqual(X509RevocationMode.Online, handler.SslOptions.CertificateChainPolicy!.RevocationMode);
         Assert.AreEqual(X509ChainTrustMode.System, handler.SslOptions.CertificateChainPolicy.TrustMode);
+        Assert.AreEqual(TableauHandler.RevocationTimeout, handler.SslOptions.CertificateChainPolicy.UrlRetrievalTimeout);
+        Assert.AreEqual(TimeSpan.FromSeconds(10), TableauHandler.RevocationTimeout);
         Assert.AreEqual(TableauHandler.PooledConnectionLifetime, handler.PooledConnectionLifetime);
     }
 
+    // The serial's first byte at 0x80 and above is where a serial read as signed turns negative, which a revocation list
+    // built from the serial's bytes rather than the certificate would then name wrongly.
     [TestMethod]
-    public async Task ARevokedCertificateIsRefused()
+    [DataRow((byte)0x01)]
+    [DataRow((byte)0x7F)]
+    [DataRow((byte)0x80)]
+    [DataRow((byte)0xFF)]
+    public async Task ARevokedCertificateIsRefused(byte firstSerialByte)
     {
         using var authority = new TestAuthority();
         using var crl = FakeTableauServer.Start();
-        var crlUrl = authority.ServeCrl(crl, revoked: true);
-        using var server = FakeTableauServer.StartTls(authority.Leaf(crlUrl));
+        var crlUrl = TestAuthority.CrlUrl(crl);
+        using var leaf = authority.Leaf(crlUrl, firstSerialByte);
+        authority.ServeCrl(crl, crlUrl, revoked: leaf);
+        using var server = FakeTableauServer.StartTls(leaf);
         server.Map("GET", ClientFixtures.ServerInfoPath, ClientFixtures.ServerInfo());
         using var handler = authority.Handler(server);
         using var http = new HttpClient(handler, disposeHandler: false);
@@ -117,12 +127,16 @@ public sealed class ClientCertificateTests
     }
 
     [TestMethod]
-    public async Task ACertificateItsAuthorityListsAsGoodIsAccepted()
+    [DataRow((byte)0x01)]
+    [DataRow((byte)0x80)]
+    public async Task ACertificateItsAuthorityListsAsGoodIsAccepted(byte firstSerialByte)
     {
         using var authority = new TestAuthority();
         using var crl = FakeTableauServer.Start();
-        var crlUrl = authority.ServeCrl(crl, revoked: false);
-        using var server = FakeTableauServer.StartTls(authority.Leaf(crlUrl));
+        var crlUrl = TestAuthority.CrlUrl(crl);
+        using var leaf = authority.Leaf(crlUrl, firstSerialByte);
+        authority.ServeCrl(crl, crlUrl, revoked: null);
+        using var server = FakeTableauServer.StartTls(leaf);
         server.Map("GET", ClientFixtures.ServerInfoPath, ClientFixtures.ServerInfo());
         using var handler = authority.Handler(server);
         using var http = new HttpClient(handler, disposeHandler: false);
@@ -131,13 +145,14 @@ public sealed class ClientCertificateTests
         await client.Server.GetInfoAsync();
 
         Assert.HasCount(1, server.Requests);
+        Assert.IsNotEmpty(crl.Requests, "the revocation list was never asked for");
     }
 
     [TestMethod]
     public async Task ACertificateWhoseRevocationListCantBeReachedIsAccepted()
     {
         using var authority = new TestAuthority();
-        using var server = FakeTableauServer.StartTls(authority.Leaf($"http://127.0.0.1:{ClientFixtures.ClosedPort()}/{Guid.NewGuid():N}.crl"));
+        using var server = FakeTableauServer.StartTls(authority.Leaf($"http://127.0.0.1:{ClientFixtures.ClosedPort()}/{Guid.NewGuid():N}.crl", 0x01));
         server.Map("GET", ClientFixtures.ServerInfoPath, ClientFixtures.ServerInfo());
         using var handler = authority.Handler(server);
         using var http = new HttpClient(handler, disposeHandler: false);
@@ -153,7 +168,6 @@ public sealed class ClientCertificateTests
     {
         private readonly RSA _key = RSA.Create(2048);
         private readonly X509Certificate2 _root;
-        private readonly BigInteger _leafSerial = new(RandomNumberGenerator.GetInt32(1, int.MaxValue));
 
         public TestAuthority()
         {
@@ -165,22 +179,31 @@ public sealed class ClientCertificateTests
             _root = request.CreateSelfSigned(now.AddMinutes(-5), now.AddHours(1));
         }
 
-        /// <summary>Serves the authority's revocation list from server, the leaf on it or not, and returns its URL.</summary>
-        public string ServeCrl(FakeTableauServer server, bool revoked)
+        /// <summary>
+        /// Where server will serve the authority's revocation list: a path no other run has used, so no cache of a list
+        /// from an earlier run answers for this one.
+        /// </summary>
+        public static string CrlUrl(FakeTableauServer server) => new Uri(server.BaseUrl, $"/{Guid.NewGuid():N}.crl").ToString();
+
+        /// <summary>
+        /// Serves the authority's revocation list at crlUrl, naming the certificate revoked, if one is given, by its own
+        /// serial number.
+        /// </summary>
+        public void ServeCrl(FakeTableauServer server, string crlUrl, X509Certificate2? revoked)
         {
             var builder = new CertificateRevocationListBuilder();
-            if (revoked)
-                builder.AddEntry(_leafSerial.ToByteArray(isUnsigned: true, isBigEndian: true), DateTimeOffset.UtcNow.AddMinutes(-1));
+            if (revoked is not null)
+                builder.AddEntry(revoked, DateTimeOffset.UtcNow.AddMinutes(-1));
             var now = DateTimeOffset.UtcNow;
             var crl = builder.Build(_root, BigInteger.One, now.AddHours(1), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1, now.AddMinutes(-1));
-            // A path no other run has used, so no cache of a list from an earlier run answers for this one.
-            var path = $"/{Guid.NewGuid():N}.crl";
-            server.Map("GET", path, FakeResponse.Bytes(200, "application/pkix-crl", crl));
-            return new Uri(server.BaseUrl, path).ToString();
+            server.Map("GET", new Uri(crlUrl).AbsolutePath, FakeResponse.Bytes(200, "application/pkix-crl", crl));
         }
 
-        /// <summary>A certificate for 127.0.0.1 that names crlUrl as where its revocation is listed.</summary>
-        public X509Certificate2 Leaf(string crlUrl)
+        /// <summary>
+        /// A certificate for 127.0.0.1 that names crlUrl as where its revocation is listed, its serial eight bytes that
+        /// start with firstSerialByte.
+        /// </summary>
+        public X509Certificate2 Leaf(string crlUrl, byte firstSerialByte)
         {
             using var key = RSA.Create(2048);
             var request = new CertificateRequest("CN=127.0.0.1", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
@@ -193,8 +216,10 @@ public sealed class ClientCertificateTests
             request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension([new Oid("1.3.6.1.5.5.7.3.1")], false));
             request.CertificateExtensions.Add(X509AuthorityKeyIdentifierExtension.CreateFromCertificate(_root, true, false));
             request.CertificateExtensions.Add(CertificateRevocationListBuilder.BuildCrlDistributionPointExtension([crlUrl]));
+            var serial = RandomNumberGenerator.GetBytes(8);
+            serial[0] = firstSerialByte;
             var now = DateTimeOffset.UtcNow;
-            using var issued = request.Create(_root, now.AddMinutes(-5), now.AddMinutes(50), _leafSerial.ToByteArray(isUnsigned: true, isBigEndian: true));
+            using var issued = request.Create(_root, now.AddMinutes(-5), now.AddMinutes(50), serial);
             using var withKey = issued.CopyWithPrivateKey(key);
             // Windows' TLS stack can't use a key that lives only in memory, so the certificate goes through a PFX.
             return X509CertificateLoader.LoadPkcs12(withKey.Export(X509ContentType.Pfx), null);

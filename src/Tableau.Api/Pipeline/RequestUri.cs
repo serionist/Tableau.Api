@@ -100,7 +100,10 @@ internal static class RequestUri
                 $"{segment.Text} is '{value}', but a value in a request path can't be empty or only dots: it would name "
                 + "no resource.", segment.Text);
         }
-        if (segment.Kind == PathSegmentKind.Luid && !Guid.TryParseExact(value, "D", out _))
+        // TryParseExact forgives whitespace around the value, which would then be sent, so the value must be the LUID
+        // itself, in either case.
+        if (segment.Kind == PathSegmentKind.Luid
+            && !(Guid.TryParseExact(value, "D", out var luid) && string.Equals(luid.ToString("D"), value, StringComparison.OrdinalIgnoreCase)))
             throw new ArgumentException($"{segment.Text} is '{value}', which is no LUID.", segment.Text);
         return value;
     }

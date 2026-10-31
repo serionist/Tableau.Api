@@ -32,8 +32,13 @@ public static class TableauServiceCollectionExtensions
     /// </para>
     /// <para>
     /// The options are checked when the host starts, or else when the first client is made, and are read-only from then
-    /// on. To bind them from configuration, bind in <paramref name="configure"/>:
-    /// <c>options => configuration.GetSection("Tableau:Prod").Bind(options)</c>.
+    /// on: a configuration reloaded later changes nothing for the name. To bind them from configuration, bind in
+    /// <paramref name="configure"/>: <c>options => configuration.GetSection("Tableau:Prod").Bind(options)</c>.
+    /// </para>
+    /// <para>
+    /// The named HttpClient takes none of the handlers an app adds to every client with
+    /// <c>ConfigureHttpClientDefaults</c>, such as a standard resilience handler: the client keeps its own rules for
+    /// redirects, timeouts and errors, and throws <see cref="TableauException"/> alone.
     /// </para>
     /// </remarks>
     /// <param name="services">The service collection.</param>
@@ -50,10 +55,14 @@ public static class TableauServiceCollectionExtensions
         services.AddOptions<TableauClientOptions>(name).Configure(configure).ValidateOnStart();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<TableauClientOptions>, TableauClientOptionsValidator>());
 
-        // The client logs its own request lines, at Debug and with query values hidden, so the factory's loggers go.
+        // The handler is built from the state's options, read-only since the first client, so a handler the factory
+        // makes later, after a configuration reload, still follows them. Handlers an app gives every HttpClient, such
+        // as a resilience handler with its own timeouts and exceptions, would change the client's rules, so they go;
+        // and the client logs its own request lines, at Debug with query values hidden, so the factory's loggers go.
         var httpClientName = HttpClientName(name);
         services.AddHttpClient(httpClientName)
-            .ConfigurePrimaryHttpMessageHandler(provider => TableauHandler.Create(OptionsFor(provider, name)))
+            .ConfigurePrimaryHttpMessageHandler(provider => TableauHandler.Create(provider.GetRequiredKeyedService<TableauClientState>(name).Options))
+            .ConfigureAdditionalHttpMessageHandlers(static (handlers, _) => handlers.Clear())
             .ConfigureHttpClient(client => client.Timeout = Timeout.InfiniteTimeSpan)
             .RemoveAllLoggers();
 

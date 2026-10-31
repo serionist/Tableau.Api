@@ -27,7 +27,9 @@ public enum TableauErrorKind
 
     /// <summary>
     /// Tableau answered with a redirect the client doesn't follow: to another scheme, host or port, a method that would
-    /// lose its body, or more than five in a row. Nothing was sent to its target.
+    /// lose its body, or more than five in a row. The client sent nothing to its target. An HttpClient of the caller's
+    /// own whose handler follows redirects may have sent the request there before the client could see it, and the
+    /// message then says so.
     /// </summary>
     Redirect,
 

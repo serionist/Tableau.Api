@@ -28,12 +28,11 @@ namespace Tableau.Api;
 /// threads. Its members are virtual, and the protected constructor makes one for a mock.
 /// </para>
 /// </remarks>
-public class TableauClient : IAsyncDisposable
+public class TableauClient : IDisposable, IAsyncDisposable
 {
     private readonly TableauPipeline? _pipeline;
     private readonly ServerClient? _server;
     private readonly HttpClient? _ownedHttpClient;
-    private readonly TableauClientState? _ownedState;
     private int _disposed;
 
     /// <summary>A client with no connection, for a mock to derive from: its members throw until overridden.</summary>
@@ -66,8 +65,7 @@ public class TableauClient : IAsyncDisposable
             throw new ArgumentException("DangerousAcceptAnyServerCertificate can't apply to an HttpClient the client didn't build: "
                 + "set the certificate check on its handler.", nameof(options));
         }
-        _ownedState = NewState(options, loggerFactory);
-        _pipeline = new TableauPipeline(httpClient, _ownedState);
+        _pipeline = new TableauPipeline(httpClient, NewState(options, loggerFactory));
         _server = new ServerClient(_pipeline);
     }
 
@@ -78,12 +76,11 @@ public class TableauClient : IAsyncDisposable
         _server = new ServerClient(_pipeline);
     }
 
-    /// <summary>A client that owns its HttpClient and its state, as <see cref="Create"/> builds it.</summary>
-    private TableauClient(TableauClientState ownedState, HttpClient ownedHttpClient)
-        : this(ownedHttpClient, ownedState)
+    /// <summary>A client that owns its HttpClient, as <see cref="Create"/> builds it.</summary>
+    private TableauClient(TableauClientState state, HttpClient ownedHttpClient)
+        : this(ownedHttpClient, state)
     {
         _ownedHttpClient = ownedHttpClient;
-        _ownedState = ownedState;
     }
 
     /// <summary>Server Info: the versions of the server and of its REST API.</summary>
@@ -106,7 +103,6 @@ public class TableauClient : IAsyncDisposable
         var state = NewState(options, loggerFactory);
         SocketsHttpHandler? handler = null;
         HttpClient? httpClient = null;
-        var built = false;
         try
         {
             handler = TableauHandler.Create(state.Options);
@@ -114,7 +110,6 @@ public class TableauClient : IAsyncDisposable
             handler = null;
             var client = new TableauClient(state, httpClient);
             httpClient = null;
-            built = true;
             return client;
         }
         finally
@@ -122,31 +117,40 @@ public class TableauClient : IAsyncDisposable
             // Left set only when building the client failed.
             handler?.Dispose();
             httpClient?.Dispose();
-            if (!built) state.Dispose();
         }
     }
 
     /// <summary>
     /// Ends the client. A client from <see cref="Create"/> closes its connections; one over a caller's HttpClient leaves
     /// it open; one from DI leaves its named client's state to the container. A call after this throws
-    /// <see cref="ObjectDisposedException"/>.
+    /// <see cref="ObjectDisposedException"/>. Disposing twice does nothing more.
     /// </summary>
-    public async ValueTask DisposeAsync()
+    public void Dispose()
     {
-        await DisposeAsyncCore().ConfigureAwait(false);
+        Dispose(true);
         GC.SuppressFinalize(this);
     }
 
-    /// <summary>Ends what the client owns; a derived client ends its own here too.</summary>
-    protected virtual ValueTask DisposeAsyncCore()
+    /// <summary>
+    /// Ends the client as <see cref="Dispose()"/> does: nothing it ends waits on I/O, so a container or a caller may end
+    /// it either way.
+    /// </summary>
+    public ValueTask DisposeAsync()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) == 0)
+        Dispose(true);
+        GC.SuppressFinalize(this);
+        return ValueTask.CompletedTask;
+    }
+
+    /// <summary>Ends what the client owns; a derived client ends its own here too, and calls this.</summary>
+    /// <param name="disposing">True from <see cref="Dispose()"/>; false from a finalizer, which ends nothing managed.</param>
+    protected virtual void Dispose(bool disposing)
+    {
+        if (disposing && Interlocked.Exchange(ref _disposed, 1) == 0)
         {
             _pipeline?.Dispose();
             _ownedHttpClient?.Dispose();
-            _ownedState?.Dispose();
         }
-        return ValueTask.CompletedTask;
     }
 
     internal static InvalidOperationException ForMocksOnly() =>

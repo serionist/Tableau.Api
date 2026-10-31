@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -10,7 +11,7 @@ namespace Tableau.Api.Tests;
 
 /// <summary>The library's log lines hold no password, session token or personal access token secret.</summary>
 [TestClass]
-public sealed class LogTests
+public sealed partial class LogTests
 {
     private const string ApiPath = "/api/" + Fixtures.ApiVersion;
 
@@ -63,12 +64,63 @@ public sealed class LogTests
             || line.Contains("AllowInsecureHttp is set", StringComparison.Ordinal)), string.Join("\n", log.Lines));
     }
 
-    /// <summary>The same for every line the suite's clients logged, once every test has run.</summary>
-    [AssemblyCleanup]
-    public static void NoLogLineInTheSuiteHoldsASecret()
+    [TestMethod]
+    public async Task ARedirectIsLoggedWithItsTargetsQueryValuesHidden()
     {
-        var holding = Fixtures.Log.LinesHolding(Fixtures.Secrets).ToList();
+        using var server = FakeTableauServer.Start();
+        server.Map("GET", "/api/3.25/hop", FakeResponse.Redirect(307, "/api/3.25/items?filter=email:eq:ada@invented.example&flag"));
+        server.Map("GET", "/api/3.25/items", ClientFixtures.ServerInfo());
+        var log = new RecordingLogger();
+        await using var client = TableauClient.Create(ClientFixtures.Options(server), log.Factory);
+
+        await ClientFixtures.SendAsync(client, ClientFixtures.Endpoint("{version}/hop"), new TableauRequest(
+            Query: ClientFixtures.Query(("filter", "name:eq:ada")), Token: Fixtures.SessionToken));
+
+        var debug = log.At(Microsoft.Extensions.Logging.LogLevel.Debug);
+        Assert.IsTrue(debug.Any(line => line.Contains(
+            "GET /api/3.25/hop?filter=*** answered 307, a redirect to /api/3.25/items?filter=***&flag=***, which it follows", StringComparison.Ordinal)),
+            string.Join("\n", log.Lines));
+        Assert.IsTrue(debug.Any(line => line.EndsWith(": GET /api/3.25/items?filter=***&flag=***", StringComparison.Ordinal)), string.Join("\n", log.Lines));
+        Assert.IsEmpty(log.LinesHolding([.. Fixtures.Secrets, "ada@invented.example", "name:eq"]).ToList());
+        Assert.IsEmpty(QueryValuesShown(log.Lines).ToList());
+    }
+
+    [TestMethod]
+    public void TheQueryCheckFindsAValueShown()
+    {
+        string[] lines =
+        [
+            "Debug: Tableau client prod: GET /api/3.25/items?filter=*** answered 200 in 3 ms",
+            "Debug: Tableau client prod: Test call (GET /api/3.25/items?filter=***&flag=***) failed.",
+            "Debug: Tableau client prod: GET /api/3.25/items?filter=***&pageSize=100",
+            "Information: Sending request to Tableau Server. Method: GET, Url: 'https://x.example/api/3.4/items?filter=a'",
+        ];
+
+        CollectionAssert.AreEqual(new[] { lines[2] }, QueryValuesShown(lines).ToArray());
+    }
+
+    /// <summary>
+    /// The same for every line any logger in the suite took, once every test has run: no secret in any, and no query
+    /// value but <c>***</c> in a line of the 2.0 client.
+    /// </summary>
+    [AssemblyCleanup]
+    public static void NoLogLineInTheSuiteHoldsASecretOrAQueryValue()
+    {
+        var lines = RecordingLogger.All.Append(Fixtures.Log).Distinct().SelectMany(log => log.Lines).ToList();
+        var holding = lines.Where(line => Fixtures.Secrets.Any(secret => line.Contains(secret, StringComparison.Ordinal))).ToList();
         if (holding.Count > 0)
             throw new InvalidOperationException($"{holding.Count} log line(s) hold a secret:\n" + string.Join("\n", holding));
+        var shown = QueryValuesShown(lines).ToList();
+        if (shown.Count > 0)
+            throw new InvalidOperationException($"{shown.Count} log line(s) of the 2.0 client show a query value:\n" + string.Join("\n", shown));
     }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"/[^\s?()']*\?(?<query>[^\s)']+)", System.Text.RegularExpressions.RegexOptions.CultureInvariant)]
+    private static partial System.Text.RegularExpressions.Regex QueryPattern();
+
+    // A 2.0 line names its client first; the old client's lines show values, and go with it.
+    private static IEnumerable<string> QueryValuesShown(IEnumerable<string> lines) =>
+        lines.Where(line => line.Contains(": Tableau client ", StringComparison.Ordinal)
+            && QueryPattern().Matches(line).Any(match => match.Groups["query"].Value.TrimEnd('.', ',').Split('&')
+                .Any(pair => !pair.EndsWith("=***", StringComparison.Ordinal))));
 }

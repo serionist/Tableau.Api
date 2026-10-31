@@ -12,9 +12,10 @@ namespace Tableau.Api.Pipeline;
 /// makes over it: its options, read-only from here; its deployment; the REST API version it negotiated. Under DI it is
 /// a singleton keyed by the client's name; a client built without DI owns its own.
 /// </summary>
-internal sealed class TableauClientState : IDisposable
+internal sealed class TableauClientState
 {
-    private readonly SemaphoreSlim _negotiating = new(1, 1);
+    private readonly Lock _negotiationLock = new();
+    private Task<Version>? _negotiation;
     private Version? _negotiated;
     private string? _productVersion;
     private int _warnedBelowFloor;
@@ -66,60 +67,81 @@ internal sealed class TableauClientState : IDisposable
     /// newest the client knows. Below the floor it throws <see cref="TableauErrorKind.UnsupportedApiVersion"/> on every
     /// call, unless the options allow it, and then warns once.
     /// </summary>
-    public async ValueTask<Version> ApiVersionAsync(TableauPipeline pipeline, CancellationToken cancellationToken)
+    /// <remarks>
+    /// Concurrent first calls share one negotiation and its outcome, so a server that fails it is asked once, not once
+    /// per waiting call. A failure is not kept: the next call asks again. The negotiation runs on no caller's token, so
+    /// one caller's cancellation fails no other; each caller stops waiting on its own token.
+    /// </remarks>
+    /// <param name="pipeline">What sends Server Info.</param>
+    /// <param name="endpoint">The call that needs the version, which an exception names.</param>
+    /// <param name="cancellationToken">The caller's token.</param>
+    public async ValueTask<Version> ApiVersionAsync(TableauPipeline pipeline, Endpoint endpoint, CancellationToken cancellationToken)
     {
-        if (Options.ApiVersion is { } pinned) return Supported(ApiVersions.MajorMinor(pinned), null);
-        if (Volatile.Read(ref _negotiated) is { } known) return Supported(known, _productVersion);
+        if (Options.ApiVersion is { } pinned) return Supported(ApiVersions.MajorMinor(pinned), null, endpoint);
+        if (Volatile.Read(ref _negotiated) is { } known) return Supported(known, _productVersion, endpoint);
 
-        await _negotiating.WaitAsync(cancellationToken).ConfigureAwait(false);
+        Task<Version> negotiation;
+        lock (_negotiationLock)
+            negotiation = _negotiation ??= Task.Run(() => NegotiateAsync(pipeline), CancellationToken.None);
+        Version used;
         try
         {
-            if (_negotiated is null)
-            {
-                var info = await ServerInfoAsync(pipeline, cancellationToken).ConfigureAwait(false);
-                var offered = ApiVersions.Parse(info.RestApiVersion) ?? throw new TableauException(TableauErrorKind.InvalidResponse,
-                    $"Server Info gave no REST API version the client can read: '{info.RestApiVersion}'.");
-                var used = offered > ApiVersions.Newest ? ApiVersions.Newest : offered;
-                TableauLog.Negotiated(Logger, DisplayName, offered, used);
-                _productVersion = info.ProductVersion?.Value;
-                Volatile.Write(ref _negotiated, used);
-            }
+            used = await negotiation.WaitAsync(cancellationToken).ConfigureAwait(false);
         }
-        finally
+        catch when (negotiation.IsFaulted || negotiation.IsCanceled)
         {
-            _negotiating.Release();
+            lock (_negotiationLock)
+            {
+                if (ReferenceEquals(_negotiation, negotiation)) _negotiation = null;
+            }
+            throw;
         }
-        return Supported(_negotiated!, _productVersion);
+        return Supported(used, _productVersion, endpoint);
     }
-
-    public void Dispose() => _negotiating.Dispose();
 
     // Asked at the floor, which every supported server answers; a server too old for it answers 404, and is asked
     // again at the version Server Info came in, so the error can name its version.
-    private static async Task<ServerInfo> ServerInfoAsync(TableauPipeline pipeline, CancellationToken cancellationToken)
+    private async Task<Version> NegotiateAsync(TableauPipeline pipeline)
     {
+        ServerInfo info;
         try
         {
-            return await pipeline.SendAtAsync(Endpoints.ServerInfo, ApiVersions.Floor, default, static body => body.ServerInfo,
-                "serverInfo", cancellationToken).ConfigureAwait(false);
+            info = await pipeline.SendAtAsync(Endpoints.ServerInfo, ApiVersions.Floor, default, static body => body.ServerInfo,
+                "serverInfo", CancellationToken.None).ConfigureAwait(false);
         }
         catch (TableauException e) when (e.Kind == TableauErrorKind.NotFound)
         {
-            return await pipeline.SendAtAsync(Endpoints.ServerInfo, ApiVersions.ServerInfoOldest, default,
-                static body => body.ServerInfo, "serverInfo", cancellationToken).ConfigureAwait(false);
+            info = await pipeline.SendAtAsync(Endpoints.ServerInfo, ApiVersions.ServerInfoOldest, default,
+                static body => body.ServerInfo, "serverInfo", CancellationToken.None).ConfigureAwait(false);
         }
+        var offered = ApiVersions.Parse(info.RestApiVersion) ?? throw Failed(Endpoints.ServerInfo,
+            new TableauException(TableauErrorKind.InvalidResponse,
+                $"Server Info gave no REST API version the client can read: '{info.RestApiVersion}'.")
+            { Method = Endpoints.ServerInfo.Method });
+        var used = offered > ApiVersions.Newest ? ApiVersions.Newest : offered;
+        TableauLog.Negotiated(Logger, DisplayName, offered, used);
+        _productVersion = info.ProductVersion?.Value;
+        Volatile.Write(ref _negotiated, used);
+        return used;
     }
 
-    private Version Supported(Version version, string? productVersion)
+    // An exception this state makes, rather than the pipeline, logged as the pipeline logs its own.
+    private TableauException Failed(Endpoint endpoint, TableauException exception)
+    {
+        TableauLog.Failed(Logger, DisplayName, endpoint.Method, endpoint.Template, exception.Kind, exception);
+        return exception;
+    }
+    private Version Supported(Version version, string? productVersion, Endpoint endpoint)
     {
         if (version >= ApiVersions.Floor) return version;
         if (!Options.AllowUnsupportedServerVersion)
         {
             var server = productVersion is null ? "" : $" (Tableau {productVersion})";
-            throw new TableauException(TableauErrorKind.UnsupportedApiVersion,
+            throw Failed(endpoint, new TableauException(TableauErrorKind.UnsupportedApiVersion,
                 $"REST API {ApiVersions.Format(version)}{server} is below {ApiVersions.Format(ApiVersions.Floor)} (Tableau Server "
                 + "2024.2), the oldest this client supports. Upgrade the server, or set AllowUnsupportedServerVersion to call it "
-                + "anyway, untested.");
+                + "anyway, untested.")
+            { Method = endpoint.Method });
         }
         if (Interlocked.Exchange(ref _warnedBelowFloor, 1) == 0)
             TableauLog.UnsupportedVersion(Logger, DisplayName, version, ApiVersions.Floor);

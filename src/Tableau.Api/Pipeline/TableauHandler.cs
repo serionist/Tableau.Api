@@ -40,13 +40,22 @@ internal static class TableauHandler
     }
 
     /// <summary>
+    /// How long a new connection waits for a revocation list or a responder's answer. One that is reachable answers in
+    /// well under a second; one a firewall drops silently would hold every new connection for the platform's own
+    /// default, so the wait is bounded here, far inside <see cref="TableauClientOptions.RequestTimeout"/>'s two minutes.
+    /// The pool keeps a connection for five minutes, so the wait comes at most that often.
+    /// </summary>
+    public static readonly TimeSpan RevocationTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>
     /// The machine's trusted roots, with revocation checked online: a certificate its issuer has revoked is refused.
-    /// When no answer comes, from a revocation list or a responder the network can't reach, the status is unknown and
-    /// tolerated, as a browser does, so a server on a closed network stays reachable.
+    /// When no answer comes in <see cref="RevocationTimeout"/>, from a revocation list or a responder the network can't
+    /// reach, the status is unknown and tolerated, as a browser does, so a server on a closed network stays reachable.
     /// </summary>
     public static X509ChainPolicy CertificatePolicy() => new()
     {
         RevocationMode = X509RevocationMode.Online,
+        UrlRetrievalTimeout = RevocationTimeout,
         RevocationFlag = X509RevocationFlag.ExcludeRoot,
         VerificationFlags = X509VerificationFlags.IgnoreEndRevocationUnknown
             | X509VerificationFlags.IgnoreCertificateAuthorityRevocationUnknown

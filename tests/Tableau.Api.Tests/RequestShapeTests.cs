@@ -42,14 +42,21 @@ public sealed class RequestShapeTests
         var endpoint = ClientFixtures.Endpoint("{version}/items/{itemId:luid}");
 
         await ClientFixtures.SendAsync(client, endpoint, new TableauRequest([Fixtures.SiteId]));
-        foreach (var notALuid in new[] { "finance", "0F4B9E1C3A524D6E9C8B1A2B3C4D5E6F", "{" + Fixtures.SiteId + "}", Fixtures.SiteId + "/x" })
+        await ClientFixtures.SendAsync(client, endpoint, new TableauRequest([Fixtures.SiteId.ToUpperInvariant()]));
+        foreach (var notALuid in new[]
+                 {
+                     "finance", "0F4B9E1C3A524D6E9C8B1A2B3C4D5E6F", "{" + Fixtures.SiteId + "}", "(" + Fixtures.SiteId + ")",
+                     Fixtures.SiteId + "/x", " " + Fixtures.SiteId, Fixtures.SiteId + " ", "\t" + Fixtures.SiteId,
+                     Fixtures.SiteId + "\n", Fixtures.SiteId + " ", Fixtures.SiteId[..^1] + "g", "",
+                 })
         {
             var thrown = await Assert.ThrowsExactlyAsync<ArgumentException>(
                 () => ClientFixtures.SendAsync(client, endpoint, new TableauRequest([notALuid])));
             Assert.AreEqual("itemId", thrown.ParamName);
         }
 
-        CollectionAssert.AreEqual(new[] { $"GET {ItemsPath}{Fixtures.SiteId} HTTP/1.1" }, ClientFixtures.Lines(server));
+        CollectionAssert.AreEqual(new[] { $"GET {ItemsPath}{Fixtures.SiteId} HTTP/1.1", $"GET {ItemsPath}{Fixtures.SiteId.ToUpperInvariant()} HTTP/1.1" },
+            ClientFixtures.Lines(server));
     }
 
     [TestMethod]

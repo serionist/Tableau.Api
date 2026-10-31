@@ -96,7 +96,7 @@ public sealed class ClientOptionsTests
     [DataRow("https://online.tableau.com.example.com/", TableauDeployment.Server)]
     public void AutoTakesCloudForTableauCloudsHosts(string url, TableauDeployment expected)
     {
-        using var state = new TableauClientState("", new TableauClientOptions { ServerUrl = new Uri(url) }, null);
+        var state = new TableauClientState("", new TableauClientOptions { ServerUrl = new Uri(url) }, null);
 
         Assert.AreEqual(expected, state.Deployment);
     }
@@ -106,7 +106,7 @@ public sealed class ClientOptionsTests
     [DataRow(TableauDeployment.Cloud)]
     public void ADeploymentSetIsKept(TableauDeployment deployment)
     {
-        using var state = new TableauClientState("", new TableauClientOptions
+        var state = new TableauClientState("", new TableauClientOptions
         {
             ServerUrl = new Uri("https://10ax.online.tableau.com/"),
             Deployment = deployment,
@@ -125,13 +125,19 @@ public sealed class ClientOptionsTests
         var created = ClientFixtures.Client(server);
         var overCallers = new TableauClient(http, ClientFixtures.Options(server), Fixtures.Log.Factory);
 
+        var disposedSync = ClientFixtures.Client(server);
+
         await created.Server.GetInfoAsync();
         await created.DisposeAsync();
         await created.DisposeAsync();
+        created.Dispose();
         await overCallers.DisposeAsync();
+        disposedSync.Dispose();
+        disposedSync.Dispose();
 
         await Assert.ThrowsExactlyAsync<ObjectDisposedException>(() => created.Server.GetInfoAsync());
         await Assert.ThrowsExactlyAsync<ObjectDisposedException>(() => overCallers.Server.GetInfoAsync());
+        await Assert.ThrowsExactlyAsync<ObjectDisposedException>(() => disposedSync.Server.GetInfoAsync());
         Assert.IsTrue((await http.GetAsync(new Uri(server.BaseUrl, ClientFixtures.ServerInfoPath))).IsSuccessStatusCode);
     }
 

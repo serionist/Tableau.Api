@@ -88,6 +88,25 @@ public sealed class ErrorTests
     }
 
     [TestMethod]
+    [DataRow(new byte[] { 0x22, 0x5C, 0x75, 0x64, 0x38, 0x30, 0x30, 0x22 })]
+    [DataRow(new byte[] { 0x22, 0xC3, 0x28, 0x22 })]
+    public async Task AnErrorBodyWhoseStringsCantBeReadGivesTheStatusAlone(byte[] code)
+    {
+        // A lone surrogate written as an escape, and two bytes that are no UTF-8, as the error's code.
+        using var server = FakeTableauServer.Start();
+        byte[] body = [.. Encoding.ASCII.GetBytes("""{"error":{"summary":"Invented","code":"""), .. code, (byte)'}', (byte)'}'];
+        server.Map("GET", ItemsPath, FakeResponse.Bytes(400, "application/json", body));
+        await using var client = ClientFixtures.Client(server);
+
+        var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.Http, () => Send(client));
+
+        Assert.IsNull(thrown.ErrorCode);
+        Assert.IsNull(thrown.Summary);
+        Assert.EndsWith(" 400 Bad Request.", thrown.Message);
+        Assert.IsNotNull(thrown.ResponseBody);
+    }
+
+    [TestMethod]
     public async Task AnHtmlPageIsCutToFourKilobytesAndGivesNoDetails()
     {
         using var server = FakeTableauServer.Start();

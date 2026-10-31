@@ -7,17 +7,23 @@ using Microsoft.Extensions.Logging;
 namespace Tableau.Api.Tests.Fakes;
 
 /// <summary>
-/// An ILogger that keeps every line the library logs, its level and its exception's text included; and the logger
-/// factory that hands it out, for the 2.0 client, which takes a factory.
+/// An ILogger that keeps every line the library logs, its level and its exception's text included, with a logger
+/// factory that hands it out, for the 2.0 client, which takes a factory. Every one made is kept in <see cref="All"/>,
+/// which the suite's cleanup reads, so no line any test logs escapes the check for secrets.
 /// </summary>
 internal sealed class RecordingLogger : ILogger
 {
+    private static readonly ConcurrentQueue<RecordingLogger> _all = new();
     private readonly ConcurrentQueue<string> _lines = new();
 
     public RecordingLogger()
     {
         Factory = new LoggerFactory(this);
+        _all.Enqueue(this);
     }
+
+    /// <summary>Every logger the suite has made so far.</summary>
+    public static IReadOnlyList<RecordingLogger> All => [.. _all];
 
     /// <summary>A logger factory whose every logger is this one.</summary>
     public ILoggerFactory Factory { get; }
