@@ -19,7 +19,7 @@ public partial class VizPortalClient
     /// <returns></returns>
     /// <exception cref="TableauRequestException"></exception>
     public IAsyncEnumerable<Subscription> QuerySubscriptionsForWorkbook(
-        TableauSession session, string workbookId) => querySubscriptions(session, ("workbookId", workbookId));
+        Tableau.Api.Models.TableauSession session, string workbookId) => querySubscriptions(session, ("workbookId", workbookId));
 
     /// <summary>
     /// Returns Subscriptions for a single Schedule. Returns an enumerable that will paginate results in the background
@@ -28,7 +28,7 @@ public partial class VizPortalClient
     /// <param name="siteId">The site ID</param>
     /// <param name="scheduleId">The schedule ID</param>
     /// <returns></returns>
-    public async IAsyncEnumerable<Subscription> QuerySubscriptionsForSchedule(TableauSession session, string siteId, string scheduleId)
+    public async IAsyncEnumerable<Subscription> QuerySubscriptionsForSchedule(Tableau.Api.Models.TableauSession session, string siteId, string scheduleId)
     {
         var scheduleInfo = await Request(session, "getSchedules", JObject.FromObject(new QueryModel()
         {
@@ -72,7 +72,7 @@ public partial class VizPortalClient
     /// <param name="scheduleId">The schedule ID</param>
     /// <param name="subscribeOnExtractRefresh">Bind subscription to data refreshes</param>
     /// <returns></returns>
-    public async Task ChangeSubscriptionFrequency(TableauSession session, int subscriptionId, int scheduleId, bool subscribeOnExtractRefresh = false)
+    public async Task ChangeSubscriptionFrequency(Tableau.Api.Models.TableauSession session, int subscriptionId, int scheduleId, bool subscribeOnExtractRefresh = false)
     {
         var req = await Request<ChangeSubscriptionFrequency, Empty>(session, "setSubscriptionsSchedule",
             new ChangeSubscriptionFrequency()
@@ -89,7 +89,7 @@ public partial class VizPortalClient
     /// <param name="session">The session obtained from the top level client</param>
     /// <param name="subscriptionId">The subscription ID</param>
     /// <returns></returns>
-    public async Task DeleteSubscription(TableauSession session, int subscriptionId)
+    public async Task DeleteSubscription(Tableau.Api.Models.TableauSession session, int subscriptionId)
     {
         var req = await Request<DeleteSubscription, Empty>(session, "deleteSubscriptions",
             new DeleteSubscription()
@@ -99,7 +99,7 @@ public partial class VizPortalClient
     }
 
 
-    private IAsyncEnumerable<Subscription> querySubscriptions(TableauSession session, params (string field, string value)[] search)
+    private IAsyncEnumerable<Subscription> querySubscriptions(Tableau.Api.Models.TableauSession session, params (string field, string value)[] search)
     {
         var q = new QueryModel()
         {

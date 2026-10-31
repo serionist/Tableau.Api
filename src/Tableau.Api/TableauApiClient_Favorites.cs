@@ -26,7 +26,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 3)]
-    public async Task<favoriteType> AddDataSourceToFavorites(TableauSession session, string userId,
+    public async Task<favoriteType> AddDataSourceToFavorites(Models.TableauSession session, string userId,
         string datasourceId, string favoriteLabel, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -54,7 +54,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(3, 1)]
-    public async Task<favoriteType> AddProjectToFavorites(TableauSession session, string userId,
+    public async Task<favoriteType> AddProjectToFavorites(Models.TableauSession session, string userId,
         string projectId, string favoriteLabel, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -82,7 +82,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 0)]
-    public async Task<favoriteType> AddWorkbookToFavorites(TableauSession session, string userId,
+    public async Task<favoriteType> AddWorkbookToFavorites(Models.TableauSession session, string userId,
         string workbookId, string favoriteLabel, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -110,7 +110,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 0)]
-    public async Task<favoriteType> AddViewToFavorites(TableauSession session, string userId,
+    public async Task<favoriteType> AddViewToFavorites(Models.TableauSession session, string userId,
         string viewId, string favoriteLabel, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -137,7 +137,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 3)]
-    public async Task DeleteDataSourceFromFavorites(TableauSession session, string userId, string datasourceId,
+    public async Task DeleteDataSourceFromFavorites(Models.TableauSession session, string userId, string datasourceId,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -158,7 +158,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(3, 1)]
-    public async Task DeleteProjectFromFavorites(TableauSession session, string userId, string projectId,
+    public async Task DeleteProjectFromFavorites(Models.TableauSession session, string userId, string projectId,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -179,7 +179,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 0)]
-    public async Task DeleteWorkbookFromFavorites(TableauSession session, string userId, string workbookId,
+    public async Task DeleteWorkbookFromFavorites(Models.TableauSession session, string userId, string workbookId,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -200,7 +200,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 0)]
-    public async Task DeleteViewFromFavorites(TableauSession session, string userId, string viewId,
+    public async Task DeleteViewFromFavorites(Models.TableauSession session, string userId, string viewId,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -219,7 +219,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 5)]
-    public async Task<favoriteType[]> GetFavoritesForUser(TableauSession session, string userId,
+    public async Task<favoriteType[]> GetFavoritesForUser(Models.TableauSession session, string userId,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();

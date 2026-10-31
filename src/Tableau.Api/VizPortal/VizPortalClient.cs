@@ -57,7 +57,7 @@ public partial class VizPortalClient
         return c;
     }
 
-    private async Task<TResult> Request<TParameters, TResult>(TableauSession session, string methodName,
+    private async Task<TResult> Request<TParameters, TResult>(Tableau.Api.Models.TableauSession session, string methodName,
         TParameters parameters)
     {
         var jsonSettings = new JsonSerializer()
@@ -89,7 +89,7 @@ public partial class VizPortalClient
             throw;
         }
     }
-    private async Task<JObject> Request(TableauSession session, string methodName, JObject parameters)
+    private async Task<JObject> Request(Tableau.Api.Models.TableauSession session, string methodName, JObject parameters)
     {
         // Disposed after each request, as the REST client's is, so its connection doesn't wait for the finalizer.
         using var c = buildClient(session.Token);
@@ -160,7 +160,7 @@ public partial class VizPortalClient
     }
 
     public async IAsyncEnumerable<TResult> PaginateRequest<TResult, TPageResponse, TParameters>(
-        TableauSession session, string methodName,
+        Tableau.Api.Models.TableauSession session, string methodName,
         TParameters parameters, Func<TPageResponse, TResult[]> getResults) where TPageResponse : QueryResponseModel
         where TParameters : QueryModel
     {
@@ -188,7 +188,7 @@ public partial class VizPortalClient
     }
 
     public async IAsyncEnumerable<TResult> NextPageTokenRequest<TResult, TPageResponse, TParameters>(
-        TableauSession session, string methodName,
+        Tableau.Api.Models.TableauSession session, string methodName,
         TParameters parameters, Func<TPageResponse, TResult[]> getResults) where TPageResponse : QueryResponseWithTokenModel
         where TParameters : QueryModel
     {

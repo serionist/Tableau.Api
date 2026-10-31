@@ -486,25 +486,46 @@ As S10 built it (#41, PR #42):
   A response without Content-Type works.
 ### Sessions and sign-in (S11)
 
-- **Credentials** (`TableauCredentials`), each with a delegate overload so a secret can come from a vault:
-  - `PersonalAccessToken(name, secret)`;
-  - `ConnectedAppDirectTrust(clientId, secretId, secretValue, userName, scopes)`: the library mints an HS256 JWT at
-    each sign-in (header `kid` and `iss`; claims `iss`, `exp` at most 10 minutes ahead, a fresh `jti`, `aud` "tableau",
-    `sub`, `scp` as an array) with the BCL, no JWT package;
-  - `Jwt(Func<CancellationToken, ValueTask<string>>)` for OAuth 2.0 trust and any JWT minted elsewhere;
-  - `UnifiedAccessToken(...)`: Cloud only, 3.27, signs in with `isUat`;
-  - `Password(name, password)`, with `ImpersonateUserId` (Server only, also with a PAT where Server allows it).
-- **The session manager,** one per named client:
-  - signs in lazily on the first call, one sign-in at a time (a `SemaphoreSlim`; one PAT allows one session);
-  - holds an immutable `TableauSession` swapped atomically;
-  - signs in again before the known expiry (`estimatedTimeToExpiration`, else 240 minutes on Server and 120 on Cloud)
-    and once after a 401, resending the call when its body can be resent;
-  - signs out on dispose, without throwing.
-- **`TableauSession`** is a record with `SiteId`, `SiteContentUrl`, `UserId`, `UserName`, `ExpiresAt`, `Deployment` and
-  `ApiVersion`. Its `ToString` and `PrintMembers` leave the token out (F27, F34).
-- **The explicit API:** `client.Sessions.SignInAsync(credentials, site)`, `SwitchSiteAsync` (Server only) and
-  `SignOutAsync`. `client.WithSession(session)` gives a client bound to that session, which never signs in by itself:
-  a 401 throws `Authentication`. One bound client per site serves multi-site work.
+As S11 built it (#43, the door agreed there):
+
+- **Credentials** (`TableauCredentials`, an abstract class only the library derives), each secret also from a
+  `Func<CancellationToken, ValueTask<string>>`, called at each sign-in, so a vault can rotate it:
+  - `PersonalAccessToken(name, secret, impersonateUserId)` and `Password(name, password, impersonateUserId)`;
+    impersonation is Tableau Server only, a LUID checked when the credentials are made;
+  - `ConnectedAppDirectTrust(clientId, secretId, secretValue, userName, scopes)`: an HS256 JWT minted at each sign-in
+    with `HMACSHA256.HashData` and `Base64Url`, no JWT package: header `alg`, `typ`, `kid` and `iss`; claims `iss`,
+    `exp` five minutes ahead (Tableau refuses more than ten, so the clocks may be five minutes apart either way), a new
+    `jti`, `aud` "tableau", `sub` and `scp` as an array;
+  - `Jwt(token)` for OAuth 2.0 trust and any JWT minted elsewhere; `UnifiedAccessToken(token)`, Cloud only, 3.27,
+    signed in with `isUat`.
+  - Each kind is its own Sign In descriptor (password 1.0; a PAT 3.6; a JWT 3.17; a UAT 3.27 Cloud; impersonation
+    Server), so the gates refuse a kind the server or its deployment lacks before any secret is read.
+- **The session manager** (`Pipeline/TableauSessions.cs`), one per named client, in its state:
+  - signs in on the first call that needs a session (a descriptor's `NeedsSession`), one sign-in at a time under a
+    `SemaphoreSlim`, and holds the session and when to renew it as one immutable record, swapped whole;
+  - callers that arrived before a sign-in failed take its failure rather than trying again each, so 20 calls with a
+    wrong password make one refused sign-in, not 20 for a lockout to count;
+  - signs in again five minutes before the session's `ExpiresAt`, or at half its life when that is shorter; `ExpiresAt`
+    is 240 minutes on Server and 120 on Cloud, or sooner when a PAT's `estimatedTimeToExpiration` (`DAYS:HH:MM`, the
+    token's own lifetime) says the token expires first;
+  - signs in again once after a 401 to a call in its own session, unless another call already did, and sends the call
+    again, an upload's excepted;
+  - a client from `Create` or the constructor over an `HttpClient` signs its session out when disposed, never throwing,
+    within ten seconds: `DisposeAsync` awaits it; `Dispose` runs it on the thread pool and waits, so no caller's
+    synchronisation context can deadlock it. A client from DI never signs out: the session is the name's, and the
+    container's disposal of the name's singleton doesn't either, since the factory's handlers may be gone by then and a
+    host's shutdown shouldn't wait on Tableau.
+- **`TableauSession`**, a sealed record with `required` init members `SiteId`, `SiteContentUrl`, `UserId`, `ExpiresAt`,
+  `Deployment` and `ApiVersion`, and `UserName` (F27: the user's, the PAT's name, a JWT's `sub`, the first session's
+  after Switch Site). The token is internal, and `PrintMembers` is written out to leave it out (F34).
+- **The explicit API:** `client.Sessions.SignInAsync(credentials, site)`, `SwitchSiteAsync` (Server only, the old token
+  ended) and `SignOutAsync`, on sessions the caller holds and the client never signs out. `client.WithSession(session)`
+  is a client over the same connection and state that calls in that session and never signs in: a 401 throws
+  `Authentication`, disposing it signs nothing out, and disposing its client ends it.
+- **The pipeline:** `X-Tableau-Auth` on each request alone; `{siteId}` in a template filled from the session; a call
+  refused for its arguments is refused before a sign-in. A sign-in's or Switch Site's exception keeps no
+  `ResponseBody` (a descriptor's `KeepsBody`). When a caller's `HttpClient` followed a redirect elsewhere with a token,
+  the call fails as `Redirect` and that session is signed out; the client's own signs in again on the next call.
 
 ### Paging and filters (S12)
 
@@ -644,11 +665,20 @@ As S10 built it (#41, PR #42):
   - at 2.0.0: at least 90% of lines and 80% of branches.
 - **Legs:** Linux and Windows; on Linux, one run under sv-SE, one under tr-TR, and a time zone that is not UTC (F10,
   F28).
-- **Live suite** (S11): nightly and on dispatch, on `main` only, in the `tableau-live` environment, serial.
-  - It signs in with the direct-trust app.
+- **Live suite** (S11): `live.yml`, by hand and nightly once the repository variable `TABLEAU_LIVE_NIGHTLY` is `true`,
+  on `main` only, in the `tableau-live` environment, one run at a time, against the maintainers' own Tableau Server
+  (#43; the Developer Program site was the first plan).
+  - It signs in with the direct-trust app (`TABLEAU_LIVE_CLIENT_ID`, `TABLEAU_LIVE_SECRET_ID`,
+    `TABLEAU_LIVE_SECRET_VALUE`, `TABLEAU_LIVE_USER`), or by hand with a PAT (`TABLEAU_LIVE_PAT_NAME`,
+    `TABLEAU_LIVE_PAT_SECRET`); `TABLEAU_LIVE_SITE` unset is the default site. Its session tests run one at a time,
+    since one PAT allows one session.
   - Every object is made in a project named after the run and deleted in cleanup; leftovers older than a day with the
-    prefix are swept.
-  - It never runs on PRs, so forks never see its secrets.
+    prefix are swept. Tableau Server lists a project from its index, a second behind a create and minutes behind a
+    delete, so the suite waits for a new one and the sweep passes over one already gone.
+  - With `TABLEAU_RECORD=1` each JSON body goes through `FixtureRecorder`, scrubbed of tokens, LUIDs, names, emails and
+    hosts, into a folder outside `Fixtures/`, for a maintainer to read and copy in.
+  - It never runs on PRs, so forks never see its secrets; the log check counts a line holding a live secret, and shows
+    none.
 
 ### CI and release
 
@@ -750,8 +780,8 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
 | S7 | main | Test platform and coverage | F26 F28 | #34 | #35 | done: squash `4ba9b69` |
 | S8 | main | Models, generator, AOT | F14 F23 F50 | #37 | #38 | done: squash `ffc43f5` |
 | S9 | main | Client core | F4 F16 F18 F20 F21 F22 F35 F36 F37 F38 F46 F47 F48 | #39 | #40 | done: squash `18c8404` |
-| S10 | main | Resilience and downloads | F17 F19 F42 | #41 | #42 | in review |
-| S11 | main | Sessions and the live suite | F27 F34 | | | todo |
+| S10 | main | Resilience and downloads | F17 F19 F42 | #41 | #42 | done: squash `54b6764` |
+| S11 | main | Sessions and the live suite | F27 F34 | #43 | | in review |
 | S12 | main | Port: server, sites, projects, users, groups, favorites; paging and filters | F13 F33 | | | todo |
 | S13 | main | Port: permissions, tags, metadata (REST and GraphQL) | F8 F44 | | | todo |
 | S14 | main | Port: workbooks, views, data sources, revisions | F5 F7 F32 | | | todo |
@@ -1130,11 +1160,11 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
     - `ToString` has no token.
   - **Live:** sign in with direct trust, call, sign out; a bound session used across two sub-clients.
   - **ServerOnly, by hand:** password with impersonation, Switch Site.
-- **One-way doors:** the credentials and session API: a maintainer's yes on the issue.
+- **One-way doors:** the credentials and session API: a maintainer's yes on the issue (#43).
 - **Done when:**
   - merged with that yes;
-  - the maintainer has set up the app and `tableau-live` on the site (Q2);
-  - the first nightly run is green.
+  - the maintainer has set up the app and `tableau-live` on their Tableau Server (Q2; done before the merge);
+  - the first run of `live.yml` is green, and `TABLEAU_LIVE_NIGHTLY` turns the nightly run on.
 
 ### S12. Port: server, sites, projects, users, groups, favorites
 
@@ -1327,7 +1357,7 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
 | Culture and time zone | every PR | Linux: sv-SE, tr-TR, a non-UTC zone |
 | Native AOT | every PR, from S8 | Linux |
 | Coverage gate | every PR, from S7 | Linux and Windows |
-| Live (`Live`) | nightly and on dispatch, `main` only, from S11 | the Developer Program site (Cloud) |
+| Live (`Live`) | nightly once `TABLEAU_LIVE_NIGHTLY` is `true`, and on dispatch, `main` only, from S11 | the maintainers' Tableau Server, by its direct-trust app (#43) |
 | Server only (`ServerOnly`) | by hand; each PR that touches a Server-only call says whether it ran | a Tableau Server the maintainer has |
 
 ## Docs
@@ -1347,7 +1377,7 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
 |---|---|---|
 | R1 | Tableau's JSON shape is undocumented: wrappers, single items, numbers as strings, envelopes | Mitigated: tolerant converters, fixtures recorded live per area; Server-only fixtures stay synthetic until recorded by hand |
 | R2 | A multipart publish may not answer in JSON | Mitigated: `XmlReader` for the four publish responses, decided in S17 on the live site |
-| R3 | The Developer Program site can be wiped, can run a pre-release Cloud, and lapses unless renewed | Accepted: a red night is triaged as Tableau's or ours; the run prefix and sweep; the maintainer renews |
+| R3 | The Developer Program site can be wiped, can run a pre-release Cloud, and lapses unless renewed | Moot from S11: the suite runs on the maintainers' Tableau Server (#43), so nightly runs show Tableau Server's behaviour, and Tableau Cloud's is checked by hand; a red night is triaged as Tableau's or ours; the run prefix and sweep |
 | R4 | A REST token may not open a Vizportal session on Cloud | Checked in S16; if not, Vizportal is Server only and the docs say so |
 | R5 | 1.2.6's escaping breaks callers who pre-encoded filters or relied on raw paths | Accepted: written in the CHANGELOG; the new behaviour is what the docs describe |
 | R6 | 1.2.6's code is public on the PR before the package is on nuget.org | Mitigated (Q7): S2a sets the branch up and reveals nothing, so only S2b is public before the release; its PR, review, merge, tag and approval are kept close together, and its text says what changes, nothing more |
@@ -1355,7 +1385,7 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
 | R8 | Server-only features never run in CI | Accepted (D9): by hand, and the PR says so |
 | R9 | MIT needs the agreement of everyone whose code it covers | Q6 |
 | R10 | The trademark guidelines discourage "Tableau" in a product name; the id has been used since 2018 | Accepted (D5): the disclaimer; a fallback id is ready if Salesforce objects |
-| R11 | One PAT allows one session, so two sign-ins end each other | Mitigated: one sign-in at a time per client, direct trust in the live suite, and a docs warning against sharing a PAT between processes |
+| R11 | One PAT allows one session, so two sign-ins end each other | Mitigated: one sign-in at a time per client, direct trust in the live suite, its session tests one at a time, and a docs warning against sharing a PAT between processes |
 | R12 | ApiCompat's suppression file lists most of 1.2.5's API | Accepted: reviewed per PR, grouped in the guide, deleted after 2.0.0 (Later) |
 | R13 | Cloud rate limits on the nightly run | Accepted: a small serial suite, far under 40,000 calls an hour |
 | R14 | Versions below the floor are allowed on opt-in but never tested | Accepted: the docs say so |
@@ -1431,14 +1461,14 @@ Status: `todo`, `done` (with the PR) or `wontfix` (with the reason). No finding 
 | F24 | Target, version and package validation set once; the breaks listed | S5 | no | done |
 | F25 | Licence, README, CONTRIBUTING, SECURITY, true package metadata | S1 | the 1.2.6 package gets the metadata | todo |
 | F26 | Tests that build, run offline and cover the API | S7 | 1.x gets its own offline suite | done |
-| F27 | The session's user name set after sign-in | S11 | yes | todo |
+| F27 | The session's user name set after sign-in | S11 | yes | done (#43): `TableauSession.UserName` |
 | F28 | Invariant culture and ordinal comparisons, tested under sv-SE and tr-TR | S7 | no (Q5) | done |
 | F29 | The Vizportal schedule check sends camelCase | S16 | n/a | todo |
 | F30 | Chunks read from any stream, asynchronously | S17 | no | todo |
 | F31 | Add Workbook to Schedule returns the task; Add Data Source to Schedule | S15 | no; a known issue | todo |
 | F32 | Updates omit nested elements the caller did not set | S14 | no (Q5) | todo |
 | F33 | Update User sends the documented attributes | S12 | no | todo |
-| F34 | A session lifecycle: expiry, signing in again, no token in `ToString` | S11 | no | todo |
+| F34 | A session lifecycle: expiry, signing in again, no token in `ToString` | S11 | no | done (#43): the session manager |
 | F35 | One exception type with the details (D8) | S9 | no | done |
 | F36 | Logging without secrets or noise; Abstractions only | S9 | no | done |
 | F37 | `ConfigureAwait(false)` on every await | S9 | no | done: CA2007 an error outside TableauLegacy |
@@ -1751,6 +1781,8 @@ and start the steps", and on the owner calls they have answered since (Q7 to Q9)
 | 2026-10-31 | S10 | Built on `41-resilience-downloads` for #41, from `origin/main` at `18c8404`; @serionist agreed on #41 to its doors, the resilience option names and the builder's handler hooks, and `TableauDownload`. **Resilience** (`Pipeline/TableauResilience.cs`): Microsoft.Extensions.Http.Resilience's `ResilienceHandler` over a Polly pipeline built from the read-only options, a retry around an attempt timeout, on the state's `TimeProvider` (the container's under DI); not `AddResilienceHandler`, whose registration puts services and telemetry in the caller's container and logs each retry as a warning. `TableauAttemptHandler`, inside the retries, reads a success whole and an error's first 64 KB within the attempt, so `RequestTimeout` covers the answer and an answer that breaks off is retried. Retries only for idempotent descriptors, carried in the request's options: 408, 429, 5xx, a connection that failed (not a refused certificate or another failure sending again won't mend), an attempt that timed out; three by default, jittered back-off from about two seconds, at most 30, logged at Debug. The server's wait, `Retry-After` as a delay or a date or a 429 body's "retry after N minutes", is waited out up to `MaxRetryAfter`; a longer one fails at once, `RateLimited` for a 429 with `RetryAfter`. A transfer has no attempt timeout and `TransferTimeout` covers all of it, a download's reading included. A timeout's cause is a cancellation, never Polly's exception; a caller's handler that throws fails the call as `Http`. **One chain everywhere:** the named `HttpClient`'s handlers are the caller's, outermost, then the library's two; `Create` builds the same two over its `SocketsHttpHandler`; the constructor over a caller's `HttpClient` sends each attempt through it as a copy of the request, so its handlers run inside the retries, which its doc says. One action per name sets the primary handler and the handlers, registered by the first `AddTableauClient` of the name, so a second keeps what the first added; `ConfigurePrimaryHandler` runs on the library's handler before its rules are set again (no redirects, no cookies, its certificate callback; a chain policy the caller set kept). **Downloads:** `TableauDownload`, `TableauFileKind`, the pipeline's `DownloadAsync` (the download methods come with their areas, from S12); `Content-Disposition` read raw, since Tableau's documented `name="tableau_workbook"; filename="..."` has no disposition type and .NET's typed header refuses it. **Looked up:** Learn on Microsoft.Extensions.Http.Resilience (the handler, `AddResilienceHandler`, the standard handler's predicates, Retry-After, the static-client pattern), IHttpClientFactory (`ConfigurePrimaryHttpMessageHandler`, `ConfigureAdditionalHttpMessageHandlers`, the obsolete `ConfigureHttpMessageHandlerBuilder`, handler order), Polly's retry and timeout options and `TimeProvider`; Tableau documents no 429 body or `Retry-After`, and the one wording found is a detail "Please retry after 29 minutes." under code 429000 (tableau/server-client-python#952), so the body is read loosely. **AOT:** a probe published natively with `ResilienceHandler`, a retry, a timeout and the request's options: no warning; the AOT app now retries a 503, downloads and saves a file, and calls through a DI client with `ConfigurePrimaryHandler` and a handler of the caller's, published natively on win-x64 with no warning, 16 MB, every check passed. **Live check,** Tableau Server 2025.1 (REST API 3.25), read-only, by a scratch program outside the clone that printed shapes only: the 2.0 client negotiated through the new chain; two workbooks' downloads answered `Content-Disposition: name="tableau_workbook"; filename="<name>.twbx"`, which .NET's typed header refuses and the library reads, `application/octet-stream`, and no `Content-Length`. A first run signed in with JSON but read XML, so it could not sign out; that session ends on its own. **Tests:** 315 to 438; coverage 94.67% of lines and 93.81% of branches, the floors rise to 94% and 93%. A caller's `HttpClient` with a resilience handler of its own showed that a copy carrying the request's options hands the client's resilience context to it, and the client's next attempt then sends the copy without its body: the copy takes no options, and a test sends a body through both. **Departures,** in the PR's door list, agreed by @serionist on #41: `Kind` also from the media type and from a PDF's or a PNG's signature, since an export sends no file name; a public constructor of `TableauDownload` over a stream, for a mock of a download method; the builder's methods return the builder; `MaxRetryAfter` caps a 503's `Retry-After` too; `ConfigurePrimaryHandler`'s certificate rule replaces a caller's callback and uses a caller's chain policy as set; a read of `Content` that breaks off or times out throws `TableauException`. |
 | 2026-10-31 | S10 | Draft PR #42. review-code round 1, by fresh reviewers: one blocker and fourteen minors, all fixed on the branch, with the maintainer's calls. **The blocker:** `TableauHandler.Create` set the library's TLS rules in place on `SslClientAuthenticationOptions` a `ConfigurePrimaryHandler` action gave it, so two clients sharing one, one with `DangerousAcceptAnyServerCertificate`, both took the one resolved last, and an app's own handler sharing it lost its callback; the rules are now set on a copy the handler holds alone, member by member as the runtime's own clone copies them, with a test of two clients in both orders and one that counts the 15 members. **Polly.Core alone,** the maintainer's call: Microsoft.Extensions.Http.Resilience brought `Microsoft.Extensions.Telemetry.Abstractions`, which turns off the runtime's `LoggerMessage` generator in every app that takes it, and 16 packages in all; a handler of the library's own, `TableauResilienceHandler`, now runs Polly.Core 8.9.0's retry, times each attempt on the client's clock and reads its answer, and the library's lock file falls from 33 packages to 17. **Minors:** the docs say a caller's chain policy is used as set, its flags able to loosen the check; `Retry-After` is honoured on a 429 and a 503 only, another status left to the back-off; a handler's own timeout or cancellation fails the call as `Http` with it as the cause, the library's own attempt timeout told apart by an internal exception; two tests now fail without what they claim (the disposed handler, the answer read whole); a file name is cut to 255 bytes of UTF-8 on a character's boundary before it is trimmed and checked for a device name; an empty `filename*` leaves `filename`; a save refuses a folder before reading, documents `UnauthorizedAccessException`, and may be tried again when it couldn't open its file; the pipeline takes only a download descriptor for a download; a 5 MB download is sent chunked, as Tableau Server sends one; the guide and the changelog say a 503 over the cap is `Http`, and which old downloads gave a kind. **Improvements taken:** a proxy's 407 isn't retried; `AddHttpMessageHandler` advises retrying only safe methods; the waits' tests measure from the retry's log line; the public constructor parses its `Content-Type`; a break-off while reading ahead says "broke off after N bytes"; the download docs name the read-ahead and the cleaning rules; `SaveToFileAsync`'s example falls back when `FileName` is null; S12 marks Append to File Upload non-idempotent. Tests 438 to 472; coverage 94.73% of lines and 94.09% of branches on Windows, more on Linux, which also runs the platform's own TLS members; the branch floor rises to 94%. The native AOT app stays warning-free, 15.9 MB. The live check on Tableau Server 2025.1 ran again: negotiation and Server Info through the new handler, one workbook download's headers read as before, signed out. |
 | 2026-10-31 | S10 | review-code round 2 on `dd567cf`: every round 1 fix holds; five minors and eight improvements, all taken. **Minors:** two comments outlived the switch to Polly.Core (`CallerClientHandler`'s options, `TableauClientState.Resilience`); the advice to a caller's own retrying handler now says GET and HEAD, or a call known safe to send twice, never a POST nor Append to File Upload's PUT, and that the client's attempt timeout runs inside it; a DI handler's exception shaped as an `HttpClient` timeout is `Http`, since only a caller's `HttpClient` has a timeout of its own; a save cancelled before it starts no longer blocks a later one; `ClientFixtures.ClosedPort()` holds its port with a socket bound and never listening, since a freed port went to a parallel test's server and failed a test once in twelve coverage runs (a connection to it is refused at once on Linux, after Windows' usual two seconds there). **Improvements:** the waits' upper bounds have ten seconds' room; a 503 whose body names a wait is left to the back-off; a dead branch in the name cut goes, and the device rule's second trim is pinned; the guide links `main`'s `DownloadDataSource`; blank lines between members restored. Tests 472 to 475; ten runs with coverage in a row, as the gate runs them, all passed; 94.74% of lines and 94.09% of branches on Windows, the floors unchanged. |
+| 2026-10-31 | S10 | Done: PR #42 merged as `54b6764`, closing #41, with its doors and their departures agreed on #41. |
+| 2026-10-31 | S11 | Built on `43-sessions-live-suite` for #43, from `origin/main` at `54b6764`; @serionist agreed on #43 to its door, the credentials and session API, and chose his own Tableau Server for the live suite over a Developer Program site. **Sessions** (Design, Sessions and sign-in): `TableauCredentials` with its five kinds and their vault overloads; `TableauSession`; `client.Sessions` (`SessionsClient`) and `client.WithSession`; credentials on `Create`, the `HttpClient` constructor and `UseCredentials`; the session manager, `Pipeline/TableauSessions.cs`; eight descriptors (Sign In by kind, Sign Out, Switch Site), `NeedsSession`, `KeepsBody` and `{siteId}` in the pipeline. `TableauApiClient`'s `SignIn`, `SignInWithPAT`, `SignOut` and `SwitchSite` are deleted: three more breaks in the ledger (22), `SignInWithPAT`'s 1.2.5 signature being listed already; the old files name `Models.TableauSession`, since a `TableauSession` in `Tableau.Api` would otherwise bind every old method to the new record. **Looked up:** the REST reference's Sign In, Sign Out and Switch Site (bodies, `isUat` from 3.27, impersonation Server only, Switch Site 2.6 and Server only, a token valid 240 minutes on Server and 120 on Cloud); `estimatedTimeToExpiration` is a PAT's own lifetime, `DAYS:HH:MM`, returned to a PAT sign-in alone, and the live server sent `363:10:35`; the direct-trust JWT's header and claims, Server and Cloud; connected-app scopes (none for sign-in and sign-out from 2023.2; `tableau:content:read` for reads, `tableau:projects:*` for projects); unified access tokens; `HMACSHA256.HashData`, `Base64Url`, `IHttpClientFactory`'s handler lifetimes, and `ServiceProvider.Dispose` throwing on a service that is `IAsyncDisposable` alone. **The live suite:** `live.yml` (by hand from `main`, nightly once `TABLEAU_LIVE_NIGHTLY` is `true`, in `tableau-live`, one run at a time); `LiveSite.cs` (the settings, the sign-in, the run's project and its sweep); `FixtureRecorder.cs` (`TABLEAU_RECORD=1`); `ServerOnlySessionTests` for impersonation and Switch Site by hand; one `[AssemblyCleanup]`, `SuiteCleanup`, which deletes the run's project, then checks every log line, a live secret's counted and never shown. **Live check,** Tableau Server 2025.1 (REST API 3.25), the default site, a PAT from outside the clone: the four `Live` tests passed, sign-outs checked by a refused token; the run's project made, listed and deleted. It showed that a PAT's two sessions end each other, so the session tests run one at a time, and that the server lists a project a second behind a create and minutes behind a delete. A recording run wrote 19 fixtures, none holding the secret, the token's name, the host, a LUID, an email or a token. Not run: Switch Site (one site) and the password sign-ins (no password); the first direct-trust run comes from `main` after the merge. **Tests:** 475 to 551; coverage 95.01% of lines and 94.56% of branches on Windows; the line floor rises to 95%. The native AOT app signs in through its fixtures, mints a JWT, binds a session and signs out: published natively on win-x64 with no warning, 16 MB. **Departures,** in the PR's door list: `ExpiresAt` takes a PAT's `estimatedTimeToExpiration` only when sooner than the deployment's lifetime; `TableauSession`'s six members are `required` init, so a test can make one, and `WithSession` refuses one without a token; `Jwt` and `UnifiedAccessToken` take only a delegate; `UseCredentials` keeps the last given; a DI name's session is never signed out, the container's disposal included; sign-in descriptors are idempotent. |
 
 ## For the maintainers
 
@@ -1782,12 +1814,20 @@ What the session cannot do, first what closes a security exposure. Kept current 
   undeprecated.
 - [x] Tell Starschema, the co-owner: not needed, its owner is @serionist.
 
-**Before S11:**
+**Before S11:** the suite runs on the maintainers' own Tableau Server, not a Developer Program site (#43).
 
-- [ ] On the Developer Program site, a direct-trust connected app: enabled, one secret, the scopes the suite needs.
-- [ ] The `tableau-live` environment, deployment branch `main` only and no required reviewers (Q2), with the secrets
-  `TABLEAU_LIVE_SERVER_URL`, `TABLEAU_LIVE_SITE`, `TABLEAU_LIVE_CLIENT_ID`, `TABLEAU_LIVE_SECRET_ID`,
-  `TABLEAU_LIVE_SECRET_VALUE` and `TABLEAU_LIVE_USER`.
+- [x] On that Tableau Server, the default site, a direct-trust connected app, "Tableau.Api live suite": enabled, all
+  projects, one secret (2026-10-31). The JWT asks for `tableau:content:read` and `tableau:projects:*`; signing in and
+  out needs no scope from Tableau 2023.2.
+- [x] The `tableau-live` environment, deployment branch `main` only and no required reviewers (Q2), with the secrets
+  `TABLEAU_LIVE_SERVER_URL`, `TABLEAU_LIVE_CLIENT_ID`, `TABLEAU_LIVE_SECRET_ID`, `TABLEAU_LIVE_SECRET_VALUE` and
+  `TABLEAU_LIVE_USER` (2026-10-31). No `TABLEAU_LIVE_SITE`: GitHub keeps no empty secret, and unset is the default site.
+
+**After S11 merges:**
+
+- [ ] Run `live.yml` by hand on `main`, the first direct-trust run. If the sign-in is refused, check the user's name as
+  the server shows it, a domain included for Active Directory or LDAP.
+- [ ] Then set the repository variable `TABLEAU_LIVE_NIGHTLY` to `true`, which turns the nightly run on.
 
 **Settings:**
 

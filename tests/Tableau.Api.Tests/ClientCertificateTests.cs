@@ -47,7 +47,7 @@ public sealed class ClientCertificateTests
         var options = ClientFixtures.Options(server);
         options.DangerousAcceptAnyServerCertificate = true;
         var log = new RecordingLogger();
-        await using var client = TableauClient.Create(options, log.Factory);
+        await using var client = TableauClient.Create(options, loggerFactory: log.Factory);
 
         await client.Server.GetInfoAsync();
 
@@ -62,8 +62,8 @@ public sealed class ClientCertificateTests
         var refused = new TableauClientOptions { ServerUrl = new Uri("http://tableau.example.com/") };
         var allowed = new TableauClientOptions { ServerUrl = new Uri("http://tableau.example.com/"), AllowInsecureHttp = true };
 
-        var thrown = Assert.ThrowsExactly<ArgumentException>(() => TableauClient.Create(refused, log.Factory));
-        await using var client = TableauClient.Create(allowed, log.Factory);
+        var thrown = Assert.ThrowsExactly<ArgumentException>(() => TableauClient.Create(refused, loggerFactory: log.Factory));
+        await using var client = TableauClient.Create(allowed, loggerFactory: log.Factory);
 
         Assert.Contains("ServerUrl is plain http, which sends passwords and tokens unencrypted", thrown.Message);
         Assert.Contains("AllowInsecureHttp is set, so passwords and tokens go to http://tableau.example.com/ unencrypted",
@@ -117,7 +117,7 @@ public sealed class ClientCertificateTests
         server.Map("GET", ClientFixtures.ServerInfoPath, ClientFixtures.ServerInfo());
         using var handler = authority.Handler(server);
         using var http = new HttpClient(handler, disposeHandler: false);
-        await using var client = new TableauClient(http, ClientFixtures.Options(server), Fixtures.Log.Factory);
+        await using var client = new TableauClient(http, ClientFixtures.Options(server), loggerFactory: Fixtures.Log.Factory);
 
         var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.Http, () => client.Server.GetInfoAsync());
 
@@ -140,7 +140,7 @@ public sealed class ClientCertificateTests
         server.Map("GET", ClientFixtures.ServerInfoPath, ClientFixtures.ServerInfo());
         using var handler = authority.Handler(server);
         using var http = new HttpClient(handler, disposeHandler: false);
-        await using var client = new TableauClient(http, ClientFixtures.Options(server), Fixtures.Log.Factory);
+        await using var client = new TableauClient(http, ClientFixtures.Options(server), loggerFactory: Fixtures.Log.Factory);
 
         await client.Server.GetInfoAsync();
 
@@ -156,7 +156,7 @@ public sealed class ClientCertificateTests
         server.Map("GET", ClientFixtures.ServerInfoPath, ClientFixtures.ServerInfo());
         using var handler = authority.Handler(server);
         using var http = new HttpClient(handler, disposeHandler: false);
-        await using var client = new TableauClient(http, ClientFixtures.Options(server), Fixtures.Log.Factory);
+        await using var client = new TableauClient(http, ClientFixtures.Options(server), loggerFactory: Fixtures.Log.Factory);
 
         await client.Server.GetInfoAsync();
 

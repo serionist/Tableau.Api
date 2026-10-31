@@ -16,7 +16,7 @@ public partial class VizPortalClient
     /// <returns></returns>
     /// <exception cref="TableauRequestException"></exception>
     public IAsyncEnumerable<Project> QueryProjects(
-        TableauSession session) => queryProjects(session);
+        Tableau.Api.Models.TableauSession session) => queryProjects(session);
 
     /// <summary>
     /// Change the name of a single Project
@@ -25,7 +25,7 @@ public partial class VizPortalClient
     /// <param name="projectId">The ID of the project</param>
     /// <param name="newName">New name for this project</param>
     /// <returns></returns>
-    public async Task ChangeProjectName(TableauSession session, int projectId, string newName)
+    public async Task ChangeProjectName(Tableau.Api.Models.TableauSession session, int projectId, string newName)
     {
         var req = await Request<ChangeProjectName, Empty>(session, "setProjectName",
             new ChangeProjectName()
@@ -42,7 +42,7 @@ public partial class VizPortalClient
     /// <param name="containerId">Target Project Id</param>
     /// <param name="contentId">Project Id that will be moved</param>
     /// <returns></returns>
-    public async Task MoveProject(TableauSession session, int containerId, int contentId)
+    public async Task MoveProject(Tableau.Api.Models.TableauSession session, int containerId, int contentId)
     {
         var req = await Request<MoveProject, Empty>(session, "moveContentToContainer",
         new MoveProject()
@@ -67,7 +67,7 @@ public partial class VizPortalClient
     /// <param name="session">The session obtained from the top level client</param>
     /// <param name="projectId">The project ID</param>
     /// <returns></returns>
-    public async Task DeleteProject(TableauSession session, int projectId)
+    public async Task DeleteProject(Tableau.Api.Models.TableauSession session, int projectId)
     {
         var req = await Request<DeleteProject, Empty>(session, "deleteProjects",
             new DeleteProject()
@@ -83,7 +83,7 @@ public partial class VizPortalClient
     /// <param name="projectId">The project Id</param>
     /// <param name="newOwnerId">The site user id of the new owner</param>
     /// <returns></returns>
-    public async Task ChangeProjectOwner(TableauSession session, int projectId, int newOwnerId)
+    public async Task ChangeProjectOwner(Tableau.Api.Models.TableauSession session, int projectId, int newOwnerId)
     {
         var req = await Request<ChangeProjectOwner, Empty>(session, "setProjectsOwner",
             new ChangeProjectOwner()
@@ -93,7 +93,7 @@ public partial class VizPortalClient
             });
     }
 
-    private IAsyncEnumerable<Project> queryProjects(TableauSession session)
+    private IAsyncEnumerable<Project> queryProjects(Tableau.Api.Models.TableauSession session)
     {
         var q = new QueryModel()
         {

@@ -26,7 +26,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 0)]
-    public async Task<groupType> CreateGroup(TableauSession session, string groupName,
+    public async Task<groupType> CreateGroup(Models.TableauSession session, string groupName,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -48,7 +48,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 0)]
-    public async Task<groupType> CreateGroupFromActiveDirectory(TableauSession session, string adGroupName,
+    public async Task<groupType> CreateGroupFromActiveDirectory(Models.TableauSession session, string adGroupName,
         string domainName, siteRoleType siteRole, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -79,7 +79,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 0)]
-    public async Task<jobType> CreateGroupFromActiveDirectoryAsJob(TableauSession session, string adGroupName,
+    public async Task<jobType> CreateGroupFromActiveDirectoryAsJob(Models.TableauSession session, string adGroupName,
         string domainName, siteRoleType siteRole, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -110,7 +110,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 0)]
-    public async Task<groupType> UpdateGroup(TableauSession session, string groupId, string newGroupName,
+    public async Task<groupType> UpdateGroup(Models.TableauSession session, string groupId, string newGroupName,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -132,7 +132,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 0)]
-    public async Task<groupType> UpdateGroupFromActiveDirectory(TableauSession session, string newAdGroupName,
+    public async Task<groupType> UpdateGroupFromActiveDirectory(Models.TableauSession session, string newAdGroupName,
         string newDomainName, siteRoleType newSiteRole, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -163,7 +163,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 0)]
-    public async Task<jobType> UpdateGroupFromActiveDirectoryAsJob(TableauSession session, string newAdGroupName,
+    public async Task<jobType> UpdateGroupFromActiveDirectoryAsJob(Models.TableauSession session, string newAdGroupName,
         string newDomainName, siteRoleType siteRole, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -193,7 +193,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 0)]
-    public async Task<userType> AddUserToGroup(TableauSession session, string groupId, string userId,
+    public async Task<userType> AddUserToGroup(Models.TableauSession session, string groupId, string userId,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -216,7 +216,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 0)]
-    public async Task<userType> AddUserToSite(TableauSession session, string userName,
+    public async Task<userType> AddUserToSite(Models.TableauSession session, string userName,
         siteRoleType siteRole, siteUserAuthSettingType? authSetting = null,
         CancellationToken? cancelToken = null)
     {
@@ -247,7 +247,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(3, 7)]
-    public async Task<(paginationType pagination, groupType[] groups)> GetGroupsOfUser(TableauSession session,
+    public async Task<(paginationType pagination, groupType[] groups)> GetGroupsOfUser(Models.TableauSession session,
         string userId, int pageSize = 100, int pageNumber = 1, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -274,7 +274,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 0)]
-    public async Task<(paginationType pagination, userType[] users)> GetUsersInGroup(TableauSession session,
+    public async Task<(paginationType pagination, userType[] users)> GetUsersInGroup(Models.TableauSession session,
         string groupId, int pageSize = 100, int pageNumber = 1, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -302,7 +302,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 0)]
-    public async Task<(paginationType pagination, userType[] users)> GetUsersOnSite(TableauSession session,
+    public async Task<(paginationType pagination, userType[] users)> GetUsersOnSite(Models.TableauSession session,
         int pageSize = 100, int pageNumber = 1, string fieldsExpression = null, string filterExpression = null,
         string sortExpression = null, CancellationToken? cancelToken = null)
     {
@@ -338,7 +338,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 0)]
-    public async Task<(paginationType pagination, groupType[] groups)> QueryGroups(TableauSession session,
+    public async Task<(paginationType pagination, groupType[] groups)> QueryGroups(Models.TableauSession session,
         int pageSize = 100, int pageNumber = 1, string filterExpression = null, string sortExpression = null,
         CancellationToken? cancelToken = null)
     {
@@ -369,7 +369,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 0)]
-    public async Task<userType> QueryUser(TableauSession session, string userId,
+    public async Task<userType> QueryUser(Models.TableauSession session, string userId,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -396,7 +396,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 0)]
-    public async Task<userType> UpdateUser(TableauSession session, string userId, string newFullName = null,
+    public async Task<userType> UpdateUser(Models.TableauSession session, string userId, string newFullName = null,
         string newEmail = null, string newPassword = null, siteRoleType? newSiteRole = null,
         siteUserAuthSettingType? newAuthSetting = null, string newDisplayName = null, CancellationToken? cancelToken = null)
     {
@@ -429,7 +429,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 0)]
-    public async Task RemoveUserFromGroup(TableauSession session, string groupId, string userId,
+    public async Task RemoveUserFromGroup(Models.TableauSession session, string groupId, string userId,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -448,7 +448,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 0)]
-    public async Task RemoveUserFromSite(TableauSession session, string userId,
+    public async Task RemoveUserFromSite(Models.TableauSession session, string userId,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -469,7 +469,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 0)]
     [OnPremiseOnly]
-    public async Task DeleteGroup(TableauSession session, string groupId,
+    public async Task DeleteGroup(Models.TableauSession session, string groupId,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();

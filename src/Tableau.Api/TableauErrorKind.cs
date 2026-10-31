@@ -10,7 +10,11 @@ public enum TableauErrorKind
     /// </summary>
     Http,
 
-    /// <summary>Tableau answered 401: the sign-in failed, or the session ended.</summary>
+    /// <summary>
+    /// Tableau answered 401: the sign-in failed, the session given to <see cref="TableauClient.WithSession"/> ended, or the
+    /// session ended again after the client signed in again. Also, with nothing sent, a call that needs a session on a
+    /// client with no credentials, and a sign-in whose secret's delegate failed or gave none.
+    /// </summary>
     Authentication,
 
     /// <summary>Tableau answered 404: the item, the site, or the endpoint at this API version doesn't exist.</summary>

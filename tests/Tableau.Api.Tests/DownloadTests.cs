@@ -367,7 +367,7 @@ public sealed class DownloadTests : IDisposable
         using var server = FakeTableauServer.Start();
         using var answering = new FailingContent();
         using var http = new System.Net.Http.HttpClient(answering, disposeHandler: false);
-        await using var client = new TableauClient(http, ClientFixtures.Options(server), Fixtures.Log.Factory);
+        await using var client = new TableauClient(http, ClientFixtures.Options(server), loggerFactory: Fixtures.Log.Factory);
 
         var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.Http, () => ClientFixtures.DownloadAsync(client, Content()));
 

@@ -15,8 +15,14 @@ internal static class RequestUri
     /// The URI, or <see cref="ArgumentException"/> before anything is sent: for a value that is empty or only dots, a
     /// LUID that isn't one, or a path this platform's URI parsing would send otherwise than written.
     /// </summary>
+    /// <param name="serverUrl">The base URL.</param>
+    /// <param name="endpoint">The call's descriptor.</param>
+    /// <param name="version">The version in use.</param>
+    /// <param name="values">A value for each of the template's parameters, in order.</param>
+    /// <param name="query">The query's keys and values.</param>
+    /// <param name="siteId">The session's site, for a template that names <c>{siteId}</c>.</param>
     public static Uri Build(Uri serverUrl, Endpoint endpoint, Version version, IReadOnlyList<string>? values,
-        IReadOnlyList<KeyValuePair<string, string?>>? query)
+        IReadOnlyList<KeyValuePair<string, string?>>? query, string? siteId = null)
     {
         var path = new StringBuilder(BasePath(serverUrl)).Append("api");
         var next = 0;
@@ -30,6 +36,10 @@ internal static class RequestUri
                     break;
                 case PathSegmentKind.Version:
                     path.Append(ApiVersions.Format(version));
+                    break;
+                case PathSegmentKind.SiteId:
+                    UriEscaping.AppendPathSegment(path, Checked(new PathSegment("siteId", PathSegmentKind.Luid),
+                        siteId ?? throw new InvalidOperationException($"{endpoint.Name} names the session's site, and was given none.")));
                     break;
                 default:
                     if (values is null || next >= values.Count)

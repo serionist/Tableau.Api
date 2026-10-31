@@ -26,7 +26,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(1, 0)]
-    public async Task DeleteProject2(TableauSession session, string projectId, CancellationToken? cancelToken = null)
+    public async Task DeleteProject2(Models.TableauSession session, string projectId, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
         checkNullParameters((nameof(session), session), (nameof(projectId), projectId));
@@ -46,7 +46,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(1, 0)]
-    public async Task<tagType[]> AddTagsToView(TableauSession session, string viewId, string[] tagsToAdd,
+    public async Task<tagType[]> AddTagsToView(Models.TableauSession session, string viewId, string[] tagsToAdd,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -71,7 +71,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(1, 0)]
-    public async Task<tagType[]> AddTagsToWorkbook(TableauSession session, string workbookId, string[] tagsToAdd,
+    public async Task<tagType[]> AddTagsToWorkbook(Models.TableauSession session, string workbookId, string[] tagsToAdd,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -96,7 +96,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(1, 0)]
-    public async Task<viewType[]> QueryViewsForWorkbook(TableauSession session, string workbookId,
+    public async Task<viewType[]> QueryViewsForWorkbook(Models.TableauSession session, string workbookId,
         bool includeUsageStatistics = false, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -116,7 +116,7 @@ public partial class TableauApiClient
     /// <param name="cancelToken"></param>
     /// <returns></returns>
     [ApiVersion(3, 0)]
-    public async Task<viewType> QueryView(TableauSession session, string viewId,
+    public async Task<viewType> QueryView(Models.TableauSession session, string viewId,
         bool includeUsageStatistics = false, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -137,7 +137,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 8)]
-    public async Task<Stream> QueryViewData(TableauSession session, string viewId,
+    public async Task<Stream> QueryViewData(Models.TableauSession session, string viewId,
         CancellationToken? cancelToken = null, params (string filterName, string filterValue)[] filters)
     {
         checkEndpointAvailability();
@@ -165,7 +165,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 5)]
-    public async Task<Stream> QueryViewImage(TableauSession session, string viewId, TableauImageWidth imageWidth = TableauImageWidth.Default_784px,
+    public async Task<Stream> QueryViewImage(Models.TableauSession session, string viewId, TableauImageWidth imageWidth = TableauImageWidth.Default_784px,
         CancellationToken? cancelToken = null, params (string filterName, string filterValue)[] filters)
     {
         checkEndpointAvailability();
@@ -199,7 +199,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 8)]
-    public async Task<Stream> QueryViewPDF(TableauSession session, string viewId,
+    public async Task<Stream> QueryViewPDF(Models.TableauSession session, string viewId,
         CancellationToken? cancelToken = null, PageType pageType = PageType.Legal, Orientation orientation = Orientation.Portrait,
         (string filterName, string filterValue)[] filters = null)
     {
@@ -236,7 +236,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(3, 9)]
-    public async Task<Stream> QueryViewCrosstabExcel(TableauSession session, string viewId,
+    public async Task<Stream> QueryViewCrosstabExcel(Models.TableauSession session, string viewId,
         (string filterName, string filterValue)[] filters = null, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -267,7 +267,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(1, 0)]
-    public async Task<Stream> QueryViewPreviewImage(TableauSession session, string workbookId, string viewId,
+    public async Task<Stream> QueryViewPreviewImage(Models.TableauSession session, string workbookId, string viewId,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -284,7 +284,7 @@ public partial class TableauApiClient
     /// <param name="cancelToken"></param>
     /// <returns></returns>
     [ApiVersion(1, 0)]
-    public async Task<workbookType> QueryWorkbook(TableauSession session, string workbookId,
+    public async Task<workbookType> QueryWorkbook(Models.TableauSession session, string workbookId,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -303,7 +303,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 0)]
-    public async Task<connectionType[]> QueryWorkbookConnections(TableauSession session, string workbookId,
+    public async Task<connectionType[]> QueryWorkbookConnections(Models.TableauSession session, string workbookId,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -324,7 +324,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(1, 0)]
-    public async Task<Stream> QueryWorkbookPreviewImage(TableauSession session, string workbookId,
+    public async Task<Stream> QueryWorkbookPreviewImage(Models.TableauSession session, string workbookId,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -347,7 +347,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(3, 4)]
-    public async Task<Stream> QueryWorkbookPDF(TableauSession session, string workbookId, PageOrientation orientation = PageOrientation.Portrait,
+    public async Task<Stream> QueryWorkbookPDF(Models.TableauSession session, string workbookId, PageOrientation orientation = PageOrientation.Portrait,
         PageType pageType = PageType.Legal,
         CancellationToken? cancelToken = null)
     {
@@ -376,7 +376,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 3)]
-    public async Task<(paginationType pagination, workbookType[] views)> QueryWorkbooksForSite(TableauSession session,
+    public async Task<(paginationType pagination, workbookType[] views)> QueryWorkbooksForSite(Models.TableauSession session,
         int pageSize = 100, int pageNumber = 1, string fieldsExpression = null,
         string filterExpression = null, string sortExpresion = null, CancellationToken? cancelToken = null)
     {
@@ -414,7 +414,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(1, 0)]
     public async Task<(paginationType pagination, workbookType[] workbooks)> QueryWorkbooksForUser(
-        TableauSession session, string userId, bool isOwner = false, int pageSize = 100, int pageNumber = 1,
+        Models.TableauSession session, string userId, bool isOwner = false, int pageSize = 100, int pageNumber = 1,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -440,7 +440,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 0)]
-    public async Task<(Stream stream, WorkbookFileType type)> DownloadWorkbook(TableauSession session, string workbookId,
+    public async Task<(Stream stream, WorkbookFileType type)> DownloadWorkbook(Models.TableauSession session, string workbookId,
         bool includeExtract = true, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -469,7 +469,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 0)]
-    public async Task<workbookType> UpdateWorkbook(TableauSession session, string workbookId,
+    public async Task<workbookType> UpdateWorkbook(Models.TableauSession session, string workbookId,
         bool? newShowTabs = null, string newProjectId = null, string newOwnerId = null, string newName = null,
         CancellationToken? cancelToken = null)
     {
@@ -502,7 +502,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 0)]
-    public async Task<connectionType> UpdateWorkbookConnection(TableauSession session, string workbookId,
+    public async Task<connectionType> UpdateWorkbookConnection(Models.TableauSession session, string workbookId,
         string connectionId, string serverAddress, int serverPort, string userName, string password,
         CancellationToken? cancelToken = null)
     {
@@ -533,7 +533,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 8)]
-    public async Task<jobType> UpdateWorkbookNow(TableauSession session, string workbookId,
+    public async Task<jobType> UpdateWorkbookNow(Models.TableauSession session, string workbookId,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -554,7 +554,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 0)]
-    public async Task DeleteWorkbook(TableauSession session, string workbookId,
+    public async Task DeleteWorkbook(Models.TableauSession session, string workbookId,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -575,7 +575,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(1, 0)]
-    public async Task DeleteTagFromView(TableauSession session, string viewId, string tagName,
+    public async Task DeleteTagFromView(Models.TableauSession session, string viewId, string tagName,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -596,7 +596,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(1, 0)]
-    public async Task DeleteTagFromWorkbook(TableauSession session, string workbookId, string tagName,
+    public async Task DeleteTagFromWorkbook(Models.TableauSession session, string workbookId, string tagName,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();

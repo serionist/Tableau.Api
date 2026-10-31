@@ -85,12 +85,12 @@ public sealed class PathTests
     {
         using var server = FakeTableauServer.Start();
         var client = new TableauApiClient(new Uri(server.BaseUrl, basePath), Fixtures.ApiVersion);
-        server.Map("POST", $"/tableau/api/{Fixtures.ApiVersion}/auth/signin", Fixtures.SignedIn());
+        var projects = $"/tableau/api/{Fixtures.ApiVersion}/sites/{Fixtures.SiteId}/projects";
+        server.Map("GET", projects, FakeResponse.Xml(200, "<pagination pageNumber=\"1\" pageSize=\"100\" totalAvailable=\"0\"/><projects/>"));
 
-        var session = await client.SignIn(Fixtures.UserName, Fixtures.Password, Fixtures.SiteContentUrl);
+        await client.QueryProjects(Fixtures.Session());
 
-        Assert.AreEqual($"POST /tableau/api/{Fixtures.ApiVersion}/auth/signin HTTP/1.1", server.Requests.Single().RequestLine);
-        Assert.AreEqual(Fixtures.SessionToken, session.Token);
+        Assert.AreEqual($"GET {projects}?pageSize=100&pageNumber=1 HTTP/1.1", server.Requests.Single().RequestLine);
     }
 
     [TestMethod]
@@ -181,7 +181,7 @@ public sealed class PathTests
     }
 
     private static async Task<string?> CheckAsync(FakeTableauServer server, TableauApiClient client,
-        TableauSession session, string value)
+        Models.TableauSession session, string value)
     {
         var path = DatasourcesPath + PathRows.Escaped(value);
         server.Map("GET", path, FakeResponse.Xml(200, "<datasource id=\"d1\" name=\"Sales\"/>"));

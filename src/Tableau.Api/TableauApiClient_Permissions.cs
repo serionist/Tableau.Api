@@ -22,7 +22,7 @@ public partial class TableauApiClient
     /// <param name="cancelToken"></param>
     /// <returns></returns>
     [ApiVersion(2, 0)]
-    public async Task<permissionsType> AddDataSourcePermissions(TableauSession session, string datasourceId,
+    public async Task<permissionsType> AddDataSourcePermissions(Models.TableauSession session, string datasourceId,
         granteeCapabilitiesType[] granteeCapabilities, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -47,7 +47,7 @@ public partial class TableauApiClient
     /// <param name="cancelToken"></param>
     /// <returns></returns>
     [ApiVersion(2, 0)]
-    public async Task<permissionsType> AddProjectPermissions(TableauSession session, string projectId,
+    public async Task<permissionsType> AddProjectPermissions(Models.TableauSession session, string projectId,
         granteeCapabilitiesType[] granteeCapabilities, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -72,7 +72,7 @@ public partial class TableauApiClient
     /// <param name="cancelToken"></param>
     /// <returns></returns>
     [ApiVersion(2, 0)]
-    public async Task<permissionsType> AddDefaultPermissionsForWorkbooks(TableauSession session, string projectId,
+    public async Task<permissionsType> AddDefaultPermissionsForWorkbooks(Models.TableauSession session, string projectId,
         granteeCapabilitiesType[] granteeCapabilities, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -96,7 +96,7 @@ public partial class TableauApiClient
     /// <param name="cancelToken"></param>
     /// <returns></returns>
     [ApiVersion(2, 0)]
-    public async Task<permissionsType> AddDefaultPermissionsForDataSources(TableauSession session, string projectId,
+    public async Task<permissionsType> AddDefaultPermissionsForDataSources(Models.TableauSession session, string projectId,
         granteeCapabilitiesType[] granteeCapabilities, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -120,7 +120,7 @@ public partial class TableauApiClient
     /// <param name="cancelToken"></param>
     /// <returns></returns>
     [ApiVersion(2, 0)]
-    public async Task<permissionsType> AddWorkbookPermissions(TableauSession session, string workbookId,
+    public async Task<permissionsType> AddWorkbookPermissions(Models.TableauSession session, string workbookId,
         granteeCapabilitiesType[] granteeCapabilities, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -146,7 +146,7 @@ public partial class TableauApiClient
     /// <param name="cancelToken"></param>
     /// <returns></returns>
     [ApiVersion(2, 8)]
-    public async Task<permissionsType> AddWorkbookToSchedule(TableauSession session, string workbookId,
+    public async Task<permissionsType> AddWorkbookToSchedule(Models.TableauSession session, string workbookId,
        string scheduleId, granteeCapabilitiesType[] granteeCapabilities, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -168,7 +168,7 @@ public partial class TableauApiClient
     /// <param name="cancelToken"></param>
     /// <returns></returns>
     [ApiVersion(2, 0)]
-    public async Task<permissionsType> QueryDataSourcePermissions(TableauSession session, string datasourceId,
+    public async Task<permissionsType> QueryDataSourcePermissions(Models.TableauSession session, string datasourceId,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -187,7 +187,7 @@ public partial class TableauApiClient
     /// <param name="cancelToken"></param>
     /// <returns></returns>
     [ApiVersion(2, 0)]
-    public async Task<permissionsType> QueryProjectPermissions(TableauSession session, string projectId,
+    public async Task<permissionsType> QueryProjectPermissions(Models.TableauSession session, string projectId,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -206,7 +206,7 @@ public partial class TableauApiClient
     /// <param name="cancelToken"></param>
     /// <returns></returns>
     [ApiVersion(2, 0)]
-    public async Task<permissionsType> QueryDefaultPermissionsForWorkbooks(TableauSession session, string workbookId,
+    public async Task<permissionsType> QueryDefaultPermissionsForWorkbooks(Models.TableauSession session, string workbookId,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -225,7 +225,7 @@ public partial class TableauApiClient
     /// <param name="cancelToken"></param>
     /// <returns></returns>
     [ApiVersion(2, 0)]
-    public async Task<permissionsType> QueryDefaultPermissionsForDataSources(TableauSession session, string datasourceId,
+    public async Task<permissionsType> QueryDefaultPermissionsForDataSources(Models.TableauSession session, string datasourceId,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -244,7 +244,7 @@ public partial class TableauApiClient
     /// <param name="cancelToken"></param>
     /// <returns></returns>
     [ApiVersion(3, 2)]
-    public async Task<permissionsType> QueryViewPermissions(TableauSession session, string viewId,
+    public async Task<permissionsType> QueryViewPermissions(Models.TableauSession session, string viewId,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -264,7 +264,7 @@ public partial class TableauApiClient
     /// <param name="cancelToken"></param>
     /// <returns></returns>
     [ApiVersion(2, 0)]
-    public async Task<permissionsType> QueryWorkbookPermissions(TableauSession session, string workbookId,
+    public async Task<permissionsType> QueryWorkbookPermissions(Models.TableauSession session, string workbookId,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -285,7 +285,7 @@ public partial class TableauApiClient
     /// <param name="cancelToken"></param>
     /// <returns></returns>
     [ApiVersion(2, 0)]
-    public async Task DeleteDataSourcePermissionForUser(TableauSession session, string datasourceId, string userId,
+    public async Task DeleteDataSourcePermissionForUser(Models.TableauSession session, string datasourceId, string userId,
         capabilityTypeName capabilityName, capabilityTypeMode capabilityMode, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -306,7 +306,7 @@ public partial class TableauApiClient
     /// <param name="cancelToken"></param>
     /// <returns></returns>
     [ApiVersion(2, 0)]
-    public async Task DeleteDataSourcePermissionForGroup(TableauSession session, string datasourceId, string groupId,
+    public async Task DeleteDataSourcePermissionForGroup(Models.TableauSession session, string datasourceId, string groupId,
         capabilityTypeName capabilityName, capabilityTypeMode capabilityMode, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -328,7 +328,7 @@ public partial class TableauApiClient
     /// <param name="cancelToken"></param>
     /// <returns></returns>
     [ApiVersion(2, 0)]
-    public async Task DeleteProjectPermissionForUser(TableauSession session, string projectId, string userId,
+    public async Task DeleteProjectPermissionForUser(Models.TableauSession session, string projectId, string userId,
         capabilityTypeName capabilityName, capabilityTypeMode capabilityMode, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -349,7 +349,7 @@ public partial class TableauApiClient
     /// <param name="cancelToken"></param>
     /// <returns></returns>
     [ApiVersion(2, 0)]
-    public async Task DeleteProjectPermissionForGroup(TableauSession session, string projectId, string groupId,
+    public async Task DeleteProjectPermissionForGroup(Models.TableauSession session, string projectId, string groupId,
         capabilityTypeName capabilityName, capabilityTypeMode capabilityMode, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -372,7 +372,7 @@ public partial class TableauApiClient
     /// <param name="cancelToken"></param>
     /// <returns></returns>
     [ApiVersion(2, 0)]
-    public async Task DeleteDefaultDataSourcePermissionForUser(TableauSession session, string projectId, string userId,
+    public async Task DeleteDefaultDataSourcePermissionForUser(Models.TableauSession session, string projectId, string userId,
         capabilityTypeName capabilityName, capabilityTypeMode capabilityMode, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -393,7 +393,7 @@ public partial class TableauApiClient
     /// <param name="cancelToken"></param>
     /// <returns></returns>
     [ApiVersion(2, 0)]
-    public async Task DeleteDefaultDataSourcePermissionForGroup(TableauSession session, string projectId, string groupId,
+    public async Task DeleteDefaultDataSourcePermissionForGroup(Models.TableauSession session, string projectId, string groupId,
         capabilityTypeName capabilityName, capabilityTypeMode capabilityMode, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -415,7 +415,7 @@ public partial class TableauApiClient
     /// <param name="cancelToken"></param>
     /// <returns></returns>
     [ApiVersion(2, 0)]
-    public async Task DeleteDefaultWorkbookPermissionForUser(TableauSession session, string projectId, string userId,
+    public async Task DeleteDefaultWorkbookPermissionForUser(Models.TableauSession session, string projectId, string userId,
         capabilityTypeName capabilityName, capabilityTypeMode capabilityMode, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -436,7 +436,7 @@ public partial class TableauApiClient
     /// <param name="cancelToken"></param>
     /// <returns></returns>
     [ApiVersion(2, 0)]
-    public async Task DeleteDefaultWorkbookPermissionForGroup(TableauSession session, string projectId, string groupId,
+    public async Task DeleteDefaultWorkbookPermissionForGroup(Models.TableauSession session, string projectId, string groupId,
         capabilityTypeName capabilityName, capabilityTypeMode capabilityMode, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -461,7 +461,7 @@ public partial class TableauApiClient
     /// <param name="cancelToken"></param>
     /// <returns></returns>
     [ApiVersion(2, 0)]
-    public async Task DeleteWorkbookPermissionForUser(TableauSession session, string workbookId, string userId,
+    public async Task DeleteWorkbookPermissionForUser(Models.TableauSession session, string workbookId, string userId,
         capabilityTypeName capabilityName, capabilityTypeMode capabilityMode, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -484,7 +484,7 @@ public partial class TableauApiClient
     /// <param name="cancelToken"></param>
     /// <returns></returns>
     [ApiVersion(2, 0)]
-    public async Task DeleteWorkbookPermissionForGroup(TableauSession session, string workbookId, string groupId,
+    public async Task DeleteWorkbookPermissionForGroup(Models.TableauSession session, string workbookId, string groupId,
         capabilityTypeName capabilityName, capabilityTypeMode capabilityMode, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();

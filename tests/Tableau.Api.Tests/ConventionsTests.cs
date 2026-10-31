@@ -18,9 +18,12 @@ namespace Tableau.Api.Tests;
 [TestClass]
 public sealed class ConventionsTests
 {
-    /// <summary>The verbs a sub-client's methods start with. The explicit session API adds its own, by name.</summary>
+    /// <summary>The verbs a sub-client's methods start with.</summary>
     private static readonly string[] _verbs =
         ["ListPage", "List", "Get", "Create", "Update", "Delete", "Download", "Publish", "Run", "Cancel", "Add", "Remove"];
+
+    /// <summary>The explicit session API's own verbs, on <see cref="SessionsClient"/> alone.</summary>
+    private static readonly string[] _sessionVerbs = ["SignIn", "SwitchSite", "SignOut"];
 
     private static readonly HashSet<string> _objectMembers = new(StringComparer.Ordinal)
     {
@@ -72,10 +75,11 @@ public sealed class ConventionsTests
         foreach (var method in PublicMethods().Where(method => IsSubClient(method.DeclaringType!)))
         {
             var name = $"{method.DeclaringType!.Name}.{method.Name}";
-            var verb = _verbs.FirstOrDefault(verb => method.Name.StartsWith(verb, StringComparison.Ordinal));
+            var verbs = method.DeclaringType == typeof(SessionsClient) ? _sessionVerbs : _verbs;
+            var verb = verbs.FirstOrDefault(verb => method.Name.StartsWith(verb, StringComparison.Ordinal));
             if (verb is null)
             {
-                problems.Add($"{name}: starts with none of {string.Join(", ", _verbs)}");
+                problems.Add($"{name}: starts with none of {string.Join(", ", verbs)}");
                 continue;
             }
             var returns = method.ReturnType;

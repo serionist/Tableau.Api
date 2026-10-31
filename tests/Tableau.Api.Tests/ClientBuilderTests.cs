@@ -245,7 +245,7 @@ public sealed class ClientBuilderTests
         using var primary = new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false };
         using var recording = new Recording("caller's", order, primary);
         using var http = new HttpClient(recording, disposeHandler: false);
-        await using var client = new TableauClient(http, ClientFixtures.Options(server, maxRetries: 3), Fixtures.Log.Factory);
+        await using var client = new TableauClient(http, ClientFixtures.Options(server, maxRetries: 3), loggerFactory: Fixtures.Log.Factory);
 
         await ClientFixtures.SendAsync(client, ClientFixtures.Endpoint("{version}/items"),
             new Pipeline.TableauRequest(Token: Fixtures.SessionToken));
@@ -285,11 +285,12 @@ public sealed class ClientBuilderTests
         using var primary = new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false };
         using var retrying = new RetryingOnce { InnerHandler = primary };
         using var http = new HttpClient(retrying, disposeHandler: false);
-        await using var client = new TableauClient(http, ClientFixtures.Options(server, maxRetries: 3), Fixtures.Log.Factory);
+        await using var client = new TableauClient(http, ClientFixtures.Options(server, maxRetries: 3), loggerFactory: Fixtures.Log.Factory);
 
         // An update of a resource, safe to send twice, with a body every attempt must carry.
         var update = new Pipeline.Endpoint("Test update", HttpMethod.Put, "{version}/items", new Version(2, 0), Pipeline.TableauDeployments.Both,
-            Idempotent: true, Pipeline.TransferKind.None);
+            Idempotent: true, Pipeline.TransferKind.None)
+        { NeedsSession = false };
         var body = new Rest.Models.TsRequest { Project = new Rest.Models.Project { Name = "Invented project" } };
 
         var info = await ClientFixtures.SendAsync(client, update, new Pipeline.TableauRequest(Body: body));

@@ -16,23 +16,45 @@ public sealed partial class LogTests
     private const string ApiPath = "/api/" + Fixtures.ApiVersion;
 
     [TestMethod]
-    public async Task SignInsCallsAndFailuresLogNoSecret()
+    public async Task TheOldClientsCallsAndFailuresLogNoSecret()
     {
         using var server = FakeTableauServer.Start();
         var log = new RecordingLogger();
         var client = new TableauApiClient(server.BaseUrl, log, Fixtures.ApiVersion);
-        server.Map("POST", ApiPath + "/auth/signin", Fixtures.SignedIn());
         server.Map("GET", ApiPath + "/sites/" + Fixtures.SiteId + "/projects",
             FakeResponse.Redirect(302, "https://tableau.example.com/next"));
+        var session = Fixtures.Session();
 
-        var session = await client.SignIn(Fixtures.UserName, Fixtures.Password, Fixtures.SiteContentUrl);
-        await client.SignInWithPAT("nightly-export", Fixtures.PatSecret, Fixtures.SiteContentUrl);
         await Assert.ThrowsExactlyAsync<TableauRequestException>(() => client.QueryProjects(session));
         await Assert.ThrowsExactlyAsync<TableauRequestException>(() => client.QueryDataSource(session, "d1"));
-        await Assert.ThrowsExactlyAsync<TableauRequestException>(() => client.SignOut(session));
+        await Assert.ThrowsExactlyAsync<TableauRequestException>(() => client.DeleteProject(session, "p1"));
 
-        Assert.IsGreaterThanOrEqualTo(10, log.Lines.Count, "the calls logged too little to check");
+        Assert.IsGreaterThanOrEqualTo(6, log.Lines.Count, "the calls logged too little to check");
         Assert.IsEmpty(log.LinesHolding(Fixtures.Secrets).ToList());
+    }
+
+    [TestMethod]
+    public async Task SignInsSignOutsAndTheirFailuresLogNoSecretAndNoUser()
+    {
+        using var server = FakeTableauServer.Start();
+        server.Map("POST", SessionFixtures.SignInPath, SessionFixtures.SignedIn());
+        server.Map("GET", SessionFixtures.ItemsPath, ClientFixtures.ServerInfo());
+        server.Map("POST", SessionFixtures.SignOutPath, FakeResponse.Json(500, """{"error":{"code":"500000","summary":"Invented"}}"""));
+        var log = new RecordingLogger();
+        using var refused = FakeTableauServer.Start();
+        refused.Map("POST", SessionFixtures.SignInPath, SessionFixtures.Refused());
+
+        await using (var client = TableauClient.Create(SessionFixtures.Options(server), SessionFixtures.DirectTrust(), log.Factory))
+            await ClientFixtures.SendAsync(client, SessionFixtures.Items);
+        await using (var client = TableauClient.Create(SessionFixtures.Options(server), SessionFixtures.Pat(), log.Factory))
+            await ClientFixtures.SendAsync(client, SessionFixtures.Items);
+        await using (var client = TableauClient.Create(SessionFixtures.Options(refused), SessionFixtures.Password(), log.Factory))
+            await ClientFixtures.FailsAsync(TableauErrorKind.Authentication, () => ClientFixtures.SendAsync(client, SessionFixtures.Items));
+
+        var debug = log.At(Microsoft.Extensions.Logging.LogLevel.Debug);
+        Assert.IsTrue(debug.Any(line => line.Contains("signed in with ConnectedAppDirectTrust", StringComparison.Ordinal)), string.Join("\n", log.Lines));
+        Assert.IsTrue(debug.Any(line => line.Contains("signing out failed", StringComparison.Ordinal)), string.Join("\n", log.Lines));
+        Assert.IsEmpty(log.LinesHolding([.. Fixtures.Secrets, Fixtures.UserName, SessionFixtures.PatName, SessionFixtures.AppUser]).ToList());
     }
 
     [TestMethod]
@@ -42,7 +64,7 @@ public sealed partial class LogTests
         server.Map("GET", "/api/3.25/items", ClientFixtures.ServerInfo());
         server.Map("GET", "/api/3.25/missing", FakeResponse.Json(404, """{"error":{"code":"404000","summary":"Not found"}}"""));
         var log = new RecordingLogger();
-        await using var client = TableauClient.Create(ClientFixtures.Options(server), log.Factory);
+        await using var client = TableauClient.Create(ClientFixtures.Options(server), loggerFactory: log.Factory);
         var query = ClientFixtures.Query(("filter", "email:eq:ada@invented.example"), ("pageSize", "100"));
         using var cancelled = new System.Threading.CancellationTokenSource();
         await cancelled.CancelAsync();
@@ -71,7 +93,7 @@ public sealed partial class LogTests
         server.Map("GET", "/api/3.25/hop", FakeResponse.Redirect(307, "/api/3.25/items?filter=email:eq:ada@invented.example&flag"));
         server.Map("GET", "/api/3.25/items", ClientFixtures.ServerInfo());
         var log = new RecordingLogger();
-        await using var client = TableauClient.Create(ClientFixtures.Options(server), log.Factory);
+        await using var client = TableauClient.Create(ClientFixtures.Options(server), loggerFactory: log.Factory);
 
         await ClientFixtures.SendAsync(client, ClientFixtures.Endpoint("{version}/hop"), new TableauRequest(
             Query: ClientFixtures.Query(("filter", "name:eq:ada")), Token: Fixtures.SessionToken));
@@ -101,12 +123,16 @@ public sealed partial class LogTests
 
     /// <summary>
     /// The same for every line any logger in the suite took, once every test has run: no secret in any, and no query
-    /// value but <c>***</c> in a line of the 2.0 client.
+    /// value but <c>***</c> in a line of the 2.0 client. A site's own secrets and tokens, from the live suite, are checked
+    /// too, and a line that holds one is counted, never shown, since the run's log is public.
     /// </summary>
-    [AssemblyCleanup]
-    public static void NoLogLineInTheSuiteHoldsASecretOrAQueryValue()
+    /// <param name="live">The live suite's secrets: its settings' and its sessions' tokens.</param>
+    internal static void NoLogLineInTheSuiteHoldsASecretOrAQueryValue(IReadOnlyCollection<string> live)
     {
         var lines = RecordingLogger.All.Append(Fixtures.Log).Distinct().SelectMany(log => log.Lines).ToList();
+        var leaking = lines.Count(line => live.Any(secret => line.Contains(secret, StringComparison.Ordinal)));
+        if (leaking > 0)
+            throw new InvalidOperationException($"{leaking} log line(s) hold a secret or a token of the live site; they are not shown here.");
         var holding = lines.Where(line => Fixtures.Secrets.Any(secret => line.Contains(secret, StringComparison.Ordinal))).ToList();
         if (holding.Count > 0)
             throw new InvalidOperationException($"{holding.Count} log line(s) hold a secret:\n" + string.Join("\n", holding));

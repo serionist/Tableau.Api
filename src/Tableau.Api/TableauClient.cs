@@ -10,11 +10,17 @@ namespace Tableau.Api;
 
 /// <summary>
 /// A client for Tableau's REST API, on Tableau Server or Tableau Cloud, with one sub-client per area: <see cref="Server"/>
-/// first, and the others as the 2.0 client takes them over from <see cref="TableauApiClient"/>.
+/// and <see cref="Sessions"/> first, and the others as the 2.0 client takes them over from <see cref="TableauApiClient"/>.
 /// </summary>
 /// <remarks>
 /// <para>Get one from DI, registered with <c>services.AddTableauClient(name, options => ...)</c>, or build one with
 /// <see cref="Create"/>, or over an <see cref="HttpClient"/> of your own.</para>
+/// <para>
+/// Given credentials, it signs itself in on the first call that needs a session, one sign-in at a time, and signs in
+/// again shortly before the session is due to end and once when the server refuses it with a 401, sending the refused
+/// call again. Without credentials it makes only the calls that need no session, such as Server Info, or calls in a
+/// session you signed in yourself through a client from <see cref="WithSession"/>.
+/// </para>
 /// <para>
 /// On its first call it asks the server's REST API version through Server Info, unless
 /// <see cref="TableauClientOptions.ApiVersion"/> names one, and uses it up to 3.29, the newest it knows. Below REST
@@ -39,8 +45,11 @@ public class TableauClient : IDisposable, IAsyncDisposable
 {
     private readonly TableauPipeline? _pipeline;
     private readonly ServerClient? _server;
+    private readonly SessionsClient? _sessions;
     private readonly HttpMessageInvoker? _owned;
+    private readonly bool _ownsState;
     private int _disposed;
+    private int _signedOut;
 
     /// <summary>A client with no connection, for a mock to derive from: its members throw until overridden.</summary>
     protected TableauClient()
@@ -60,24 +69,32 @@ public class TableauClient : IDisposable, IAsyncDisposable
     /// <see cref="TableauClientOptions.MaxRetries"/> to 0, or each of their attempts is repeated by the client's.
     /// </para>
     /// <para>
-    /// The client can't change a handler it didn't build, so <paramref name="httpClient"/>'s handler should follow no
-    /// redirect (<c>AllowAutoRedirect = false</c>) and keep no cookies (<c>UseCookies = false</c>): the client follows
-    /// redirects itself, only to the same scheme, host and port, and throws <see cref="TableauErrorKind.Redirect"/> when
-    /// it finds a handler went elsewhere, though by then the request has gone there. Certificates are the handler's to
-    /// check, so <see cref="TableauClientOptions.DangerousAcceptAnyServerCertificate"/> is refused here.
+    /// The client can't change a handler it didn't build, so <paramref name="httpClient"/>'s handler must follow no
+    /// redirect (<c>AllowAutoRedirect = false</c>) and keep no cookies (<c>UseCookies = false</c>). The client follows
+    /// redirects itself, only to the same scheme, host and port. A handler that follows one elsewhere sends the request
+    /// there, its session token in <c>X-Tableau-Auth</c> and its body, a sign-in's password among them, before the client
+    /// can see it: the client then throws <see cref="TableauErrorKind.Redirect"/> and signs that session out, so the token
+    /// stops working, but a password has gone. Certificates are the handler's to check, so
+    /// <see cref="TableauClientOptions.DangerousAcceptAnyServerCertificate"/> is refused here.
+    /// </para>
+    /// <para>
+    /// The client owns its session: disposing it signs the session out, as <see cref="DisposeAsync"/> describes.
     /// </para>
     /// </remarks>
     /// <param name="httpClient">The HttpClient to send through.</param>
     /// <param name="options">The server and the rules; checked here, and read-only from here on.</param>
+    /// <param name="credentials">What the client signs itself in with, or null for a client that signs in only when told to.</param>
     /// <param name="loggerFactory">Where the client logs, or null for nowhere.</param>
     /// <exception cref="ArgumentException">The options are not valid, or ask for what this constructor can't do.</exception>
-    public TableauClient(HttpClient httpClient, TableauClientOptions options, ILoggerFactory? loggerFactory = null)
-        : this(httpClient, options, loggerFactory, timeProvider: null)
+    public TableauClient(HttpClient httpClient, TableauClientOptions options, TableauCredentials? credentials = null,
+        ILoggerFactory? loggerFactory = null)
+        : this(httpClient, options, credentials, loggerFactory, timeProvider: null)
     {
     }
 
-    /// <summary>The same, with the clock the retries wait on, for the tests.</summary>
-    internal TableauClient(HttpClient httpClient, TableauClientOptions options, ILoggerFactory? loggerFactory, TimeProvider? timeProvider)
+    /// <summary>The same, with the clock the retries wait on and sessions end by, for the tests.</summary>
+    internal TableauClient(HttpClient httpClient, TableauClientOptions options, TableauCredentials? credentials,
+        ILoggerFactory? loggerFactory, TimeProvider? timeProvider)
     {
         ArgumentNullException.ThrowIfNull(httpClient);
         ArgumentNullException.ThrowIfNull(options);
@@ -86,65 +103,111 @@ public class TableauClient : IDisposable, IAsyncDisposable
             throw new ArgumentException("DangerousAcceptAnyServerCertificate can't apply to an HttpClient the client didn't build: "
                 + "set the certificate check on its handler.", nameof(options));
         }
-        var state = NewState(options, loggerFactory, timeProvider);
+        TableauClientState? state = null;
+        HttpMessageHandler? caller = null;
         HttpMessageHandler? chain = null;
         try
         {
-            chain = TableauResilience.Chain(state, new CallerClientHandler(httpClient));
+            state = NewState(options, credentials, loggerFactory, timeProvider);
+            caller = new CallerClientHandler(httpClient);
+            chain = TableauResilience.Chain(state, caller);
+            caller = null;
             _owned = new HttpMessageInvoker(chain, disposeHandler: true);
             chain = null;
+            _pipeline = new TableauPipeline(_owned, state);
+            state = null;
         }
         finally
         {
-            // Left set only when building the invoker failed.
+            // Left set only when building the client failed.
+            caller?.Dispose();
             chain?.Dispose();
+            state?.Dispose();
         }
-        _pipeline = new TableauPipeline(_owned, state);
         _server = new ServerClient(_pipeline);
+        _sessions = new SessionsClient(_pipeline);
+        _ownsState = true;
     }
 
-    /// <summary>A client over a named client's state, which DI owns, and the named HttpClient, whose chain the library built.</summary>
+    /// <summary>
+    /// A client over a named client's state, which DI owns, and the named HttpClient, whose chain the library built. The
+    /// session is the name's, which no single client signs out.
+    /// </summary>
     internal TableauClient(HttpClient httpClient, TableauClientState state)
+        : this(new TableauPipeline(httpClient, state))
     {
-        _pipeline = new TableauPipeline(httpClient, state);
-        _server = new ServerClient(_pipeline);
     }
 
-    /// <summary>A client that owns its HttpClient, as <see cref="Create"/> builds it.</summary>
+    /// <summary>A client that owns its HttpClient and its session, as <see cref="Create"/> builds it.</summary>
     private TableauClient(TableauClientState state, HttpClient ownedHttpClient)
-        : this(ownedHttpClient, state)
+        : this(new TableauPipeline(ownedHttpClient, state))
     {
         _owned = ownedHttpClient;
+        _ownsState = true;
+    }
+
+    /// <summary>A client over a pipeline: a named client's, or one bound to a session by <see cref="WithSession"/>.</summary>
+    private TableauClient(TableauPipeline pipeline)
+    {
+        _pipeline = pipeline;
+        _server = new ServerClient(_pipeline);
+        _sessions = new SessionsClient(_pipeline);
     }
 
     /// <summary>Server Info: the versions of the server and of its REST API.</summary>
     public virtual ServerClient Server => _server ?? throw ForMocksOnly();
 
+    /// <summary>Sessions you hold yourself: sign in, switch site, sign out.</summary>
+    public virtual SessionsClient Sessions => _sessions ?? throw ForMocksOnly();
+
     /// <summary>The pipeline every sub-client sends through.</summary>
     internal TableauPipeline Pipeline => _pipeline ?? throw ForMocksOnly();
+
+    /// <summary>
+    /// A client that calls in <paramref name="session"/>: over this client's connection and options, with its negotiated
+    /// version, but never signing in. One bound client per site serves work across sites.
+    /// </summary>
+    /// <remarks>
+    /// When the server refuses the session, because it ended or was signed out, a call throws
+    /// <see cref="TableauErrorKind.Authentication"/>: sign in again and bind the new session. Disposing the bound client
+    /// signs nothing out and leaves this client open; disposing this client ends the bound one too.
+    /// </remarks>
+    /// <param name="session">The session to call in, from <see cref="SessionsClient.SignInAsync"/> or <see cref="SessionsClient.SwitchSiteAsync"/>.</param>
+    /// <returns>The bound client.</returns>
+    /// <exception cref="ArgumentException"><paramref name="session"/> holds no token: it wasn't made by a sign-in.</exception>
+    public virtual TableauClient WithSession(TableauSession session)
+    {
+        SessionsClient.Signed(session);
+        return new TableauClient(Pipeline.Bind(session));
+    }
 
     /// <summary>
     /// A client with an HttpClient of its own, over one connection pool that renews each connection every five
     /// minutes, so DNS changes reach it. It follows no redirect but the client's own, keeps no cookies, and validates
     /// the server's certificate, a revoked one refused, unless the options turn that off. Its calls are retried and
-    /// timed as a client from <c>AddTableauClient</c>'s are, by the same handlers. Dispose it when done.
+    /// timed as a client from <c>AddTableauClient</c>'s are, by the same handlers. Dispose it when done: that signs its
+    /// session out and closes its connections.
     /// </summary>
     /// <param name="options">The server and the rules; checked here, and read-only from here on.</param>
+    /// <param name="credentials">What the client signs itself in with, or null for a client that signs in only when told to.</param>
     /// <param name="loggerFactory">Where the client logs, or null for nowhere.</param>
     /// <exception cref="ArgumentException">The options are not valid.</exception>
-    public static TableauClient Create(TableauClientOptions options, ILoggerFactory? loggerFactory = null) =>
-        CreateWithClock(options, loggerFactory, timeProvider: null);
+    public static TableauClient Create(TableauClientOptions options, TableauCredentials? credentials = null,
+        ILoggerFactory? loggerFactory = null) =>
+        CreateWithClock(options, credentials, loggerFactory, timeProvider: null);
 
-    /// <summary>The same, with the clock the retries wait on, for the tests.</summary>
-    internal static TableauClient CreateWithClock(TableauClientOptions options, ILoggerFactory? loggerFactory, TimeProvider? timeProvider)
+    /// <summary>The same, with the clock the retries wait on and sessions end by, for the tests.</summary>
+    internal static TableauClient CreateWithClock(TableauClientOptions options, TableauCredentials? credentials,
+        ILoggerFactory? loggerFactory, TimeProvider? timeProvider)
     {
         ArgumentNullException.ThrowIfNull(options);
-        var state = NewState(options, loggerFactory, timeProvider);
+        TableauClientState? state = null;
         SocketsHttpHandler? primary = null;
         HttpMessageHandler? chain = null;
         HttpClient? httpClient = null;
         try
         {
+            state = NewState(options, credentials, loggerFactory, timeProvider);
             primary = TableauHandler.Create(state.Options);
             chain = TableauResilience.Chain(state, primary);
             primary = null;
@@ -152,6 +215,7 @@ public class TableauClient : IDisposable, IAsyncDisposable
             chain = null;
             var client = new TableauClient(state, httpClient);
             httpClient = null;
+            state = null;
             return client;
         }
         finally
@@ -160,29 +224,42 @@ public class TableauClient : IDisposable, IAsyncDisposable
             primary?.Dispose();
             chain?.Dispose();
             httpClient?.Dispose();
+            state?.Dispose();
         }
     }
 
     /// <summary>
-    /// Ends the client. A client from <see cref="Create"/> closes its connections; one over a caller's HttpClient leaves
-    /// it open; one from DI leaves its named client's state to the container. A call after this throws
-    /// <see cref="ObjectDisposedException"/>. Disposing twice does nothing more.
+    /// Ends the client as <see cref="DisposeAsync"/> does, signing its session out on a thread of the pool and waiting
+    /// for that ten seconds at most, so it can't deadlock on the caller's synchronisation context. Prefer
+    /// <see cref="DisposeAsync"/>, which blocks no thread.
     /// </summary>
     public void Dispose()
     {
+        if (OwnsSessionToSignOut())
+        {
+            var signingOut = Task.Run(() => _pipeline!.State.Sessions.SignOutOnDisposeAsync(_pipeline));
+            // It never throws, and gives up within its own timeout; the wait's own bound is a backstop.
+            signingOut.Wait(TableauSessions.SignOutTimeout + TimeSpan.FromSeconds(1));
+        }
         Dispose(true);
         GC.SuppressFinalize(this);
     }
 
     /// <summary>
-    /// Ends the client as <see cref="Dispose()"/> does: nothing it ends waits on I/O, so a container or a caller may end
-    /// it either way.
+    /// Ends the client. A client from <see cref="Create"/> or the constructor over an HttpClient signs out the session it
+    /// signed itself in with, never throwing and waiting ten seconds at most, then a client from <see cref="Create"/>
+    /// closes its connections; one over a caller's HttpClient leaves that open. A client from DI signs nothing out: its
+    /// session is its name's, shared by every client of the name, and ends on its own, or when a personal access token
+    /// signs in again. A client from <see cref="WithSession"/> signs nothing out either: its session is yours. Sessions
+    /// signed in through <see cref="Sessions"/> are yours too. A call after this throws
+    /// <see cref="ObjectDisposedException"/>. Disposing twice does nothing more.
     /// </summary>
-    public ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
+        if (OwnsSessionToSignOut())
+            await _pipeline!.State.Sessions.SignOutOnDisposeAsync(_pipeline).ConfigureAwait(false);
         Dispose(true);
         GC.SuppressFinalize(this);
-        return ValueTask.CompletedTask;
     }
 
     /// <summary>Ends what the client owns; a derived client ends its own here too, and calls this.</summary>
@@ -193,17 +270,24 @@ public class TableauClient : IDisposable, IAsyncDisposable
         {
             _pipeline?.Dispose();
             _owned?.Dispose();
+            if (_ownsState) _pipeline!.State.Dispose();
         }
     }
 
     internal static InvalidOperationException ForMocksOnly() =>
         new("This instance was made by the protected constructor, for a mock: override the members it uses.");
 
-    private static TableauClientState NewState(TableauClientOptions options, ILoggerFactory? loggerFactory, TimeProvider? timeProvider)
+    // Once, and only for a client that owns its session and holds one.
+    private bool OwnsSessionToSignOut() =>
+        _ownsState && Volatile.Read(ref _disposed) == 0 && _pipeline!.State.Sessions.Current is not null
+        && Interlocked.Exchange(ref _signedOut, 1) == 0;
+
+    private static TableauClientState NewState(TableauClientOptions options, TableauCredentials? credentials,
+        ILoggerFactory? loggerFactory, TimeProvider? timeProvider)
     {
         var result = new TableauClientOptionsValidator().Validate(Options.DefaultName, options);
         if (result.Failed)
             throw new ArgumentException($"The TableauClientOptions are not valid: {result.FailureMessage}", nameof(options));
-        return new TableauClientState(Options.DefaultName, options, loggerFactory, timeProvider);
+        return new TableauClientState(Options.DefaultName, options, loggerFactory, timeProvider, credentials);
     }
 }

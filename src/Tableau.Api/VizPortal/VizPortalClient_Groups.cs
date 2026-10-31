@@ -18,7 +18,7 @@ public partial class VizPortalClient
     /// <returns></returns>
     /// <exception cref="TableauRequestException"></exception>
     public IAsyncEnumerable<Group> QueryGroups(
-        TableauSession session) => queryGroups(session);
+        Tableau.Api.Models.TableauSession session) => queryGroups(session);
 
     /// <summary>
     /// Returns users for a single Group. Returns an enumerable that will paginate results in the background
@@ -28,7 +28,7 @@ public partial class VizPortalClient
     /// <returns></returns>
     /// <exception cref="TableauRequestException"></exception>
     public IAsyncEnumerable<GroupUser> QueryGroupUsers(
-        TableauSession session, int groupId) =>
+        Tableau.Api.Models.TableauSession session, int groupId) =>
         queryGroupUsers(session, ("groupIds", groupId.ToString(CultureInfo.InvariantCulture)));
 
     /// <summary>
@@ -37,7 +37,7 @@ public partial class VizPortalClient
     /// <param name="session">The session obtained from the top level client</param>
     /// <param name="groupId">The group ID</param>
     /// <returns></returns>
-    public async Task DeleteGroup(TableauSession session, int groupId)
+    public async Task DeleteGroup(Tableau.Api.Models.TableauSession session, int groupId)
     {
         var req = await Request<DeleteGroup, Empty>(session, "deleteGroups",
             new DeleteGroup()
@@ -53,7 +53,7 @@ public partial class VizPortalClient
     /// <param name="groupId">The group ID</param>
     /// <param name="userId">The user ID</param>
     /// <returns></returns>
-    public async Task AddUserToGroup(TableauSession session, int groupId, int userId)
+    public async Task AddUserToGroup(Tableau.Api.Models.TableauSession session, int groupId, int userId)
     {
         var req = await Request<GroupUserAction, Empty>(session, "updateUsersGroupMembership",
             new GroupUserAction()
@@ -71,7 +71,7 @@ public partial class VizPortalClient
     /// <param name="groupId">The group ID</param>
     /// <param name="userId">The user ID</param>
     /// <returns></returns>
-    public async Task RemoveUserFromGroup(TableauSession session, int groupId, int userId)
+    public async Task RemoveUserFromGroup(Tableau.Api.Models.TableauSession session, int groupId, int userId)
     {
         var req = await Request<GroupUserAction, Empty>(session, "updateUsersGroupMembership",
             new GroupUserAction()
@@ -82,7 +82,7 @@ public partial class VizPortalClient
             });
     }
 
-    private IAsyncEnumerable<GroupUser> queryGroupUsers(TableauSession session, params (string field, string value)[] search)
+    private IAsyncEnumerable<GroupUser> queryGroupUsers(Tableau.Api.Models.TableauSession session, params (string field, string value)[] search)
     {
         var q = new QueryModel()
         {
@@ -108,7 +108,7 @@ public partial class VizPortalClient
         return PaginateRequest(session, "getSiteUsers", q, (GroupsUserQueryResponse p) => p.Users);
     }
 
-    private IAsyncEnumerable<Group> queryGroups(TableauSession session)
+    private IAsyncEnumerable<Group> queryGroups(Tableau.Api.Models.TableauSession session)
     {
         var q = new QueryModel()
         {

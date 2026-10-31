@@ -32,7 +32,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(1, 0)]
     [OnPremiseOnly]
-    public async Task<siteType> CreateSite(TableauSession session, string name, string contentUrl,
+    public async Task<siteType> CreateSite(Models.TableauSession session, string name, string contentUrl,
         siteTypeAdminMode? adminMode = null, int? tierCreatorCapacity = null, int? tierExplorerCapacity = null,
         int? tierViewerCapacity = null, int? storageQuotaMb = null, bool? disableSubscriptions = false,
         CancellationToken? cancelToken = null)
@@ -68,7 +68,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(1, 0)]
-    public async Task<siteType> QuerySiteById(TableauSession session, string siteId,
+    public async Task<siteType> QuerySiteById(Models.TableauSession session, string siteId,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -88,7 +88,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(1, 0)]
-    public async Task<siteType> QuerySiteByName(TableauSession session, string siteName,
+    public async Task<siteType> QuerySiteByName(Models.TableauSession session, string siteName,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -108,7 +108,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(1, 0)]
-    public async Task<siteType> QuerySiteByContentUrl(TableauSession session, string siteContentUrl,
+    public async Task<siteType> QuerySiteByContentUrl(Models.TableauSession session, string siteContentUrl,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -129,7 +129,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(1, 0)]
     [OnPremiseOnly]
-    public async Task<(paginationType pagination, siteListType sites)> QuerySites(TableauSession session, int pageSize = 100, int pageNumber = 1,
+    public async Task<(paginationType pagination, siteListType sites)> QuerySites(Models.TableauSession session, int pageSize = 100, int pageNumber = 1,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -159,7 +159,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 2)]
-    public async Task<(paginationType pagination, viewType[] views)> QueryViewsForSite(TableauSession session,
+    public async Task<(paginationType pagination, viewType[] views)> QueryViewsForSite(Models.TableauSession session,
         int pageSize = 100, int pageNumber = 1, bool? includeUsageStatistics = null, string fieldsExpression = null,
         string filterExpression = null, string sortExpresion = null, CancellationToken? cancelToken = null)
     {
@@ -207,7 +207,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(1, 0)]
     [OnPremiseOnly]
-    public async Task<siteType> UpdateSite(TableauSession session, string siteId, string newName = null,
+    public async Task<siteType> UpdateSite(Models.TableauSession session, string siteId, string newName = null,
         string newContentUrl = null, siteTypeAdminMode? newAdminMode = null, int? newTierCreatorCapacity = null,
         int? newTierExplorerCapacity = null, int? newTierViewerCapacity = null, stateType? newState = null,
         int? newStorageQuota = null, bool? newDisableSubscriptions = null, bool? newRevisionHistoryEnabled = null,
@@ -249,7 +249,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(1, 0)]
     [OnPremiseOnly]
-    public async Task DeleteSiteById(TableauSession session, string siteId,
+    public async Task DeleteSiteById(Models.TableauSession session, string siteId,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -271,7 +271,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(1, 0)]
     [OnPremiseOnly]
-    public async Task DeleteSiteByName(TableauSession session, string siteName,
+    public async Task DeleteSiteByName(Models.TableauSession session, string siteName,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -292,7 +292,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(1, 0)]
     [OnPremiseOnly]
-    public async Task DeleteSiteByContentUrl(TableauSession session, string siteContentUrl,
+    public async Task DeleteSiteByContentUrl(Models.TableauSession session, string siteContentUrl,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();

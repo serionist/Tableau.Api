@@ -15,7 +15,8 @@ namespace Tableau.Api.Tests;
 [TestClass]
 public sealed class CertificateTests
 {
-    private const string SignInPath = "/api/" + Fixtures.ApiVersion + "/auth/signin";
+    private const string ProjectsPath = "/api/" + Fixtures.ApiVersion + "/sites/" + Fixtures.SiteId + "/projects";
+    private const string NoProjects = "<pagination pageNumber=\"1\" pageSize=\"100\" totalAvailable=\"0\"/><projects/>";
 
     [TestMethod]
     public async Task VizportalRefusesAnUntrustedCertificate()
@@ -55,10 +56,9 @@ public sealed class CertificateTests
     {
         using var server = FakeTableauServer.StartTls();
         var client = Fixtures.Client(server);
-        server.Map("POST", SignInPath, Fixtures.SignedIn());
+        server.Map("GET", ProjectsPath, FakeResponse.Xml(200, NoProjects));
 
-        var thrown = await Assert.ThrowsAsync<HttpRequestException>(
-            () => client.SignIn(Fixtures.UserName, Fixtures.Password, Fixtures.SiteContentUrl));
+        var thrown = await Assert.ThrowsAsync<HttpRequestException>(() => client.QueryProjects(Fixtures.Session()));
 
         Assert.IsInstanceOfType<AuthenticationException>(thrown.InnerException);
         Assert.IsEmpty(server.Requests);
@@ -70,11 +70,11 @@ public sealed class CertificateTests
         using var server = FakeTableauServer.StartTls();
         var client = Fixtures.Client(server);
         client.IgnoreSSLErrors = true;
-        server.Map("POST", SignInPath, Fixtures.SignedIn());
+        server.Map("GET", ProjectsPath, FakeResponse.Xml(200, NoProjects));
 
-        var session = await client.SignIn(Fixtures.UserName, Fixtures.Password, Fixtures.SiteContentUrl);
+        var (pagination, _) = await client.QueryProjects(Fixtures.Session());
 
-        Assert.AreEqual(Fixtures.SessionToken, session.Token);
+        Assert.AreEqual("0", pagination.totalAvailable);
         Assert.AreEqual(Uri.UriSchemeHttps, server.BaseUrl.Scheme);
     }
 }

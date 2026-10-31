@@ -27,7 +27,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(3, 1)]
-    public async Task CancelJob(TableauSession session, string jobId, CancellationToken? cancelToken = null)
+    public async Task CancelJob(Models.TableauSession session, string jobId, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
         checkNullParameters((nameof(session), session), (nameof(jobId), jobId));
@@ -45,7 +45,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 0)]
-    public async Task<jobType> QueryJob(TableauSession session, string jobId, CancellationToken? cancelToken = null)
+    public async Task<jobType> QueryJob(Models.TableauSession session, string jobId, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
         checkNullParameters((nameof(session), session), (nameof(jobId), jobId));
@@ -65,7 +65,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 6)]
-    public async Task<taskExtractRefreshType> GetExtractRefreshTask(TableauSession session, string taskId, CancellationToken? cancelToken = null)
+    public async Task<taskExtractRefreshType> GetExtractRefreshTask(Models.TableauSession session, string taskId, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
         checkNullParameters((nameof(session), session), (nameof(taskId), taskId));
@@ -83,7 +83,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 6)]
-    public async Task<(taskExtractRefreshType[], taskRunFlowType[], scheduleType[])> GetExtractRefreshTasks(TableauSession session,
+    public async Task<(taskExtractRefreshType[], taskRunFlowType[], scheduleType[])> GetExtractRefreshTasks(Models.TableauSession session,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -96,7 +96,7 @@ public partial class TableauApiClient
             resp.task.Where(e => e.Item is scheduleType).Cast<scheduleType>().ToArray());
     }
 
-    private async Task<scheduleType> createSchedule(TableauSession session, string name, int priority,
+    private async Task<scheduleType> createSchedule(Models.TableauSession session, string name, int priority,
         scheduleTypeFrequency frequency, scheduleTypeType type, scheduleTypeExecutionOrder executionOrder,
         TimeSpan startTime, TimeSpan? endTime, intervalType[] intervals, CancellationToken? cancelToken)
     {
@@ -147,7 +147,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 3)]
     [OnPremiseOnly]
-    public async Task<scheduleType> CreateHourlySchedule(TableauSession session, string name, int priority,
+    public async Task<scheduleType> CreateHourlySchedule(Models.TableauSession session, string name, int priority,
         scheduleTypeType type, scheduleTypeExecutionOrder executionOrder,
         TimeSpan startTime, TimeSpan? endTime, intervalTypeMinutes minutesBetweenJobs,
         CancellationToken? cancelToken = null)
@@ -176,7 +176,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 3)]
     [OnPremiseOnly]
-    public async Task<scheduleType> CreateHourlySchedule(TableauSession session, string name, int priority,
+    public async Task<scheduleType> CreateHourlySchedule(Models.TableauSession session, string name, int priority,
         scheduleTypeType type, scheduleTypeExecutionOrder executionOrder,
         TimeSpan startTime, TimeSpan endTime, intervalTypeHours hoursBetweenJobs, CancellationToken? cancelToken = null)
     {
@@ -202,7 +202,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 3)]
     [OnPremiseOnly]
-    public async Task<scheduleType> CreateDailySchedule(TableauSession session, string name, int priority,
+    public async Task<scheduleType> CreateDailySchedule(Models.TableauSession session, string name, int priority,
         scheduleTypeType type, scheduleTypeExecutionOrder executionOrder,
         TimeSpan startTime, CancellationToken? cancelToken = null)
     {
@@ -229,7 +229,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 3)]
     [OnPremiseOnly]
-    public async Task<scheduleType> CreateWeeklySchedule(TableauSession session, string name, int priority,
+    public async Task<scheduleType> CreateWeeklySchedule(Models.TableauSession session, string name, int priority,
         scheduleTypeType type, scheduleTypeExecutionOrder executionOrder,
         TimeSpan startTime, intervalTypeWeekDay dayToRun, CancellationToken? cancelToken = null)
     {
@@ -255,7 +255,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 3)]
     [OnPremiseOnly]
-    public async Task<scheduleType> CreateMonthlySchedule(TableauSession session, string name, int priority,
+    public async Task<scheduleType> CreateMonthlySchedule(Models.TableauSession session, string name, int priority,
         scheduleTypeType type, scheduleTypeExecutionOrder executionOrder,
         TimeSpan startTime, CancellationToken? cancelToken = null)
     {
@@ -279,7 +279,7 @@ public partial class TableauApiClient
     [ApiVersion(2, 2)]
     [OnPremiseOnly]
     public async Task<(paginationType pagination, extractType[] extracts)> QueryExtractRefreshTasks(
-        TableauSession session, string scheduleId, int pageSize = 100, int pageNumber = 1,
+        Models.TableauSession session, string scheduleId, int pageSize = 100, int pageNumber = 1,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -307,7 +307,7 @@ public partial class TableauApiClient
     [ApiVersion(2, 2)]
     [OnPremiseOnly]
     public async Task<(paginationType pagination, scheduleType[] extracts)> QuerySchedules(
-        TableauSession session, int pageSize = 100, int pageNumber = 1,
+        Models.TableauSession session, int pageSize = 100, int pageNumber = 1,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -331,7 +331,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 6)]
-    public async Task<jobType> RunExtractRefreshTask(TableauSession session, string taskId,
+    public async Task<jobType> RunExtractRefreshTask(Models.TableauSession session, string taskId,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -342,7 +342,7 @@ public partial class TableauApiClient
     }
 
 
-    private async Task<scheduleType> updateSchedule(TableauSession session, string newName, int newPriority,
+    private async Task<scheduleType> updateSchedule(Models.TableauSession session, string newName, int newPriority,
         scheduleTypeFrequency frequency, scheduleTypeType type, scheduleTypeExecutionOrder executionOrder,
         TimeSpan startTime, TimeSpan? endTime, intervalType[] intervals, CancellationToken? cancelToken)
     {
@@ -394,7 +394,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 3)]
     [OnPremiseOnly]
-    public async Task<scheduleType> UpdateToHourlySchedule(TableauSession session, string newName, int newPriority,
+    public async Task<scheduleType> UpdateToHourlySchedule(Models.TableauSession session, string newName, int newPriority,
         scheduleTypeType newType, scheduleTypeExecutionOrder newExecutionOrder,
         TimeSpan newStartTime, TimeSpan? newEndTime, intervalTypeMinutes newMinutesBetweenJobs,
         CancellationToken? cancelToken = null)
@@ -423,7 +423,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 3)]
     [OnPremiseOnly]
-    public async Task<scheduleType> UpdateToHourlySchedule(TableauSession session, string newName, int priority,
+    public async Task<scheduleType> UpdateToHourlySchedule(Models.TableauSession session, string newName, int priority,
         scheduleTypeType type, scheduleTypeExecutionOrder executionOrder,
         TimeSpan startTime, TimeSpan endTime, intervalTypeHours hoursBetweenJobs, CancellationToken? cancelToken = null)
     {
@@ -449,7 +449,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 3)]
     [OnPremiseOnly]
-    public async Task<scheduleType> UpdateToDailySchedule(TableauSession session, string newName, int newPriority,
+    public async Task<scheduleType> UpdateToDailySchedule(Models.TableauSession session, string newName, int newPriority,
         scheduleTypeType type, scheduleTypeExecutionOrder executionOrder,
         TimeSpan startTime, CancellationToken? cancelToken = null)
     {
@@ -476,7 +476,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 3)]
     [OnPremiseOnly]
-    public async Task<scheduleType> UpdateToWeeklySchedule(TableauSession session, string newName, int newPriority,
+    public async Task<scheduleType> UpdateToWeeklySchedule(Models.TableauSession session, string newName, int newPriority,
         scheduleTypeType type, scheduleTypeExecutionOrder executionOrder,
         TimeSpan startTime, intervalTypeWeekDay dayToRun, CancellationToken? cancelToken = null)
     {
@@ -502,7 +502,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 3)]
     [OnPremiseOnly]
-    public async Task<scheduleType> UpdateToMonthlySchedule(TableauSession session, string newName, int newPriority,
+    public async Task<scheduleType> UpdateToMonthlySchedule(Models.TableauSession session, string newName, int newPriority,
         scheduleTypeType type, scheduleTypeExecutionOrder executionOrder,
         TimeSpan startTime, CancellationToken? cancelToken = null)
     {
@@ -523,7 +523,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 3)]
     [OnPremiseOnly]
-    public async Task DeleteSchedule(TableauSession session, string scheduleId, CancellationToken? cancelToken = null)
+    public async Task DeleteSchedule(Models.TableauSession session, string scheduleId, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
         checkNullParameters((nameof(session), session), (nameof(scheduleId), scheduleId));

@@ -25,7 +25,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 0)]
-    public async Task<fileUploadType> InitiateFileUpload(TableauSession session, CancellationToken? cancelToken = null)
+    public async Task<fileUploadType> InitiateFileUpload(Models.TableauSession session, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
         checkNullParameters((nameof(session), session));
@@ -47,7 +47,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 0)]
-    public async Task<fileUploadType> AppendToFileUpload(TableauSession session, string fileUploadId, Stream sourceStream, int maxBytesToRead = 67108864, CancellationToken? cancelToken = null)
+    public async Task<fileUploadType> AppendToFileUpload(Models.TableauSession session, string fileUploadId, Stream sourceStream, int maxBytesToRead = 67108864, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
         checkNullParameters((nameof(session), session), (nameof(fileUploadId), fileUploadId), (nameof(sourceStream), sourceStream));
@@ -73,7 +73,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 0)]
-    public async Task<dataSourceType> PublishDatasource(TableauSession session, string fileUploadId,
+    public async Task<dataSourceType> PublishDatasource(Models.TableauSession session, string fileUploadId,
         string datasourceName, DatasourceFileType type, string projectId,
         connectionCredentialsType connectionCredentials = null, bool overwrite = false, bool append = false, CancellationToken? cancelToken = null)
     {
@@ -111,7 +111,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 0)]
-    public async Task<workbookType> PublishWorkbook(TableauSession session, string fileUploadId,
+    public async Task<workbookType> PublishWorkbook(Models.TableauSession session, string fileUploadId,
         string workbookName, WorkbookFileType type, string projectId, bool showTabs = false,
         connectionType[] connections = null, bool overwrite = false,
         CancellationToken? cancelToken = null)

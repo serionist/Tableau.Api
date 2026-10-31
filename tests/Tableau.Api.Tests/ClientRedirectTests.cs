@@ -186,7 +186,7 @@ public sealed class ClientRedirectTests
             FakeResponse.Redirect(302, new Uri(other.BaseUrl, ClientFixtures.ServerInfoPath).ToString()));
         other.Map("GET", ClientFixtures.ServerInfoPath, ClientFixtures.ServerInfo());
         using var following = new HttpClient();
-        await using var client = new TableauClient(following, ClientFixtures.Options(server), Fixtures.Log.Factory);
+        await using var client = new TableauClient(following, ClientFixtures.Options(server), loggerFactory: Fixtures.Log.Factory);
 
         var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.Redirect, () => client.Server.GetInfoAsync());
 

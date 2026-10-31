@@ -39,11 +39,11 @@ internal static class ClientFixtures
 
     /// <summary>A client of its own over the fake server, logging to <see cref="Fixtures.Log"/>.</summary>
     public static TableauClient Client(FakeTableauServer server, string? version = Version) =>
-        TableauClient.Create(Options(server, version), Fixtures.Log.Factory);
+        TableauClient.Create(Options(server, version), loggerFactory: Fixtures.Log.Factory);
 
     /// <summary>A client from options, logging to <see cref="Fixtures.Log"/>, its retries waiting on the clock given.</summary>
     public static TableauClient Client(TableauClientOptions options, TimeProvider? time = null) =>
-        TableauClient.CreateWithClock(options, Fixtures.Log.Factory, time);
+        TableauClient.CreateWithClock(options, null, Fixtures.Log.Factory, time);
 
     /// <summary>
     /// Moves a fake clock on a step at a time, giving the client a moment after each, until <paramref name="done"/> holds,
@@ -78,11 +78,15 @@ internal static class ClientFixtures
     public static FakeResponse ServerInfo(string restApiVersion = Version, string productVersion = "2025.1.0") =>
         FakeResponse.Json(200, $$$"""{"serverInfo":{"productVersion":{"value":"{{{productVersion}}}","build":"20251.25.0101.0000"},"restApiVersion":"{{{restApiVersion}}}"}}""");
 
-    /// <summary>A descriptor for a test of the pipeline, which no real call has.</summary>
+    /// <summary>
+    /// A descriptor for a test of the pipeline, which no real call has: one made in no session unless the test asks, so it
+    /// sends the token the test gives it, or none.
+    /// </summary>
     public static Endpoint Endpoint(string template, string method = "GET", TableauDeployments deployments = TableauDeployments.Both,
-        string minVersion = "2.0", TransferKind transfer = TransferKind.None) =>
+        string minVersion = "2.0", TransferKind transfer = TransferKind.None, bool needsSession = false) =>
         new("Test call", new HttpMethod(method), template, System.Version.Parse(minVersion), deployments, Idempotent: method == "GET",
-            transfer);
+            transfer)
+        { NeedsSession = needsSession };
 
     /// <summary>Sends a test call and returns Server Info from its answer, as a call that returns an element does.</summary>
     public static Task<ServerInfo> SendAsync(TableauClient client, Endpoint endpoint, TableauRequest request = default,

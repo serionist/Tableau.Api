@@ -21,8 +21,15 @@ internal static class Fixtures
     public const string OtherSessionToken = "another-invented-token";
     public const string PatSecret = "invented-pat-secret";
 
+    /// <summary>
+    /// The start of every HS256 JWT's header, <c>{"alg":"HS256",</c> in base64url: a log line that holds it holds a JWT,
+    /// such as one the client minted for a connected app.
+    /// </summary>
+    public const string JwtStart = "eyJhbGciOiJIUzI1NiIs";
+
     /// <summary>Every secret a test hands the library, which no log line may hold.</summary>
-    public static readonly string[] Secrets = [Password, SessionToken, OtherSessionToken, PatSecret];
+    public static readonly string[] Secrets =
+        [Password, SessionToken, OtherSessionToken, PatSecret, SessionFixtures.AppSecretValue, SessionFixtures.Jwt, JwtStart];
 
     /// <summary>Every line the clients Client makes log, across the suite.</summary>
     public static readonly RecordingLogger Log = new();
@@ -34,25 +41,13 @@ internal static class Fixtures
     public static TableauApiClient Client(FakeTableauServer server) =>
         new(server.BaseUrl, Log, ApiVersion) { Timeout = TimeSpan.FromSeconds(30) };
 
-    /// <summary>Tableau's answer to a sign-in: the session token, the site's id and the user's id.</summary>
-    public static FakeResponse SignedIn() =>
-        FakeResponse.Xml(200, $"<credentials token=\"{SessionToken}\">"
-            + $"<site id=\"{SiteId}\" contentUrl=\"{SiteContentUrl}\"/><user id=\"{UserId}\"/></credentials>");
-
     /// <summary>Where Vizportal's methods are posted, under the base URL.</summary>
     public const string VizportalPath = "/vizportal/api/web/v1/";
 
     /// <summary>Vizportal's answer to a call that returns nothing: an empty result.</summary>
     public static FakeResponse VizportalResult() => FakeResponse.Json(200, "{\"result\":{}}");
 
-    /// <summary>The session a sign-in returns, for tests whose server need not see the sign-in.</summary>
-    public static TableauSession Session() =>
+    /// <summary>The old client's session, as a sign-in gave it, for its tests; 2.0's are in <see cref="SessionFixtures"/>.</summary>
+    public static Models.TableauSession Session() =>
         new() { SiteId = SiteId, UserId = UserId, Token = SessionToken, UserName = UserName };
-
-    /// <summary>Map the sign-in on the server and sign in; the tests of other calls start here.</summary>
-    public static async Task<TableauSession> SignInAsync(FakeTableauServer server, TableauApiClient client)
-    {
-        server.Map("POST", $"/api/{ApiVersion}/auth/signin", SignedIn());
-        return await client.SignIn(UserName, Password, SiteContentUrl);
-    }
 }

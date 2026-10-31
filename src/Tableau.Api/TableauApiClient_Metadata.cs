@@ -25,7 +25,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(3, 5)]
-    public async Task<databaseType[]> QueryDatabases(TableauSession session, CancellationToken? cancelToken = null)
+    public async Task<databaseType[]> QueryDatabases(Models.TableauSession session, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
         checkNullParameters((nameof(session), session));
@@ -51,7 +51,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(3, 5)]
-    public async Task<databaseType> UpdateDatabase(TableauSession session, string databaseId,
+    public async Task<databaseType> UpdateDatabase(Models.TableauSession session, string databaseId,
         string newDescription = null, string newContactId = null, bool? isCertified = null,
         string newCertificationNote = null, CancellationToken? cancelToken = null)
     {
@@ -81,7 +81,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(3, 5)]
-    public async Task<tableType[]> QueryTables(TableauSession session, CancellationToken? cancelToken = null)
+    public async Task<tableType[]> QueryTables(Models.TableauSession session, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
         checkNullParameters((nameof(session), session));
@@ -107,7 +107,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(3, 5)]
-    public async Task<tableType> UpdateTable(TableauSession session, string tableId,
+    public async Task<tableType> UpdateTable(Models.TableauSession session, string tableId,
         string newDescription = null, string newContactId = null, bool? isCertified = null,
         string newCertificationNote = null, CancellationToken? cancelToken = null)
     {
@@ -137,7 +137,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(3, 5)]
-    public async Task<columnType[]> QueryColumnsInTable(TableauSession session, string tableId,
+    public async Task<columnType[]> QueryColumnsInTable(Models.TableauSession session, string tableId,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -163,7 +163,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(3, 5)]
-    public async Task<columnType> UpdateColumn(TableauSession session, string tableId, string columnId, string newDescription,
+    public async Task<columnType> UpdateColumn(Models.TableauSession session, string tableId, string columnId, string newDescription,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -185,7 +185,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(3, 5)]
-    public async Task<dataQualityWarningType[]> QueryDataQualityWarningByContent(TableauSession session,
+    public async Task<dataQualityWarningType[]> QueryDataQualityWarningByContent(Models.TableauSession session,
         MetadataContentType contentType, string luid, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -214,7 +214,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(3, 5)]
-    public async Task<dataQualityWarningType> AddDataQualityWarning(TableauSession session,
+    public async Task<dataQualityWarningType> AddDataQualityWarning(Models.TableauSession session,
         MetadataContentType contentType, string luid, DataQualityWarningType type, string message = null, bool? severity = null, bool? state = null, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -246,7 +246,7 @@ public partial class TableauApiClient
     /// <param name="cancelToken"></param>
     /// <returns></returns>
     [ApiVersion(3, 5)]
-    public async Task<dataQualityWarningType> UpdateDataQualityWarning(TableauSession session, string dataQualityWarningId, DataQualityWarningType type, string message = null, bool? severity = null, bool? state = null, CancellationToken? cancelToken = null)
+    public async Task<dataQualityWarningType> UpdateDataQualityWarning(Models.TableauSession session, string dataQualityWarningId, DataQualityWarningType type, string message = null, bool? severity = null, bool? state = null, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
         checkNullParameters((nameof(session), session), (nameof(dataQualityWarningId), dataQualityWarningId));

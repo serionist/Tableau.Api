@@ -25,7 +25,7 @@ public sealed class PublishingTests
     {
         using var server = FakeTableauServer.Start();
         var client = Fixtures.Client(server);
-        var session = await Fixtures.SignInAsync(server, client);
+        var session = Fixtures.Session();
         server.Map("POST", SitePath + "/fileUploads",
             FakeResponse.Xml(201, $"<fileUpload uploadSessionId=\"{UploadId}\" fileSize=\"0\"/>"));
         server.Map("PUT", UploadPath,
@@ -46,7 +46,7 @@ public sealed class PublishingTests
         var datasource = await client.PublishDatasource(session, upload.uploadSessionId, "Sales extract",
             DatasourceFileType.tde, ProjectId);
 
-        var requests = server.Requests.Skip(1).ToList();
+        var requests = server.Requests.ToList();
         CollectionAssert.AreEqual(
             new[]
             {

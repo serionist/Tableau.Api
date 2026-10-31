@@ -80,6 +80,22 @@ and [the migration guide](docs/migration-2.0.md) lists every change from 1.2.5 a
     extract, a flow, packaged or not, a PDF, a PNG, a CSV, a zip) say what it is; `SaveToFileAsync` writes it, leaving
     no part of a file if it fails and replacing a file only when asked.
   - The client and its sub-clients are classes with virtual members and protected constructors, for mocks.
+  - **Sessions:** give the client `TableauCredentials` (`TableauClient.Create`, its constructor over an `HttpClient`, or
+    `AddTableauClient(...).UseCredentials`) and it signs in on the first call that needs a session, one sign-in at a
+    time, signs in again five minutes before the session is due to end (240 minutes on Tableau Server, 120 on Tableau
+    Cloud, sooner when a personal access token expires first) and once after a 401, sending the refused call again,
+    and signs out when you dispose it. A client from DI shares its name's session and signs nothing out.
+  - **Credentials:** `PersonalAccessToken` and `Password`, each optionally impersonating a user on Tableau Server;
+    `ConnectedAppDirectTrust`, which mints the connected app's JWT at each sign-in with HMAC-SHA256, valid five minutes;
+    `Jwt`, for a JWT minted elsewhere; `UnifiedAccessToken`, Tableau Cloud's from REST API 3.27. Each secret can come
+    from a delegate, such as a vault's, called at each sign-in. Impersonation on Tableau Cloud and a unified access
+    token on Tableau Server are refused before anything is sent. `ToString` names the kind and the user, never a
+    secret.
+  - **`client.Sessions`** signs in a session you hold, switches it to another site (Tableau Server only) and signs it
+    out; `client.WithSession(session)` is a client that calls in it and never signs in, so one per site serves work
+    across sites. `TableauSession` is a record with the site, the user, when it ends, the deployment and the version;
+    its token is never printed. A sign-in's `TableauException` keeps none of Tableau's answer.
+  - A session token that an `HttpClient` of yours sent to another host, by following a redirect, is signed out.
 - **The library builds with the trim and native AOT analyzers on** (`IsAotCompatible`), and the models pass them: they
   read and write JSON through System.Text.Json's source generator, with no reflection, and CI runs them in a native
   AOT app. The 1.x client is exempt: its `XmlSerializer` and Newtonsoft.Json code doesn't work trimmed or under native
@@ -90,9 +106,9 @@ and [the migration guide](docs/migration-2.0.md) lists every change from 1.2.5 a
 - **The package targets net10.0 only,** where `main` targeted netstandard2.1 and 1.2.x targets netstandard2.0. On
   .NET Framework or an older .NET, stay on 1.2.x.
 - **The version is 2.0,** from git tags: a build of `main` is `2.0.0-alpha.0.<n>`, and nothing is published before
-  2.0.0's release candidate. Every break of 1.2.5's public API is in the migration guide; so far, six methods whose
-  parameters or return type `main` had changed, and the `capabilityTypeName` members renumbered by the capabilities
-  added among them.
+  2.0.0's release candidate. Every break of 1.2.5's public API is in the migration guide; so far, five methods whose
+  parameters or return type `main` had changed, the `capabilityTypeName` members renumbered by the capabilities added
+  among them, and the old client's Server Info and sign-in methods.
 - **Values in paths and queries are escaped,** so a value the caller had already URL-encoded is encoded twice.
 - **The base URL's path is used,** by the REST and the Vizportal clients alike, so a server behind a path prefix,
   such as `https://example.com/tableau/`, is reachable. A base URL must be the server's address, not a site's or a
@@ -100,6 +116,8 @@ and [the migration guide](docs/migration-2.0.md) lists every change from 1.2.5 a
 - **A redirect fails,** where it was followed: use the address the exception names as the base URL.
 - **`TableauApiClient.ServerInfo` is gone:** use `TableauClient.Server.GetInfoAsync`, which returns the 2.0 model
   `ServerInfo` (the migration guide).
+- **`TableauApiClient`'s `SignIn`, `SignInWithPAT`, `SignOut` and `SwitchSite` are gone:** give `TableauClient` credentials,
+  or use `client.Sessions` (the migration guide).
 - **The package depends on Microsoft.Extensions' abstractions,** 10.0.14: Logging.Abstractions, Options,
   DependencyInjection.Abstractions and Http, in place of Microsoft.Extensions.Logging 2.2.0; and on Polly.Core 8.9.0,
   for the retries, which brings no other package.

@@ -47,7 +47,7 @@ public sealed class ModelFixtureTests
         var credentials = ModelFixtures.Response("sign-in.json").Credentials!;
 
         Assert.AreEqual("invented-session-token", credentials.Token);
-        Assert.AreEqual("239:59:59", credentials.EstimatedTimeToExpiration);
+        Assert.AreEqual("363:10:35", credentials.EstimatedTimeToExpiration);
         Assert.AreEqual(Fixtures.SiteId, credentials.Site!.Id);
         Assert.AreEqual(Fixtures.SiteContentUrl, credentials.Site.ContentUrl);
         Assert.AreEqual(Fixtures.UserId, credentials.User!.Id);

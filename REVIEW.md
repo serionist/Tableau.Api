@@ -62,9 +62,11 @@ Each is a yes or no; a "no" is a finding.
 
 ## When the change touches
 
-- **Authentication** (`TableauApiClient_Authentication.cs`, `TableauSession`): a password, a personal access token
-  and a session token travel only in a request body or the `X-Tableau-Auth` header, never in a URL; impersonation
-  (`userIdToImpersonate`) reaches only the sign-in that asked for it; `SignOut` still ends the session.
+- **Authentication** (`TableauCredentials`, `TableauSession`, `SessionsClient`, `Pipeline/TableauSessions.cs`): a
+  password, a personal access token, a JWT, a connected app's secret and a session token travel only in a request body
+  or the `X-Tableau-Auth` header, never in a URL, a log line, an exception's body or a `ToString`; impersonation
+  (`impersonateUserId`) reaches only the sign-in that asked for it; a client that owns its session signs it out when
+  disposed, and `SignOutAsync` still ends one.
 - **Logging** (`Log?.Log...`, `TableauLog`): no password, token, cookie or request body that holds one, in any level; a logged URL
   holds no secret.
 - **URLs** (`buildUri`): every value in a path or a query is escaped; `filter` and `sort` pass through as the caller

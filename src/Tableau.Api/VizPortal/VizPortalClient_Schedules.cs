@@ -16,7 +16,7 @@ public partial class VizPortalClient
     /// <param name="siteId">The site ID</param>
     /// <returns></returns>
     public IAsyncEnumerable<Schedule> QuerySchedules(
-        TableauSession session, string siteId) => querySchedules(session, ("siteId", siteId));
+        Tableau.Api.Models.TableauSession session, string siteId) => querySchedules(session, ("siteId", siteId));
 
     /// <summary>
     /// Returns with a single Schedule
@@ -26,7 +26,7 @@ public partial class VizPortalClient
     /// <param name="scheduleId">The schedule ID</param>
     /// <returns></returns>
     public IAsyncEnumerable<Schedule> QuerySingleSchedule(
-        TableauSession session, string siteId, string scheduleId) => querySchedules(session, ("siteId", siteId), ("id", scheduleId));
+        Tableau.Api.Models.TableauSession session, string siteId, string scheduleId) => querySchedules(session, ("siteId", siteId), ("id", scheduleId));
 
     /// <summary>
     /// Triggers a Schedule
@@ -34,7 +34,7 @@ public partial class VizPortalClient
     /// <param name="session">The session obtained from the top level client</param>
     /// <param name="scheduleId">The schedule ID</param>
     /// <returns></returns>
-    public async Task TriggerSchedule(TableauSession session, int scheduleId)
+    public async Task TriggerSchedule(Tableau.Api.Models.TableauSession session, int scheduleId)
     {
         var req = await Request<TriggerSchedule, Empty>(session, "runSchedules",
             new TriggerSchedule()
@@ -43,7 +43,7 @@ public partial class VizPortalClient
             });
     }
 
-    private IAsyncEnumerable<Schedule> querySchedules(TableauSession session, params (string field, string value)[] search)
+    private IAsyncEnumerable<Schedule> querySchedules(Tableau.Api.Models.TableauSession session, params (string field, string value)[] search)
     {
         var q = new QueryModel()
         {

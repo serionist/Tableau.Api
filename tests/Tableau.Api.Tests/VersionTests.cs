@@ -45,7 +45,7 @@ public sealed class VersionTests
         server.Map("GET", ClientFixtures.NegotiationPath, ClientFixtures.ServerInfo(offered));
         server.Map("GET", $"/api/{used}/serverinfo", ClientFixtures.ServerInfo(offered));
         var log = new RecordingLogger();
-        await using var client = TableauClient.Create(ClientFixtures.Options(server, version: null), log.Factory);
+        await using var client = TableauClient.Create(ClientFixtures.Options(server, version: null), loggerFactory: log.Factory);
 
         await client.Server.GetInfoAsync();
 
@@ -89,7 +89,7 @@ public sealed class VersionTests
         var log = new RecordingLogger();
         var options = ClientFixtures.Options(server, version: null);
         options.AllowUnsupportedServerVersion = true;
-        await using var client = TableauClient.Create(options, log.Factory);
+        await using var client = TableauClient.Create(options, loggerFactory: log.Factory);
 
         await client.Server.GetInfoAsync();
         var info = await client.Server.GetInfoAsync();
@@ -133,7 +133,7 @@ public sealed class VersionTests
         var options = ClientFixtures.Options(server, version: "3.22");
         options.AllowUnsupportedServerVersion = true;
         var log = new RecordingLogger();
-        await using var allowing = TableauClient.Create(options, log.Factory);
+        await using var allowing = TableauClient.Create(options, loggerFactory: log.Factory);
 
         var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.UnsupportedApiVersion, () => refusing.Server.GetInfoAsync());
         Assert.IsEmpty(server.Requests);
@@ -281,6 +281,8 @@ public sealed class VersionTests
                 ? new Version(endpoint.MinVersion.Major, endpoint.MinVersion.Minor - 1)
                 : new Version(endpoint.MinVersion.Major - 1, 99);
             options.AllowUnsupportedServerVersion = true;
+            // On a deployment it runs on, so the version gate is the one that refuses it.
+            options.Deployment = (endpoint.Deployments & TableauDeployments.Server) != 0 ? TableauDeployment.Server : TableauDeployment.Cloud;
             await using var client = ClientFixtures.Client(options);
 
             var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.UnsupportedApiVersion,

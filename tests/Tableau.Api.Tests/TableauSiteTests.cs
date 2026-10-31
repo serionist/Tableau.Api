@@ -87,6 +87,53 @@ public sealed class TableauSiteTests
     }
 
     [TestMethod]
+    public void ASignInTakesTheConnectedAppWhenAnyOfItsSettingsIsSetElseAToken()
+    {
+        var app = new Dictionary<string, string?>
+        {
+            ["TABLEAU_LIVE"] = "1",
+            ["TABLEAU_LIVE_CLIENT_ID"] = "c",
+            ["TABLEAU_LIVE_SECRET_ID"] = "k",
+            ["TABLEAU_LIVE_SECRET_VALUE"] = "v",
+            ["TABLEAU_LIVE_USER"] = "u",
+            ["TABLEAU_LIVE_PAT_NAME"] = "n",
+        };
+        var token = new Dictionary<string, string?> { ["TABLEAU_LIVE"] = "1", ["TABLEAU_LIVE_PAT_NAME"] = "n", ["TABLEAU_LIVE_PAT_SECRET"] = "s" };
+
+        Assert.AreSame(TableauSite.DirectTrustSettings, TableauSite.SignInSettings(Variables(app)));
+        Assert.AreSame(TableauSite.PersonalAccessTokenSettings, TableauSite.SignInSettings(Variables(token)));
+        Assert.IsNull(TableauSite.SignInSettings(Variables(new() { ["TABLEAU_LIVE"] = "1" })));
+        Assert.AreEqual(SiteOutcome.Run, TableauSite.Check(TableauSite.Live, [], Variables(app), signsIn: true).Outcome);
+        Assert.AreEqual(SiteOutcome.Run, TableauSite.Check(TableauSite.Live, [], Variables(token), signsIn: true).Outcome);
+    }
+
+    [TestMethod]
+    public void ASignInsMissingSettingsFailTheTestAndAreNamed()
+    {
+        var halfAnApp = TableauSite.Check(TableauSite.Live, ["TABLEAU_LIVE_SERVER_URL"],
+            Variables(new()
+            {
+                ["TABLEAU_LIVE"] = "1",
+                ["TABLEAU_LIVE_SERVER_URL"] = "https://x.example",
+                ["TABLEAU_LIVE_CLIENT_ID"] = "c",
+                ["TABLEAU_LIVE_USER"] = "u",
+                ["TABLEAU_LIVE_PAT_NAME"] = "n",
+                ["TABLEAU_LIVE_PAT_SECRET"] = "s"
+            }), signsIn: true);
+        var halfAToken = TableauSite.Check(TableauSite.Live, [],
+            Variables(new() { ["TABLEAU_LIVE"] = "1", ["TABLEAU_LIVE_PAT_SECRET"] = "s" }), signsIn: true);
+        var none = TableauSite.Check(TableauSite.Live, [], Variables(new() { ["TABLEAU_LIVE"] = "1" }), signsIn: true);
+
+        Assert.AreEqual("TABLEAU_LIVE=1, but TABLEAU_LIVE_SECRET_ID, TABLEAU_LIVE_SECRET_VALUE are not set.", halfAnApp.Message);
+        Assert.AreEqual("TABLEAU_LIVE=1, but TABLEAU_LIVE_PAT_NAME is not set.", halfAToken.Message);
+        Assert.AreEqual(SiteOutcome.Fail, none.Outcome);
+        Assert.AreEqual("TABLEAU_LIVE=1, but no sign-in is set: a connected app's TABLEAU_LIVE_CLIENT_ID, TABLEAU_LIVE_SECRET_ID, "
+            + "TABLEAU_LIVE_SECRET_VALUE, TABLEAU_LIVE_USER, or a personal access token's TABLEAU_LIVE_PAT_NAME and TABLEAU_LIVE_PAT_SECRET.",
+            none.Message);
+        Assert.AreEqual(SiteOutcome.Inconclusive, TableauSite.Check(TableauSite.Live, [], Variables([]), signsIn: true).Outcome);
+    }
+
+    [TestMethod]
     public void AnUnknownCategoryIsRefused() =>
         Assert.ThrowsExactly<ArgumentException>(() => TableauSite.Check("Nightly", [], _ => "1"));
 

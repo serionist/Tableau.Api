@@ -29,7 +29,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 3)]
-    public async Task<subscriptionType> CreateSubscription(TableauSession session, string subscriptionSubject,
+    public async Task<subscriptionType> CreateSubscription(Models.TableauSession session, string subscriptionSubject,
         subscriptionContentTypeType contentType, string contentId, string scheduleId, string userId,
         CancellationToken? cancelToken)
     {
@@ -57,7 +57,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 3)]
-    public async Task<subscriptionType> QuerySubscription(TableauSession session, string subscriptionId,
+    public async Task<subscriptionType> QuerySubscription(Models.TableauSession session, string subscriptionId,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -79,7 +79,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 3)]
     public async Task<(paginationType pagination, subscriptionType[] subscriptions)> QuerySubscriptions(
-        TableauSession session, int pageSize = 100, int pageNumber = 1, CancellationToken? cancelToken = null)
+        Models.TableauSession session, int pageSize = 100, int pageNumber = 1, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
         checkNullParameters((nameof(session), session));
@@ -105,7 +105,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 3)]
-    public async Task<subscriptionType> UpdateSubscription(TableauSession session, string subscriptionId,
+    public async Task<subscriptionType> UpdateSubscription(Models.TableauSession session, string subscriptionId,
         string newSubject = null, string newScheduleId = null, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -130,7 +130,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 3)]
-    public async Task DeleteSubscription(TableauSession session, string subscriptionId,
+    public async Task DeleteSubscription(Models.TableauSession session, string subscriptionId,
         CancellationToken? cancelToken = null)
     {
 

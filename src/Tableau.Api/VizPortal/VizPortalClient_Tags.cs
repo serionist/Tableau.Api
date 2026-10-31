@@ -14,7 +14,7 @@ public partial class VizPortalClient
     /// <param name="workbookId">The workbook Id</param>
     /// <param name="tag">The tag</param>
     /// <returns></returns>
-    public async Task AddTagToWorkbook(TableauSession session, int workbookId, string tag)
+    public async Task AddTagToWorkbook(Tableau.Api.Models.TableauSession session, int workbookId, string tag)
     {
         var req = await Request<TagContentAction, Empty>(session, "addTagsToWorkbooks",
             new TagContentAction()
@@ -31,7 +31,7 @@ public partial class VizPortalClient
     /// <param name="workbookId">The workbook Id</param>
     /// <param name="tag">The tag</param>
     /// <returns></returns>
-    public async Task RemoveTagFromWorkbook(TableauSession session, int workbookId, string tag)
+    public async Task RemoveTagFromWorkbook(Tableau.Api.Models.TableauSession session, int workbookId, string tag)
     {
         var req = await Request<TagContentAction, Empty>(session, "removeTagsFromWorkbooks",
             new TagContentAction()
@@ -48,7 +48,7 @@ public partial class VizPortalClient
     /// <param name="datasourceId">The datasource Id</param>
     /// <param name="tag">The tag</param>
     /// <returns></returns>
-    public async Task AddTagToDatasource(TableauSession session, int datasourceId, string tag)
+    public async Task AddTagToDatasource(Tableau.Api.Models.TableauSession session, int datasourceId, string tag)
     {
         var req = await Request<TagContentAction, Empty>(session, "addTagsToDatasources",
             new TagContentAction()
@@ -65,7 +65,7 @@ public partial class VizPortalClient
     /// <param name="datasourceId">The datasource Id</param>
     /// <param name="tag">The tag</param>
     /// <returns></returns>
-    public async Task RemoveTagFromDatasource(TableauSession session, int datasourceId, string tag)
+    public async Task RemoveTagFromDatasource(Tableau.Api.Models.TableauSession session, int datasourceId, string tag)
     {
         var req = await Request<TagContentAction, Empty>(session, "removeTagsFromDatasources",
             new TagContentAction()
