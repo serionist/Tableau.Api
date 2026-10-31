@@ -1,0 +1,10 @@
+{
+  "serverInfo": {
+    "productVersion": {
+      "value": "2025.1.0",
+      "build": "20251.25.0101.0000"
+    },
+    "prepConductorVersion": "20251.25.0101.0000",
+    "restApiVersion": "3.25"
+  }
+}

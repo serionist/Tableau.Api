@@ -1,0 +1,77 @@
+{
+  "about": "Tableau's JSON bodies, as the 2.0 models read and write them. Every fixture here is synthetic: written from the REST API reference's XML example for its call, converted by the rules a live server showed (Tableau Server 2025.1, REST API 3.25, 2026-10-31): no tsRequest or tsResponse wrapper; attributes and child elements as members; a list in its wrapper object, as an array even for one item, and an empty list as an empty object; xs:integer values as strings, xs:int values as numbers, xs:boolean values as booleans; an element's text beside its attributes as value. Every value is invented. A fixture recorded from a site replaces its synthetic one and says so here; one only a Tableau Server can give stays synthetic until a maintainer records it by hand.",
+  "fixtures": [
+    {
+      "file": "create-project-request.json",
+      "body": "request",
+      "call": "POST /api/{version}/sites/{site-id}/projects",
+      "source": "synthetic, from the reference's Create Project request"
+    },
+    {
+      "file": "create-project.json",
+      "body": "response",
+      "call": "POST /api/{version}/sites/{site-id}/projects",
+      "source": "synthetic, from the reference's Create Project response"
+    },
+    {
+      "file": "error.json",
+      "body": "response",
+      "call": "GET /api/{version}/sites/{site-id}/workbooks/{workbook-id}, for a workbook that doesn't exist",
+      "source": "synthetic, from the reference's error example; the live server sent the same shape, its code a string"
+    },
+    {
+      "file": "projects-empty.json",
+      "body": "response",
+      "call": "GET /api/{version}/sites/{site-id}/projects?filter=name:eq:{name}, matching nothing",
+      "source": "synthetic, from the reference's Query Projects response; the live server sent an empty wrapper object"
+    },
+    {
+      "file": "projects-page.json",
+      "body": "response",
+      "call": "GET /api/{version}/sites/{site-id}/projects?pageSize=3",
+      "source": "synthetic, from the reference's Query Projects response; the live server sent the same shape"
+    },
+    {
+      "file": "server-info.json",
+      "body": "response",
+      "call": "GET /api/{version}/serverinfo",
+      "source": "synthetic, from the reference's Server Info response; the live server sent the same shape"
+    },
+    {
+      "file": "sign-in-request.json",
+      "body": "request",
+      "call": "POST /api/{version}/auth/signin, with a personal access token",
+      "source": "synthetic, from the reference's Sign In request; the live server accepted the same shape"
+    },
+    {
+      "file": "sign-in.json",
+      "body": "response",
+      "call": "POST /api/{version}/auth/signin",
+      "source": "synthetic, from the reference's Sign In response; the live server sent the same shape"
+    },
+    {
+      "file": "site.json",
+      "body": "response",
+      "call": "GET /api/{version}/sites/{site-id}?includeUsage=true",
+      "source": "synthetic, from the reference's Query Site response; the live server sent the same shape, without usage, which it sends only when asked"
+    },
+    {
+      "file": "user-unknown-values.json",
+      "body": "response",
+      "call": "GET /api/{version}/sites/{site-id}/users/{user-id}",
+      "source": "synthetic, from the reference's Query User On Site response, with a site role and an auth setting no version of Tableau has, as a later one may add"
+    },
+    {
+      "file": "users-page.json",
+      "body": "response",
+      "call": "GET /api/{version}/sites/{site-id}/users?pageSize=1&pageNumber=2",
+      "source": "synthetic, from the reference's Get Users on Site response; the live server sent the same shape, a page of one user as an array"
+    },
+    {
+      "file": "workbook.json",
+      "body": "response",
+      "call": "GET /api/{version}/sites/{site-id}/workbooks/{workbook-id}",
+      "source": "synthetic, from the reference's Query Workbook response; the live server sent the same shape, an empty dataAccelerationConfig and a view's empty tags included"
+    }
+  ]
+}

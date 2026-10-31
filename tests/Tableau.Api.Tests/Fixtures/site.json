@@ -1,0 +1,39 @@
+{
+  "site": {
+    "usage": {
+      "numUsers": "12",
+      "storage": "2048"
+    },
+    "id": "0f4b9e1c-3a52-4d6e-9c8b-1a2b3c4d5e6f",
+    "name": "Finance",
+    "contentUrl": "finance",
+    "adminMode": "ContentAndUsers",
+    "disableSubscriptions": false,
+    "state": "Active",
+    "revisionHistoryEnabled": true,
+    "revisionLimit": "25",
+    "subscribeOthersEnabled": true,
+    "allowSubscriptionAttachments": true,
+    "guestAccessEnabled": false,
+    "dataAlertsEnabled": true,
+    "commentingEnabled": true,
+    "catalogingEnabled": true,
+    "derivedPermissionsEnabled": false,
+    "extractEncryptionMode": "enabled",
+    "askDataMode": "DisabledByDefault",
+    "runNowEnabled": true,
+    "requestAccessEnabled": false,
+    "storageQuota": "100000",
+    "userQuota": "-1",
+    "tierCreatorCapacity": "5",
+    "tierExplorerCapacity": "20",
+    "tierViewerCapacity": "100",
+    "useDefaultTimeZone": false,
+    "timeZone": "Europe/Budapest",
+    "autoSuspendRefreshEnabled": true,
+    "autoSuspendRefreshInactivityWindow": 30,
+    "explainDataEnabled": true,
+    "dqwSubscriptionsEnabled": false,
+    "attributeCaptureEnabled": true
+  }
+}

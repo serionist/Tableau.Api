@@ -1,0 +1,15 @@
+{
+  "project": {
+    "owner": {
+      "id": "7c1d2e3f-4a5b-4c6d-8e9f-0a1b2c3d4e5f"
+    },
+    "id": "33333333-4444-4555-8666-777777777777",
+    "parentProjectId": "22222222-3333-4444-8555-666666666666",
+    "name": "Quarterly reports",
+    "description": "Invented nested project",
+    "contentPermissions": "ManagedByOwner",
+    "controllingPermissionsProjectId": "33333333-4444-4555-8666-777777777777",
+    "createdAt": "2026-10-31T10:00:00Z",
+    "updatedAt": "2026-10-31T10:00:00Z"
+  }
+}

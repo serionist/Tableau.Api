@@ -1,0 +1,9 @@
+{
+  "credentials": {
+    "personalAccessTokenName": "invented-pat-name",
+    "personalAccessTokenSecret": "invented-pat-secret",
+    "site": {
+      "contentUrl": "finance"
+    }
+  }
+}

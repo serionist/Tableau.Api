@@ -1,0 +1,13 @@
+{
+  "credentials": {
+    "site": {
+      "id": "0f4b9e1c-3a52-4d6e-9c8b-1a2b3c4d5e6f",
+      "contentUrl": "finance"
+    },
+    "user": {
+      "id": "7c1d2e3f-4a5b-4c6d-8e9f-0a1b2c3d4e5f"
+    },
+    "token": "invented-session-token",
+    "estimatedTimeToExpiration": "239:59:59"
+  }
+}

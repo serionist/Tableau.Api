@@ -1,13 +1,20 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The offline tests: the library, as users get it, driven against a fake Tableau server on a loopback port. The
-       test application's settings and its packages are in tests/Directory.Build.props. -->
+  <!-- The offline tests: the library, as users get it, driven against a fake Tableau server on a loopback port, and its
+       models against the JSON fixtures in Fixtures/. The test application's settings and its packages are in
+       tests/Directory.Build.props. -->
   <PropertyGroup>
     <ImplicitUsings>disable</ImplicitUsings>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Tableau.Api\Tableau.Api.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Fixtures\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The native AOT app's root list, which the test of public types reads. -->
+    <EmbeddedResource Include="..\Tableau.Api.Aot\roots.xml" LogicalName="roots.xml" />
   </ItemGroup>
 
 </Project>

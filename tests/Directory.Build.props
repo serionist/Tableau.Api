@@ -5,16 +5,22 @@
   <!-- Everything under tests/: never packed, no XML docs. Each project is a test application on MSTest and
        Microsoft.Testing.Platform, which global.json selects for dotnet test. Coverage comes from the
        Microsoft.Testing.Extensions.CodeCoverage extension, with the settings in coverage.config beside this file, and
-       eng/coverage-gate.cs holds it to its floor (AGENTS.md, Build and test). -->
+       eng/coverage-gate.cs holds it to its floor (AGENTS.md, Build and test). Tableau.Api.Aot is the exception: an app
+       that CI publishes with native AOT, not a test, so it takes no MSTest. The name decides, because a project's own
+       properties are not set yet when this file is read. -->
   <PropertyGroup>
     <IsPackable>false</IsPackable>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <TableauAotApplication>$([System.String]::Copy('$(MSBuildProjectName)').Equals('Tableau.Api.Aot'))</TableauAotApplication>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(TableauAotApplication)' != 'true'">
     <IsTestProject>true</IsTestProject>
     <OutputType>Exe</OutputType>
     <EnableMSTestRunner>true</EnableMSTestRunner>
   </PropertyGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(TableauAotApplication)' != 'true'">
     <PackageReference Include="MSTest.TestFramework" />
     <PackageReference Include="MSTest.TestAdapter" />
     <PackageReference Include="MSTest.Analyzers" PrivateAssets="all" />
