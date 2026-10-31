@@ -1,0 +1,10 @@
+<Project>
+
+  <!-- IsAotCompatible makes the SDK reference the trim analyzer's package, Microsoft.NET.ILLink.Tasks, at the SDK's own
+       runtime version, which the lock file then holds: every SDK patch would change it and fail a locked restore. It is
+       pinned here instead, so an SDK update leaves the lock file alone; raise it on purpose, and restore to update it. -->
+  <ItemGroup>
+    <KnownILLinkPack Update="@(KnownILLinkPack)" ILLinkPackVersion="10.0.14" />
+  </ItemGroup>
+
+</Project>

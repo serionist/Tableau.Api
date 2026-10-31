@@ -7,9 +7,23 @@
     <PackageTags>Tableau, Tableau API, Tableau C#</PackageTags>
   </PropertyGroup>
 
+  <!-- The trim and native AOT analyzers run on the library's build, and fail it on a warning. The old client's files,
+       XmlSerializer's and Newtonsoft.Json's, are exempt through the TableauLegacy section of .editorconfig until they
+       are ported. VerifyReferenceAotCompatibility waits for the old client to go, with Newtonsoft.Json. -->
+  <PropertyGroup>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Logging" />
     <PackageReference Include="Newtonsoft.Json" />
+  </ItemGroup>
+
+  <!-- The envelopes of a request and a response, the JSON context and the converters are internal: the tests and the
+       native AOT app read fixtures through them. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Tableau.Api.Tests" />
+    <InternalsVisibleTo Include="Tableau.Api.Aot" />
   </ItemGroup>
 
 </Project>
