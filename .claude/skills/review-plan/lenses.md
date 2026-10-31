@@ -27,7 +27,8 @@ to change. No severity, never counted. Mechanical over manual: a step someone mu
 
 Read `REVIEW.md` and the code the plan changes, and list what they require that the plan leaves out and that would
 really bite: the model types a new endpoint returns, its `[ApiVersion]`, the manual additions to `XmlSchema.cs` a
-regeneration must keep, a doc comment, how existing users move over.
+regeneration must keep, what a new schema changes in the generated models, a doc comment, how existing users move
+over.
 
 ## rest-contract
 

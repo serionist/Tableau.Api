@@ -1,0 +1,14 @@
+{
+  "user": {
+    "domain": {
+      "name": "local"
+    },
+    "email": "grace@example.org",
+    "fullName": "Grace Hopper",
+    "id": "8d2e3f4a-5b6c-4d7e-9f0a-1b2c3d4e5f6a",
+    "name": "grace",
+    "siteRole": "InventedFutureRole",
+    "authSetting": "InventedFutureAuthSetting",
+    "role": "Interactor"
+  }
+}

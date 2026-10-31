@@ -9,6 +9,10 @@
 *.bat    text eol=crlf
 *.cmd    text eol=crlf
 
+# Tableau's REST API schema, byte for byte as Tableau publishes it, CRLF included, so its SHA-256 matches the published
+# file's (eng/schema/README.md) on every OS.
+eng/schema/*.xsd -text
+
 # Binary: never normalized.
 *.png    binary
 *.jpg    binary

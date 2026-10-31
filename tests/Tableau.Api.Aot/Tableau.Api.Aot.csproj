@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- An app over the library, published with native AOT in CI: Program.cs says what it checks, README.md how to run
+       it. The 2.0 types in roots.xml are kept whole, so the publish analyses every member of each, used here or not;
+       any trim or AOT warning fails it. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- One warning per problem, not one per assembly, so the log names it. -->
+    <TrimmerSingleWarn>false</TrimmerSingleWarn>
+    <IlcTreatWarningsAsErrors>true</IlcTreatWarningsAsErrors>
+    <!-- The runtime CI publishes it for, so a restore without one brings its packages. -->
+    <RuntimeIdentifiers>linux-x64</RuntimeIdentifiers>
+    <!-- No lock file: its own packages are the SDK's native AOT compiler, at the SDK's own runtime version, so a lock
+         file would fail a locked restore at every SDK patch. The library's lock file holds the rest. -->
+    <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Tableau.Api\Tableau.Api.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <TrimmerRootDescriptor Include="roots.xml" />
+    <!-- The fixtures the offline tests read, inside the binary, so it runs from anywhere. -->
+    <EmbeddedResource Include="..\Tableau.Api.Tests\Fixtures\*.json" LogicalName="Fixtures/%(Filename)%(Extension)" />
+    <Compile Include="..\Tableau.Api.Tests\JsonEquivalence.cs" Link="JsonEquivalence.cs" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,7 @@
+{
+  "error": {
+    "summary": "Resource Not Found",
+    "detail": "Workbook '9f8e7d6c-5b4a-4f3e-8d2c-1b0a9f8e7d6c' could not be found.",
+    "code": "404006"
+  }
+}

@@ -13,6 +13,8 @@
 #   culture or zone did not take.
 # - Selftest and tests (Windows): the gate's selftest, the offline tests and the coverage gate, where paths, line
 #   endings and the TLS stack differ from Linux.
+# - Native AOT (Linux): tests/Tableau.Api.Aot published with native AOT, which fails on any trim or AOT warning in the
+#   2.0 types its roots.xml keeps, then run: it reads and writes the fixtures through the generated models.
 # - CI sums those up; it and pr-text.yml's PR text are the checks the main ruleset requires.
 #
 # Every job that builds the library checks out the whole history: MinVer versions it from git's tags and history, and
@@ -218,12 +220,42 @@ jobs:
       - name: Coverage gate
         run: dotnet run eng/coverage-gate.cs -- artifacts/TestResults
 
+  # The library in a native AOT app (tests/Tableau.Api.Aot/README.md says what it checks). Its warnings are errors, and
+  # one per problem, so the log names each.
+  aot:
+    name: Native AOT (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      # The native AOT compiler links with clang and zlib. The runner image has them; this covers an image that does
+      # not.
+      - name: Native AOT prerequisites
+        run: |
+          if ! command -v clang >/dev/null || ! dpkg -s zlib1g-dev >/dev/null 2>&1; then
+            sudo apt-get update && sudo apt-get install -y --no-install-recommends clang zlib1g-dev
+          fi
+      # Restored on its own: publish -r would restore every project for that runtime, which their lock files don't
+      # hold.
+      - name: Restore (locked)
+        run: dotnet restore tests/Tableau.Api.Aot --locked-mode
+      - name: Publish with native AOT
+        run: dotnet publish tests/Tableau.Api.Aot --no-restore -c Release -r linux-x64 -o artifacts/aot
+      - name: Run the native app
+        run: artifacts/aot/Tableau.Api.Aot
+
   # The check the main ruleset requires: every job above passed. It runs whatever happened to them,
   # since a required check that is skipped counts as passed, and it fails when one of them failed, was cancelled or was
   # skipped. A matrix's result is failure when any of its legs failed.
   ci:
     name: CI
-    needs: [checks, package, cultures, windows]
+    needs: [checks, package, cultures, windows, aot]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -234,7 +266,9 @@ jobs:
           PACKAGE: ${{ needs.package.result }}
           CULTURES: ${{ needs.cultures.result }}
           WINDOWS: ${{ needs.windows.result }}
+          AOT: ${{ needs.aot.result }}
         run: |
           echo "Checks (Linux): $CHECKS. Build, test and pack (Linux): $PACKAGE."
-          echo "Tests (Linux, sv-SE and tr-TR): $CULTURES. Selftest and tests (Windows): $WINDOWS."
-          test "$CHECKS" = success && test "$PACKAGE" = success && test "$CULTURES" = success && test "$WINDOWS" = success
+          echo "Tests (Linux, sv-SE and tr-TR): $CULTURES. Selftest and tests (Windows): $WINDOWS. Native AOT (Linux): $AOT."
+          test "$CHECKS" = success && test "$PACKAGE" = success && test "$CULTURES" = success && test "$WINDOWS" = success \
+            && test "$AOT" = success

@@ -24,10 +24,12 @@
 // The `--` is needed: without it `dotnet run` takes `--file` as its own option.
 //
 // quick and full check two things:
-// - the working tree: the library builds, AGENTS.md is within 150 lines, each skill's frontmatter and its Codex link,
-//   the hooks stored as executable and turned on in this clone; full adds dotnet format's verification, the offline
-//   tests in Release with coverage, and the coverage gate, eng/coverage-gate.cs, on what they measured, its floors
-//   compared with the base's. These run when the head is the checked-out commit, and are skipped, with the reason, when
+// - the working tree: the library builds, the models in src/Tableau.Api/Rest/Models/Generated/ are what
+//   eng/generate-models.cs writes from Tableau's schema, the old client's list of public types holds no more than at
+//   the base, AGENTS.md is within 150 lines, each skill's frontmatter and its Codex link, the hooks stored as executable
+//   and turned on in this clone; full adds dotnet format's verification, the
+//   offline tests in Release with coverage, and the coverage gate, eng/coverage-gate.cs, on what they measured, its
+//   floors compared with the base's. These run when the head is the checked-out commit, and are skipped, with the reason, when
 //   the tree is not what is checked;
 // - the commits: no tool attribution in any message, author or committer, and gitleaks, on base..head (merges
 //   included).
@@ -72,6 +74,10 @@ internal static class Repo
     public const string CoverageSettings = "tests/coverage.config";
     public const string CoverageGate = "eng/coverage-gate.cs";
     public const string CoverageFloors = "eng/coverage.json";
+    public const string ModelGenerator = "eng/generate-models.cs";
+    public const string ModelSchemaFolder = "eng/schema";
+    public const string ModelOutput = "src/Tableau.Api/Rest/Models/Generated";
+    public const string OldTypes = "tests/Tableau.Api.Tests/OldPublicTypes.cs";
 
     /// <summary>Where the full lane's tests write their coverage, emptied first, so no older report counts.</summary>
     public const string CoverageResults = "artifacts/gate/TestResults";
@@ -761,6 +767,8 @@ internal static class Lanes
     [
         ("selftest", CheckSelftest, false),
         ("build", CheckBuild, true),
+        ("models", CheckModels, true),
+        ("old types", CheckOldTypes, true),
         ("AGENTS.md", CheckAgentsMd, true),
         ("skills", CheckSkills, true),
         ("skill links", CheckSkillLinks, true),
@@ -895,6 +903,81 @@ internal static class Lanes
         if (done.ExitCode != 0) return new Result("build", "FAIL", Rules.LastLine(output), output);
         var warnings = Warnings.Match(output);
         return new Result("build", "pass", $"{Repo.Library}, {(warnings.Success ? warnings.Groups[1].Value : "?")} warnings");
+    }
+
+    // The models generated from Tableau's schema are what the generator writes now: it compares, and writes nothing.
+    private static Result CheckModels(Scope _)
+    {
+        var dotnet = Proc.Which("dotnet");
+        if (dotnet is null) return new Result("models", "FAIL", "dotnet not found: https://dotnet.microsoft.com/download");
+        var result = ModelsResult(Proc.Run(dotnet, ["run", Path.Combine(Repo.Root, Repo.ModelGenerator), "--", "--check"],
+            env: new Dictionary<string, string?> { ["DOTNET_CLI_UI_LANGUAGE"] = "en" }));
+        if (result.Status != "pass") return result;
+        // On Windows and macOS a model renamed only by case looks current here, while git's index keeps the old name,
+        // and a Linux checkout misses the file.
+        var folder = Path.Combine(Repo.Root, Repo.ModelOutput);
+        var onDisk = Directory.Exists(folder) ? Directory.GetFiles(folder).Select(file => $"{Repo.ModelOutput}/{Path.GetFileName(file)}") : [];
+        var renames = CaseOnlyRenames(IndexEntries(Repo.ModelOutput).Select(entry => entry.Path), onDisk);
+        return renames.Count > 0 ? new Result("models", "FAIL", renames[0], string.Join("\n", renames)) : result;
+    }
+
+    /// <summary>Each path git's index holds that differs only in case from a file on disk, with the command that fixes it.</summary>
+    public static List<string> CaseOnlyRenames(IEnumerable<string> indexed, IEnumerable<string> onDisk)
+    {
+        var files = onDisk.ToList();
+        return
+        [
+            .. indexed.SelectMany(path => files
+                .Where(file => !string.Equals(file, path, StringComparison.Ordinal) && string.Equals(file, path, StringComparison.OrdinalIgnoreCase))
+                .Select(file => $"git's index names {path}, the generator writes {file}: git mv -f {path} {file}")),
+        ];
+    }
+
+    /// <summary>
+    /// The models check from what the generator's --check did: its summary when the models are current; its first line
+    /// when they are not, or when it failed.
+    /// </summary>
+    public static Result ModelsResult(Done done)
+    {
+        var output = Py.Strip(done.Stdout + done.Stderr);
+        var lines = Py.SplitLines(output).Where(line => line.StartsWith("generate-models: ", StringComparison.Ordinal))
+            .Select(line => line["generate-models: ".Length..]).ToList();
+        if (done.ExitCode == 0) return new Result("models", "pass", lines.LastOrDefault() ?? Rules.LastLine(output));
+        return new Result("models", "FAIL", lines.FirstOrDefault() ?? Rules.LastLine(output), output);
+    }
+
+    // The old client's public types only go: a count above the base's means a type joined the list instead of
+    // roots.xml.
+    private static Result CheckOldTypes(Scope scope)
+    {
+        var path = Path.Combine(Repo.Root, Repo.OldTypes);
+        var current = File.Exists(path) ? ReadText(path, () => Stream.Null) : null;
+        var resolved = Proc.Git(["rev-parse", "--verify", "--quiet", $"{scope.Base}^{{commit}}"]);
+        if (resolved.ExitCode != 0) return new Result("old types", "FAIL", $"can't find {scope.Base} to compare the list with");
+        var atBase = Proc.Git(["show", $"{Py.Strip(resolved.Stdout)}:{Repo.OldTypes}"]);
+        return OldTypesResult(current, atBase.ExitCode == 0 ? atBase.Stdout : null, scope.Base);
+    }
+
+    private static readonly Regex MostOldTypes = new(@"\bconst int Most = (\d+);", RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// The old types check from the list's text here and at the base, null where it has no list: its count may fall or
+    /// stay, never rise.
+    /// </summary>
+    public static Result OldTypesResult(string? current, string? atBase, string baseRef)
+    {
+        if (current is null) return new Result("old types", "pass", $"no {Repo.OldTypes}: the old client is gone");
+        var most = MostOldTypes.Match(current);
+        if (!most.Success) return new Result("old types", "FAIL", $"{Repo.OldTypes} holds no `const int Most = <n>;`");
+        if (atBase is null) return new Result("old types", "pass", $"{most.Groups[1].Value} old types; {baseRef} has no list to compare with");
+        var before = MostOldTypes.Match(atBase);
+        if (!before.Success) return new Result("old types", "FAIL", $"{Repo.OldTypes} at {baseRef} holds no `const int Most = <n>;`");
+        var now = int.Parse(most.Groups[1].Value, CultureInfo.InvariantCulture);
+        var then = int.Parse(before.Groups[1].Value, CultureInfo.InvariantCulture);
+        return now > then
+            ? new Result("old types", "FAIL", $"Most is {now} in {Repo.OldTypes}, more than {baseRef}'s {then}: the list only shrinks, "
+                + "and a new public type goes in tests/Tableau.Api.Aot/roots.xml")
+            : new Result("old types", "pass", $"{now} old types, {baseRef} {then}");
     }
 
     private static Result CheckAgentsMd(Scope _)
@@ -1836,6 +1919,8 @@ internal static class SelfTest
             Flags(t);
             TestsCases(t);
             CoverageCases(t, scratch);
+            ModelsCases(t, scratch);
+            OldTypesCases(t);
             StrictnessCases(t, scratch);
             Files(t);
             CommitMsgCases(t, scratch);
@@ -2079,6 +2164,155 @@ internal static class SelfTest
         Case(names[3], Gate(), 1, "Tableau.Api: the branch floor of 69% is lower than main's 70%; floors only rise");
     }
 
+    // The model generator itself, run on a scratch repo that holds only it, the schema and this repo's global.json: two
+    // runs write the same bytes, the same as the models committed here, and --check fails on each way the folder can
+    // drift. A construct it doesn't map stops it.
+    private static void ModelsCases(Tally t, string scratch)
+    {
+        string[] names = ["models: two runs write the same bytes, the ones committed here",
+            "models: --check passes on what it wrote", "models: --check fails on an edited file",
+            "models: --check fails on a missing file", "models: --check fails on a file it doesn't write",
+            "models: a run deletes a generated file it no longer writes", "models: --check fails on a folder in the output",
+            "models: a SHA-256 in eng/schema/README.md that isn't the schema's stops it",
+            .. Refusals.Select(refusal => $"models: {refusal.What} stops it")];
+        var quick = Lanes.CheckNames("quick");
+        t.True("quick runs the models check right after the build", quick.IndexOf("models") == quick.IndexOf("build") + 1,
+            string.Join(", ", quick));
+        var current = Lanes.ModelsResult(new Done(0, "generate-models: src/Tableau.Api/Rest/Models/Generated is current: 256 files\n", ""));
+        t.Equal("models: current models pass", "pass", current.Status);
+        t.Equal("models: it says what it checked", "src/Tableau.Api/Rest/Models/Generated is current: 256 files", current.Detail);
+        var drifted = Lanes.ModelsResult(new Done(1, "", "generate-models: src/Tableau.Api/Rest/Models/Generated/Workbook.g.cs differs\n"
+            + "generate-models: src/Tableau.Api/Rest/Models/Generated is not what eng/schema/ts-api_3_29.xsd generates: run it\n"));
+        t.Equal("models: drifted models fail", "FAIL", drifted.Status);
+        t.Equal("models: it names the first file", "src/Tableau.Api/Rest/Models/Generated/Workbook.g.cs differs", drifted.Detail);
+        t.Equal("models: a generator that doesn't build fails", "FAIL",
+            Lanes.ModelsResult(new Done(1, "eng/generate-models.cs(3,1): error CS1002: ; expected\n", "")).Status);
+        var stdout = new StringWriter();
+        t.Equal("gate quick fails when the models check fails", 1,
+            Lanes.RunChecks("quick", [("models", _ => drifted, true)], new Scope([], null, [], null), stdout));
+        t.Contains("it names the models check", stdout.ToString(), "gate quick FAILED: models");
+        t.Same("models: a file renamed only by case, which git's index still names the old way, fails",
+            ["git's index names g/LinkUserIDP.g.cs, the generator writes g/LinkUserIdp.g.cs: git mv -f g/LinkUserIDP.g.cs g/LinkUserIdp.g.cs"],
+            Lanes.CaseOnlyRenames(["g/LinkUserIDP.g.cs", "g/Tag.g.cs"], ["g/LinkUserIdp.g.cs", "g/Tag.g.cs", "g/New.g.cs"]));
+        t.Same("models: names the index holds as written pass, a file not yet added among them", [],
+            Lanes.CaseOnlyRenames(["g/Tag.g.cs"], ["g/Tag.g.cs", "g/New.g.cs"]));
+
+        var dotnet = Proc.Which("dotnet");
+        if (dotnet is null)
+        {
+            foreach (var name in names) t.Skip(name, "dotnet not found");
+            return;
+        }
+        var repo = Path.Combine(scratch, "models");
+        Directory.CreateDirectory(Path.Combine(repo, Repo.ModelSchemaFolder));
+        File.Copy(Path.Combine(Repo.Root, "global.json"), Path.Combine(repo, "global.json"));
+        File.Copy(Path.Combine(Repo.Root, Repo.ModelGenerator), Path.Combine(repo, Repo.ModelGenerator));
+        foreach (var file in Directory.GetFiles(Path.Combine(Repo.Root, Repo.ModelSchemaFolder)))
+            File.Copy(file, Path.Combine(repo, Repo.ModelSchemaFolder, Path.GetFileName(file)));
+        var output = Path.Combine(repo, Repo.ModelOutput);
+        var env = new Dictionary<string, string?>(Proc.EnvFor(repo) ?? new Dictionary<string, string?>()) { ["DOTNET_CLI_UI_LANGUAGE"] = "en" };
+        Done Generate(params string[] args) => Proc.Run(dotnet, ["run", Path.Combine(repo, Repo.ModelGenerator), "--", .. args], cwd: repo, env: env);
+        Dictionary<string, byte[]> Files(string folder) => Directory.GetFiles(folder)
+            .ToDictionary(path => Path.GetFileName(path), File.ReadAllBytes, StringComparer.Ordinal);
+        static bool SameFiles(Dictionary<string, byte[]> left, Dictionary<string, byte[]> right) =>
+            left.Count == right.Count && left.All(file => right.TryGetValue(file.Key, out var bytes) && bytes.AsSpan().SequenceEqual(file.Value));
+        void Check(string name, Done done, int exitCode, string part) =>
+            t.True(name, done.ExitCode == exitCode && (done.Stdout + done.Stderr).Contains(part, StringComparison.Ordinal),
+                $"exit {done.ExitCode}: {Rules.LastLine(Py.Strip(done.Stdout + done.Stderr))}");
+
+        var first = Generate();
+        if (first.ExitCode != 0)
+        {
+            t.True(names[0], false, $"exit {first.ExitCode}: {Rules.LastLine(Py.Strip(first.Stdout + first.Stderr))}");
+            return;
+        }
+        var written = Files(output);
+        Generate();
+        t.True(names[0], SameFiles(written, Files(output)) && SameFiles(written, Files(Path.Combine(Repo.Root, Repo.ModelOutput))),
+            $"{written.Count} files written");
+        Check(names[1], Generate("--check"), 0, " is current: ");
+
+        var edited = Path.Combine(output, "Workbook.g.cs");
+        File.AppendAllText(edited, "// edited by hand\n");
+        Check(names[2], Generate("--check"), 1, "/Workbook.g.cs differs");
+        File.Delete(edited);
+        Check(names[3], Generate("--check"), 1, "/Workbook.g.cs is missing");
+        var stale = Path.Combine(output, "Gone.g.cs");
+        File.WriteAllText(stale, "// a type the schema dropped\n");
+        Check(names[4], Generate("--check"), 1, "/Gone.g.cs is not one the generator writes");
+        Generate();
+        t.True(names[5], !File.Exists(stale) && SameFiles(written, Files(output)), "Gone.g.cs is still there, or another file changed");
+
+        var partials = Path.Combine(output, "Partials");
+        Directory.CreateDirectory(partials);
+        File.WriteAllText(Path.Combine(partials, "Workbook.cs"), "// a hand-written partial in the wrong place\n");
+        Check(names[6], Generate("--check"), 1, "/Partials/ is not one the generator writes");
+        DeleteTree(partials);
+
+        var readme = Path.Combine(repo, Repo.ModelSchemaFolder, "README.md");
+        var readmeText = File.ReadAllText(readme);
+        File.WriteAllText(readme, Regex.Replace(readmeText, "`[0-9a-f]{64}`", "`" + new string('0', 64) + "`"));
+        Check(names[7], Generate("--check"), 1, $"records the SHA-256 {new string('0', 64)}, but");
+        File.WriteAllText(readme, readmeText);
+
+        // Each refusal is a type added to the schema; the generator stops before it compares the README's SHA-256.
+        var schemaPath = Directory.GetFiles(Path.Combine(repo, Repo.ModelSchemaFolder), "*.xsd").Single();
+        var schemaText = File.ReadAllText(schemaPath);
+        for (var i = 0; i < Refusals.Length; i++)
+        {
+            var (_, type, part) = Refusals[i];
+            File.WriteAllText(schemaPath, schemaText.Replace("</xs:schema>", type + "</xs:schema>", StringComparison.Ordinal));
+            Check(names[8 + i], Generate("--check"), 1, part);
+        }
+        File.WriteAllText(schemaPath, schemaText);
+    }
+
+    private static void OldTypesCases(Tally t)
+    {
+        static string List(int most) => $"internal static class OldPublicTypes\n{{\n    public const int Most = {most};\n}}\n";
+        var quick = Lanes.CheckNames("quick");
+        t.True("quick runs the old types check right after the models check", quick.IndexOf("old types") == quick.IndexOf("models") + 1,
+            string.Join(", ", quick));
+        foreach (var (name, current, atBase, status) in new (string, string?, string?, string)[]
+                 {
+                     ("old types: a count lower than the base's passes", List(231), List(232), "pass"),
+                     ("old types: the base's count passes", List(232), List(232), "pass"),
+                     ("old types: a count higher than the base's fails", List(233), List(232), "FAIL"),
+                     ("old types: a base without the list passes", List(232), null, "pass"),
+                     ("old types: no list, once the old client is gone, passes", null, List(232), "pass"),
+                     ("old types: a list with no count fails", "internal static class OldPublicTypes { }\n", List(232), "FAIL"),
+                 })
+            t.Equal(name, status, Lanes.OldTypesResult(current, atBase, "origin/main").Status);
+        t.Contains("old types: it says the list only shrinks", Lanes.OldTypesResult(List(233), List(232), "origin/main").Detail,
+            "Most is 233 in tests/Tableau.Api.Tests/OldPublicTypes.cs, more than origin/main's 232: the list only shrinks");
+    }
+
+    // What the generator refuses: a construct it doesn't map, or a name it can't give, each added to the schema as one
+    // type, with the words its error must hold.
+    private static readonly (string What, string Type, string Part)[] Refusals =
+    [
+        ("xs:list", "<xs:complexType name=\"probeListType\"><xs:attribute name=\"probe\"><xs:simpleType>"
+            + "<xs:list itemType=\"xs:string\"/></xs:simpleType></xs:attribute></xs:complexType>", "XmlSchemaSimpleTypeList isn't mapped"),
+        ("xs:any", "<xs:complexType name=\"probeAnyType\"><xs:sequence><xs:any processContents=\"lax\"/></xs:sequence>"
+            + "</xs:complexType>", "xs:any isn't mapped"),
+        ("xs:all", "<xs:complexType name=\"probeAllType\"><xs:all><xs:element name=\"a\" type=\"xs:string\"/></xs:all>"
+            + "</xs:complexType>", "xs:all isn't mapped"),
+        ("mixed content", "<xs:complexType name=\"probeMixedType\" mixed=\"true\"><xs:sequence>"
+            + "<xs:element name=\"a\" type=\"xs:string\"/></xs:sequence></xs:complexType>", "mixed content isn't mapped"),
+        ("a complexContent restriction", "<xs:complexType name=\"probeRestrictionType\"><xs:complexContent>"
+            + "<xs:restriction base=\"tagType\"><xs:attribute name=\"label\" type=\"xs:string\" use=\"required\"/>"
+            + "</xs:restriction></xs:complexContent></xs:complexType>", "a complexContent restriction isn't mapped"),
+        ("xs:anyAttribute", "<xs:complexType name=\"probeAnyAttributeType\"><xs:anyAttribute/></xs:complexType>",
+            "xs:anyAttribute isn't mapped"),
+        ("a repeated sequence", "<xs:complexType name=\"probeRepeatedType\"><xs:sequence maxOccurs=\"unbounded\">"
+            + "<xs:element name=\"a\" type=\"xs:string\"/><xs:element name=\"b\" type=\"xs:string\"/></xs:sequence>"
+            + "</xs:complexType>", "a repeated sequence isn't mapped"),
+        ("a type named as another without its Type suffix", "<xs:complexType name=\"tag\"><xs:attribute name=\"x\" "
+            + "type=\"xs:string\"/></xs:complexType>", "would both be named Tag"),
+        ("a subtype that is extended in turn", "<xs:complexType name=\"probeDeepDomainType\"><xs:complexContent>"
+            + "<xs:extension base=\"flowParameterListDomainType\"/></xs:complexContent></xs:complexType>",
+            "is extended in turn"),
+    ];
     // A cast that can never succeed, which CA2021 finds, in a new file beside the library's old code.
     private const string CastProbe = "using System.Collections.Generic;\nusing System.Linq;\n\nnamespace Tableau.Api;\n\n"
         + "internal static class GateProbe\n{\n"

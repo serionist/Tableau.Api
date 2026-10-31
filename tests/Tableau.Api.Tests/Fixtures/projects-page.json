@@ -1,0 +1,52 @@
+{
+  "pagination": {
+    "pageNumber": "1",
+    "pageSize": "3",
+    "totalAvailable": "5"
+  },
+  "projects": {
+    "project": [
+      {
+        "owner": {
+          "id": "7c1d2e3f-4a5b-4c6d-8e9f-0a1b2c3d4e5f"
+        },
+        "id": "11111111-2222-4333-8444-555555555555",
+        "name": "Default",
+        "description": "The default project that was automatically created by Tableau.",
+        "createdAt": "2024-02-01T09:00:00Z",
+        "updatedAt": "2026-10-01T12:30:00Z",
+        "contentPermissions": "ManagedByOwner",
+        "topLevelProject": true,
+        "writeable": true
+      },
+      {
+        "owner": {
+          "id": "7c1d2e3f-4a5b-4c6d-8e9f-0a1b2c3d4e5f"
+        },
+        "id": "22222222-3333-4444-8555-666666666666",
+        "name": "Finance",
+        "description": "",
+        "createdAt": "2025-03-15T08:00:00Z",
+        "updatedAt": "2025-03-15T08:00:00Z",
+        "contentPermissions": "LockedToProject",
+        "topLevelProject": true,
+        "writeable": false
+      },
+      {
+        "owner": {
+          "id": "8d2e3f4a-5b6c-4d7e-9f0a-1b2c3d4e5f6a"
+        },
+        "id": "33333333-4444-4555-8666-777777777777",
+        "name": "Quarterly reports",
+        "description": "Invented nested project",
+        "parentProjectId": "22222222-3333-4444-8555-666666666666",
+        "controllingPermissionsProjectId": "22222222-3333-4444-8555-666666666666",
+        "createdAt": "2025-04-01T08:00:00Z",
+        "updatedAt": "2025-04-02T10:15:00Z",
+        "contentPermissions": "ManagedByOwner",
+        "topLevelProject": false,
+        "writeable": true
+      }
+    ]
+  }
+}

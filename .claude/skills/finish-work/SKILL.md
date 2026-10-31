@@ -15,9 +15,9 @@ work feels complete. `main` takes PRs only, and a maintainer squash-merges them 
 ## Steps
 
 1. **Docs in the same change.** Check each thing that describes the change moved with it: the XML doc comment of
-   each public member it touches, `src/Tableau.Api/Models/how_to_generate_schema.txt` for the schema, `AGENTS.md` for a
-   changed path, command or rule, and the plan when the work departed from it (where and why). A plan with a progress
-   log gets the step's row. Write them the way `AGENTS.md` asks.
+   each public member it touches, `eng/schema/README.md` for a new schema (`how_to_generate_schema.txt` for the old
+   `XmlSchema.cs`), `AGENTS.md` for a changed path, command or rule, and the plan when the work departed from it
+   (where and why). A plan with a progress log gets the step's row. Write them the way `AGENTS.md` asks.
 2. **The gate:** `dotnet run eng/gate.cs -- full`, which verifies the code style with `dotnet format`, and runs the
    tests in `tests/Tableau.Api.Tests/` in Release with coverage, then the coverage gate. A change to a request, a model
    or the Vizportal client has a test there that fails without it. Fix every failure; never weaken a test, a check, a warning setting or a coverage floor to pass. When the gate

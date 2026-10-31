@@ -66,6 +66,8 @@ Applies when: the scope touches a public member of `TableauApiClient`, `VizPorta
 - Does a public name, parameter, default or return type change? Named in the PR, with how callers move over? A
   silent change is a one-way door broken: a blocker.
 - A regenerated `XmlSchema.cs`: do the lower-case generated type names users already reference still exist?
+- Regenerated models (`eng/generate-models.cs`): does each change in `Rest/Models/Generated/` come from the schema or
+  the generator, and is each renamed or dropped type or member named in the PR as a break?
 
 ## vizportal
 
@@ -81,6 +83,9 @@ Applies when: the scope touches `src/Tableau.Api/VizPortal/`.
 - The offline tests in `tests/Tableau.Api.Tests/`: does a change to a request, a model or the Vizportal client add one
   there, against `FakeTableauServer`, that asserts what goes on the wire (the request line, a header, the body)? Does a
   new method that builds a path keep `EveryMethodPathTests`' count true?
+- A 2.0 model change, which the fake server doesn't fit: is it pinned by a fixture in
+  `tests/Tableau.Api.Tests/Fixtures/` with its `manifest.json` entry, are `EveryModelTests`' counts true, and is each new
+  public type in `tests/Tableau.Api.Aot/roots.xml`?
 - The `Live` and `ServerOnly` tests need a site: does the PR say what ran, against which Tableau Server version or
   Tableau Cloud, and what it can't cover? A Server-only change: did its `ServerOnly` tests run by hand on a Tableau
   Server, and does the PR say what Tableau Cloud couldn't show? Is a failure compared with `main`'s run on the same
@@ -95,8 +100,8 @@ A missing check for new behaviour is major; a missing edge-case test is minor.
 
 ## docs-freshness
 
-- Did the docs that describe the scope move with it: the XML doc comments, `how_to_generate_schema.txt`, `AGENTS.md`
-  for a changed path, command or rule?
+- Did the docs that describe the scope move with it: the XML doc comments, `eng/schema/README.md` or
+  `how_to_generate_schema.txt`, `AGENTS.md` for a changed path, command or rule?
 - Does anything cite a path, a command, a flag or a setting that no longer exists?
 - A comment or doc outside `docs/plans/` and `docs/reviews/` that cites a plan or review id instead of the reason?
 

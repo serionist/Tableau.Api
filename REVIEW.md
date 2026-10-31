@@ -52,8 +52,8 @@ Each is a yes or no; a "no" is a finding.
 8. Do paths, encodings, line endings and processes work on Windows and Linux?
 9. Does it leave the one-way doors in `AGENTS.md` alone, or name the one it changes and link a maintainer's
    agreement in its issue?
-10. Did the docs move with it (XML doc comments, `how_to_generate_schema.txt`, `AGENTS.md`), written the way
-    `AGENTS.md` asks?
+10. Did the docs move with it (XML doc comments, `eng/schema/README.md` or `how_to_generate_schema.txt`,
+    `AGENTS.md`), written the way `AGENTS.md` asks?
 11. Is each new package needed, from nuget.org, under a licence compatible with MIT, and free of known advisories
     (NuGet audit)?
 12. Is the PR title a plain imperative sentence, does the body say `Closes #<n>` or `Refs #<n>`, and is there no tool
@@ -70,8 +70,10 @@ Each is a yes or no; a "no" is a finding.
   wrote them, so a value inside them is the caller's to escape; a new endpoint keeps the base URL's scheme, host and
   port.
 - **XML and JSON:** a type regenerated in `XmlSchema.cs` keeps the manual additions `how_to_generate_schema.txt`
-  lists; a new field or enum value deserialises from both Tableau Server and Tableau Cloud; Vizportal's JSON keeps its
-  camel case and string enums; an XML reader keeps DTDs off.
+  lists; a model in `src/Tableau.Api/Rest/Models/Generated/` changes only through `eng/generate-models.cs` and the
+  schema in `eng/schema/`, and the PR names each type or member it renames or drops; a new field or enum value
+  deserialises from both Tableau Server and Tableau Cloud; Vizportal's JSON keeps its camel case and string enums; an
+  XML reader keeps DTDs off.
 - **Streams and uploads** (`PartialStream`, `TableauApiClient_Publishing.cs`): an `AppendToFileUpload` chunk reads at
   most its limit, never over 64 MB, counting the stream's position apart from the buffer's offset; the upload session
   id from `InitiateFileUpload` reaches the publish; each stream is disposed by whoever owns it, the caller's by the
@@ -89,9 +91,13 @@ Each is a yes or no; a "no" is a finding.
 These decide how every other change is checked:
 
 - `AGENTS.md`, `REVIEW.md`, `.claude/` (`CLAUDE.md`, the settings, the skills), `.agents/`, `.mcp.json`;
-- `eng/`, `.githooks/`, `.gitleaks.toml`, `.github/`;
-- the `Directory.Build.props` files, `Directory.Packages.props`, `.editorconfig` and the csproj settings that make
-  warnings errors; `src/Tableau.Api/CompatibilitySuppressions.xml`, `.config/dotnet-tools.json`, and `Tableau.Api.slnx`, whose projects CI builds and tests;
+- `eng/`, the model generator `generate-models.cs` and the schema in `eng/schema/` among it, `.githooks/`,
+  `.gitleaks.toml`, `.github/`;
+- `tests/Tableau.Api.Aot/roots.xml` and `tests/Tableau.Api.Tests/OldPublicTypes.cs`, which say what the native AOT
+  job checks;
+- the `Directory.Build.props` and `Directory.Build.targets` files, `Directory.Packages.props`, `.editorconfig` and the
+  csproj settings that make warnings errors; `src/Tableau.Api/CompatibilitySuppressions.xml`,
+  `.config/dotnet-tools.json`, and `Tableau.Api.slnx`, whose projects CI builds and tests;
   `tests/coverage.config`, which says what coverage measures and so what the floors in `eng/coverage.json` mean;
 - `nuget.config` (its sources and their mapping), `global.json`, and the secrets block of `.gitignore`.
 
