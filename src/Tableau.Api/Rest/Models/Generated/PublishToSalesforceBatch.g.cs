@@ -12,7 +12,7 @@ namespace Tableau.Api.Rest.Models;
 /// <summary>The schema's <c>publishToSalesforceBatchType</c>.</summary>
 public sealed partial record PublishToSalesforceBatch
 {
-    /// <summary>The <c>publishToSalesforceInfo</c> elements, as a list.</summary>
+    /// <summary>The <c>publishToSalesforceInfo</c> elements, as a list, null when the list comes with no item, as <c>{}</c>.</summary>
     [JsonPropertyName("publishToSalesforceInfo")]
     [JsonConverter(typeof(TableauListConverter<PublishToSalesforceInfo>))]
     public IReadOnlyList<PublishToSalesforceInfo>? PublishToSalesforceInfo { get; init; }

@@ -13,7 +13,7 @@ namespace Tableau.Api.Rest.Models;
 /// <summary>The schema's <c>routingFilterType</c>.</summary>
 public sealed partial record RoutingFilter
 {
-    /// <summary>The <c>project</c> elements, as a list.</summary>
+    /// <summary>The <c>project</c> elements, as a list, null when the list comes with no item, as <c>{}</c>.</summary>
     [JsonPropertyName("project")]
     [JsonConverter(typeof(TableauListConverter<ProjectRef>))]
     public IReadOnlyList<ProjectRef>? Project { get; init; }

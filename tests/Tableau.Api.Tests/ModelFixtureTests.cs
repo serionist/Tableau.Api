@@ -58,7 +58,7 @@ public sealed class ModelFixtureTests
     {
         var request = new TsRequest
         {
-            Credentials = new TableauCredentials
+            Credentials = new Credentials
             {
                 PersonalAccessTokenName = "invented-pat-name",
                 PersonalAccessTokenSecret = Fixtures.PatSecret,
@@ -124,7 +124,7 @@ public sealed class ModelFixtureTests
 
         Assert.AreEqual("ada", user.Name);
         Assert.AreEqual(SiteRole.SiteAdministratorCreator, user.SiteRole);
-        Assert.AreEqual(SiteUserAuthSetting.OpenID, user.AuthSetting);
+        Assert.AreEqual(SiteUserAuthSetting.OpenId, user.AuthSetting);
         Assert.AreEqual("local", user.Domain!.Name);
         Assert.AreEqual("", user.ExternalAuthUserId);
     }

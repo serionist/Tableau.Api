@@ -92,7 +92,7 @@ internal sealed partial record TsRequest
 
     /// <summary>The <c>credentials</c> element.</summary>
     [JsonPropertyName("credentials")]
-    public TableauCredentials? Credentials { get; init; }
+    public Credentials? Credentials { get; init; }
 
     /// <summary>The <c>customView</c> element.</summary>
     [JsonPropertyName("customView")]
@@ -270,7 +270,7 @@ internal sealed partial record TsRequest
 
     /// <summary>The <c>resyncPayload</c> element.</summary>
     [JsonPropertyName("resyncPayload")]
-    public ResyncTCMUserPayload? ResyncPayload { get; init; }
+    public ResyncTcmUserPayload? ResyncPayload { get; init; }
 
     /// <summary>The <c>routingFilter</c> element.</summary>
     [JsonPropertyName("routingFilter")]
@@ -307,7 +307,7 @@ internal sealed partial record TsRequest
 
     /// <summary>The <c>siteOIDCConfiguration</c> element.</summary>
     [JsonPropertyName("siteOIDCConfiguration")]
-    public SiteOIDCConfiguration? SiteOIDCConfiguration { get; init; }
+    public SiteOidcConfiguration? SiteOidcConfiguration { get; init; }
 
     /// <summary>The <c>sites</c> element: its <c>site</c> elements, as a list.</summary>
     [JsonPropertyName("sites")]

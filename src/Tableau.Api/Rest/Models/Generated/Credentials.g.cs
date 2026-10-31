@@ -4,12 +4,13 @@
 // Don't edit it: change the schema or the generator, then run `dotnet run eng/generate-models.cs`.
 #nullable enable
 
+using System.Text;
 using System.Text.Json.Serialization;
 
 namespace Tableau.Api.Rest.Models;
 
 /// <summary>The schema's <c>tableauCredentialsType</c>.</summary>
-public sealed partial record TableauCredentials
+public sealed partial record Credentials
 {
     /// <summary>The <c>site</c> element.</summary>
     [JsonPropertyName("site")]
@@ -27,7 +28,7 @@ public sealed partial record TableauCredentials
     [JsonPropertyName("isUat")]
     public bool? IsUat { get; init; }
 
-    /// <summary>The <c>jwt</c> attribute.</summary>
+    /// <summary>The <c>jwt</c> attribute, a secret: <c>ToString</c> prints it as <c>***</c>.</summary>
     [JsonPropertyName("jwt")]
     public string? Jwt { get; init; }
 
@@ -35,7 +36,7 @@ public sealed partial record TableauCredentials
     [JsonPropertyName("name")]
     public string? Name { get; init; }
 
-    /// <summary>The <c>password</c> attribute.</summary>
+    /// <summary>The <c>password</c> attribute, a secret: <c>ToString</c> prints it as <c>***</c>.</summary>
     [JsonPropertyName("password")]
     public string? Password { get; init; }
 
@@ -43,11 +44,27 @@ public sealed partial record TableauCredentials
     [JsonPropertyName("personalAccessTokenName")]
     public string? PersonalAccessTokenName { get; init; }
 
-    /// <summary>The <c>personalAccessTokenSecret</c> attribute.</summary>
+    /// <summary>The <c>personalAccessTokenSecret</c> attribute, a secret: <c>ToString</c> prints it as <c>***</c>.</summary>
     [JsonPropertyName("personalAccessTokenSecret")]
     public string? PersonalAccessTokenSecret { get; init; }
 
-    /// <summary>The <c>token</c> attribute.</summary>
+    /// <summary>The <c>token</c> attribute, a secret: <c>ToString</c> prints it as <c>***</c>.</summary>
     [JsonPropertyName("token")]
     public string? Token { get; init; }
+
+    /// <summary>Prints each member as a record does, a secret as <c>***</c> when it is set.</summary>
+    private bool PrintMembers(StringBuilder builder)
+    {
+        builder.Append("Site = ").Append((object?)Site);
+        builder.Append(", User = ").Append((object?)User);
+        builder.Append(", EstimatedTimeToExpiration = ").Append((object?)EstimatedTimeToExpiration);
+        builder.Append(", IsUat = ").Append((object?)IsUat);
+        builder.Append(", Jwt = ").Append(Jwt is null ? null : "***");
+        builder.Append(", Name = ").Append((object?)Name);
+        builder.Append(", Password = ").Append(Password is null ? null : "***");
+        builder.Append(", PersonalAccessTokenName = ").Append((object?)PersonalAccessTokenName);
+        builder.Append(", PersonalAccessTokenSecret = ").Append(PersonalAccessTokenSecret is null ? null : "***");
+        builder.Append(", Token = ").Append(Token is null ? null : "***");
+        return true;
+    }
 }

@@ -280,11 +280,11 @@ public sealed partial record Site
 
     /// <summary>The <c>groupAssertionsOIDCEnabled</c> attribute.</summary>
     [JsonPropertyName("groupAssertionsOIDCEnabled")]
-    public bool? GroupAssertionsOIDCEnabled { get; init; }
+    public bool? GroupAssertionsOidcEnabled { get; init; }
 
     /// <summary>The <c>groupAssertionsSAMLEnabled</c> attribute.</summary>
     [JsonPropertyName("groupAssertionsSAMLEnabled")]
-    public bool? GroupAssertionsSAMLEnabled { get; init; }
+    public bool? GroupAssertionsSamlEnabled { get; init; }
 
     /// <summary>The <c>groupSetsEnabled</c> attribute.</summary>
     [JsonPropertyName("groupSetsEnabled")]

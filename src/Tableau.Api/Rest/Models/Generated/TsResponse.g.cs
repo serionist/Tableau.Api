@@ -198,7 +198,7 @@ internal sealed partial record TsResponse
 
     /// <summary>The <c>credentials</c> element.</summary>
     [JsonPropertyName("credentials")]
-    public TableauCredentials? Credentials { get; init; }
+    public Credentials? Credentials { get; init; }
 
     /// <summary>The <c>customView</c> element.</summary>
     [JsonPropertyName("customView")]
@@ -543,12 +543,12 @@ internal sealed partial record TsResponse
 
     /// <summary>The <c>siteOIDCConfiguration</c> element.</summary>
     [JsonPropertyName("siteOIDCConfiguration")]
-    public SiteOIDCConfiguration? SiteOIDCConfiguration { get; init; }
+    public SiteOidcConfiguration? SiteOidcConfiguration { get; init; }
 
     /// <summary>The <c>siteOIDCConfigurations</c> element: its <c>siteOIDCConfiguration</c> elements, as a list.</summary>
     [JsonPropertyName("siteOIDCConfigurations")]
-    [JsonConverter(typeof(SiteOIDCConfigurationListConverter))]
-    public IReadOnlyList<SiteOIDCConfiguration>? SiteOIDCConfigurations { get; init; }
+    [JsonConverter(typeof(SiteOidcConfigurationListConverter))]
+    public IReadOnlyList<SiteOidcConfiguration>? SiteOidcConfigurations { get; init; }
 
     /// <summary>The <c>status</c> element.</summary>
     [JsonPropertyName("status")]

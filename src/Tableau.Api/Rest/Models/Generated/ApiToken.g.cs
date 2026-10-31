@@ -4,6 +4,7 @@
 // Don't edit it: change the schema or the generator, then run `dotnet run eng/generate-models.cs`.
 #nullable enable
 
+using System.Text;
 using System.Text.Json.Serialization;
 
 namespace Tableau.Api.Rest.Models;
@@ -23,7 +24,17 @@ public sealed partial record ApiToken
     [JsonPropertyName("scope")]
     public string? Scope { get; init; }
 
-    /// <summary>The <c>secret</c> attribute.</summary>
+    /// <summary>The <c>secret</c> attribute, a secret: <c>ToString</c> prints it as <c>***</c>.</summary>
     [JsonPropertyName("secret")]
     public string? Secret { get; init; }
+
+    /// <summary>Prints each member as a record does, a secret as <c>***</c> when it is set.</summary>
+    private bool PrintMembers(StringBuilder builder)
+    {
+        builder.Append("ClientName = ").Append((object?)ClientName);
+        builder.Append(", Id = ").Append((object?)Id);
+        builder.Append(", Scope = ").Append((object?)Scope);
+        builder.Append(", Secret = ").Append(Secret is null ? null : "***");
+        return true;
+    }
 }

@@ -12,7 +12,7 @@ namespace Tableau.Api.Rest.Models;
 /// <summary>The schema's <c>createServerScimConfigRequestType</c>.</summary>
 public sealed partial record CreateServerScimConfigRequest
 {
-    /// <summary>The <c>siteId</c> elements, as a list.</summary>
+    /// <summary>The <c>siteId</c> elements, as a list, null when the list comes with no item, as <c>{}</c>.</summary>
     [JsonPropertyName("siteId")]
     [JsonConverter(typeof(TableauListConverter<string>))]
     public IReadOnlyList<string>? SiteId { get; init; }

@@ -4,6 +4,7 @@
 // Don't edit it: change the schema or the generator, then run `dotnet run eng/generate-models.cs`.
 #nullable enable
 
+using System.Text;
 using System.Text.Json.Serialization;
 
 namespace Tableau.Api.Rest.Models;
@@ -11,11 +12,19 @@ namespace Tableau.Api.Rest.Models;
 /// <summary>The schema's <c>serverApiTokenType</c>.</summary>
 public sealed partial record ServerApiToken
 {
-    /// <summary>The <c>apiToken</c> attribute.</summary>
+    /// <summary>The <c>apiToken</c> attribute, a secret: <c>ToString</c> prints it as <c>***</c>.</summary>
     [JsonPropertyName("apiToken")]
     public string? ApiToken { get; init; }
 
     /// <summary>The <c>id</c> attribute.</summary>
     [JsonPropertyName("id")]
     public string? Id { get; init; }
+
+    /// <summary>Prints each member as a record does, a secret as <c>***</c> when it is set.</summary>
+    private bool PrintMembers(StringBuilder builder)
+    {
+        builder.Append("ApiToken = ").Append(ApiToken is null ? null : "***");
+        builder.Append(", Id = ").Append((object?)Id);
+        return true;
+    }
 }

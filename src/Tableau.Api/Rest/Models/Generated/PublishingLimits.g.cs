@@ -33,13 +33,13 @@ public sealed partial record PublishingLimits
 
     /// <summary>The <c>storageAvailableMB</c> attribute.</summary>
     [JsonPropertyName("storageAvailableMB")]
-    public long? StorageAvailableMB { get; init; }
+    public long? StorageAvailableMb { get; init; }
 
     /// <summary>The <c>storageLimitMB</c> attribute.</summary>
     [JsonPropertyName("storageLimitMB")]
-    public long? StorageLimitMB { get; init; }
+    public long? StorageLimitMb { get; init; }
 
     /// <summary>The <c>storageUsedMB</c> attribute.</summary>
     [JsonPropertyName("storageUsedMB")]
-    public long? StorageUsedMB { get; init; }
+    public long? StorageUsedMb { get; init; }
 }

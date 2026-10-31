@@ -12,7 +12,7 @@ namespace Tableau.Api.Rest.Models;
 /// <summary>The schema's <c>salesforceAppListType</c>.</summary>
 public sealed partial record SalesforceAppList
 {
-    /// <summary>The <c>salesforceApp</c> elements, as a list.</summary>
+    /// <summary>The <c>salesforceApp</c> elements, as a list, null when the list comes with no item, as <c>{}</c>.</summary>
     [JsonPropertyName("salesforceApp")]
     [JsonConverter(typeof(TableauListConverter<SalesforceApp>))]
     public IReadOnlyList<SalesforceApp>? SalesforceApp { get; init; }

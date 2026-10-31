@@ -10,23 +10,23 @@ namespace Tableau.Api.Rest.Models;
 
 /// <summary>The values of <c>linkUserIDPType</c>. A value Tableau adds later reads too, and keeps its text.</summary>
 /// <param name="Value">The value's text, as Tableau sends it.</param>
-[JsonConverter(typeof(TableauEnumConverter<LinkUserIDP>))]
-public readonly partial record struct LinkUserIDP(string Value) : ITableauEnum<LinkUserIDP>
+[JsonConverter(typeof(TableauEnumConverter<LinkUserIdp>))]
+public readonly partial record struct LinkUserIdp(string Value) : ITableauEnum<LinkUserIdp>
 {
     /// <summary><c>DEFAULT</c>.</summary>
-    public static LinkUserIDP Default { get; } = new("DEFAULT");
+    public static LinkUserIdp Default { get; } = new("DEFAULT");
 
     /// <summary><c>OpenID</c>.</summary>
-    public static LinkUserIDP OpenID { get; } = new("OpenID");
+    public static LinkUserIdp OpenId { get; } = new("OpenID");
 
     /// <summary><c>SAML</c>.</summary>
-    public static LinkUserIDP Saml { get; } = new("SAML");
+    public static LinkUserIdp Saml { get; } = new("SAML");
 
     /// <summary><c>TableauIDWithMFA</c>.</summary>
-    public static LinkUserIDP TableauIDWithMFA { get; } = new("TableauIDWithMFA");
+    public static LinkUserIdp TableauIdWithMfa { get; } = new("TableauIDWithMFA");
 
     /// <summary>The value's text.</summary>
     public override string ToString() => Value ?? "";
 
-    static LinkUserIDP ITableauEnum<LinkUserIDP>.Create(string value) => new(value);
+    static LinkUserIdp ITableauEnum<LinkUserIdp>.Create(string value) => new(value);
 }

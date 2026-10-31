@@ -4,6 +4,7 @@
 // Don't edit it: change the schema or the generator, then run `dotnet run eng/generate-models.cs`.
 #nullable enable
 
+using System.Text;
 using System.Text.Json.Serialization;
 
 namespace Tableau.Api.Rest.Models;
@@ -51,7 +52,7 @@ public sealed partial record Connection
     [JsonPropertyName("oauthConfigId")]
     public string? OauthConfigId { get; init; }
 
-    /// <summary>The <c>password</c> attribute.</summary>
+    /// <summary>The <c>password</c> attribute, a secret: <c>ToString</c> prints it as <c>***</c>.</summary>
     [JsonPropertyName("password")]
     public string? Password { get; init; }
 
@@ -82,4 +83,28 @@ public sealed partial record Connection
     /// <summary>The <c>userName</c> attribute.</summary>
     [JsonPropertyName("userName")]
     public string? UserName { get; init; }
+
+    /// <summary>Prints each member as a record does, a secret as <c>***</c> when it is set.</summary>
+    private bool PrintMembers(StringBuilder builder)
+    {
+        builder.Append("ConnectionCredentials = ").Append((object?)ConnectionCredentials);
+        builder.Append(", Datasource = ").Append((object?)Datasource);
+        builder.Append(", AuthenticationType = ").Append((object?)AuthenticationType);
+        builder.Append(", DbClass = ").Append((object?)DbClass);
+        builder.Append(", EmbedPassword = ").Append((object?)EmbedPassword);
+        builder.Append(", Filename = ").Append((object?)Filename);
+        builder.Append(", GoogleSheetId = ").Append((object?)GoogleSheetId);
+        builder.Append(", Id = ").Append((object?)Id);
+        builder.Append(", InstanceUrl = ").Append((object?)InstanceUrl);
+        builder.Append(", OauthConfigId = ").Append((object?)OauthConfigId);
+        builder.Append(", Password = ").Append(Password is null ? null : "***");
+        builder.Append(", QueryTaggingEnabled = ").Append((object?)QueryTaggingEnabled);
+        builder.Append(", Scope = ").Append((object?)Scope);
+        builder.Append(", ServerAddress = ").Append((object?)ServerAddress);
+        builder.Append(", ServerPort = ").Append((object?)ServerPort);
+        builder.Append(", Type = ").Append((object?)Type);
+        builder.Append(", UseOAuthManagedKeychain = ").Append((object?)UseOAuthManagedKeychain);
+        builder.Append(", UserName = ").Append((object?)UserName);
+        return true;
+    }
 }

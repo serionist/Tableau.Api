@@ -12,7 +12,7 @@ namespace Tableau.Api.Rest.Models;
 /// <summary>The schema's <c>groupSetType</c>.</summary>
 public sealed partial record GroupSet
 {
-    /// <summary>The <c>group</c> elements, as a list.</summary>
+    /// <summary>The <c>group</c> elements, as a list, null when the list comes with no item, as <c>{}</c>.</summary>
     [JsonPropertyName("group")]
     [JsonConverter(typeof(TableauListConverter<Group>))]
     public IReadOnlyList<Group>? Group { get; init; }

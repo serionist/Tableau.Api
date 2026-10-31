@@ -12,7 +12,7 @@ namespace Tableau.Api.Rest.Models;
 /// <summary>The schema's <c>serviceTokenListType</c>.</summary>
 public sealed partial record ServiceTokenList
 {
-    /// <summary>The <c>serviceToken</c> elements, as a list.</summary>
+    /// <summary>The <c>serviceToken</c> elements, as a list, null when the list comes with no item, as <c>{}</c>.</summary>
     [JsonPropertyName("serviceToken")]
     [JsonConverter(typeof(TableauListConverter<ServiceToken>))]
     public IReadOnlyList<ServiceToken>? ServiceToken { get; init; }

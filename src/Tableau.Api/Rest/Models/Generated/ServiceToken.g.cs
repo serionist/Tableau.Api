@@ -5,6 +5,7 @@
 #nullable enable
 
 using System;
+using System.Text;
 using System.Text.Json.Serialization;
 
 namespace Tableau.Api.Rest.Models;
@@ -40,7 +41,21 @@ public sealed partial record ServiceToken
     [JsonPropertyName("tokenName")]
     public string? TokenName { get; init; }
 
-    /// <summary>The <c>tokenSecret</c> attribute.</summary>
+    /// <summary>The <c>tokenSecret</c> attribute, a secret: <c>ToString</c> prints it as <c>***</c>.</summary>
     [JsonPropertyName("tokenSecret")]
     public string? TokenSecret { get; init; }
+
+    /// <summary>Prints each member as a record does, a secret as <c>***</c> when it is set.</summary>
+    private bool PrintMembers(StringBuilder builder)
+    {
+        builder.Append("AncestorPatGuid = ").Append((object?)AncestorPatGuid);
+        builder.Append(", ExpiresAt = ").Append((object?)ExpiresAt);
+        builder.Append(", LastUsedAt = ").Append((object?)LastUsedAt);
+        builder.Append(", OwnerLuid = ").Append((object?)OwnerLuid);
+        builder.Append(", StatusCode = ").Append((object?)StatusCode);
+        builder.Append(", TokenGuid = ").Append((object?)TokenGuid);
+        builder.Append(", TokenName = ").Append((object?)TokenName);
+        builder.Append(", TokenSecret = ").Append(TokenSecret is null ? null : "***");
+        return true;
+    }
 }

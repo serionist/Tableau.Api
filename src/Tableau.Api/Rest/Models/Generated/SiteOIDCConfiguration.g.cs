@@ -4,12 +4,13 @@
 // Don't edit it: change the schema or the generator, then run `dotnet run eng/generate-models.cs`.
 #nullable enable
 
+using System.Text;
 using System.Text.Json.Serialization;
 
 namespace Tableau.Api.Rest.Models;
 
 /// <summary>The schema's <c>siteOIDCConfigurationType</c>.</summary>
-public sealed partial record SiteOIDCConfiguration
+public sealed partial record SiteOidcConfiguration
 {
     /// <summary>The <c>allowEmbeddedAuthentication</c> attribute.</summary>
     [JsonPropertyName("allowEmbeddedAuthentication")]
@@ -27,7 +28,7 @@ public sealed partial record SiteOIDCConfiguration
     [JsonPropertyName("clientId")]
     public string? ClientId { get; init; }
 
-    /// <summary>The <c>clientSecret</c> attribute.</summary>
+    /// <summary>The <c>clientSecret</c> attribute, a secret: <c>ToString</c> prints it as <c>***</c>.</summary>
     [JsonPropertyName("clientSecret")]
     public string? ClientSecret { get; init; }
 
@@ -114,4 +115,36 @@ public sealed partial record SiteOIDCConfiguration
     /// <summary>The <c>voluntaryAcrValues</c> attribute.</summary>
     [JsonPropertyName("voluntaryAcrValues")]
     public string? VoluntaryAcrValues { get; init; }
+
+    /// <summary>Prints each member as a record does, a secret as <c>***</c> when it is set.</summary>
+    private bool PrintMembers(StringBuilder builder)
+    {
+        builder.Append("AllowEmbeddedAuthentication = ").Append((object?)AllowEmbeddedAuthentication);
+        builder.Append(", AuthorizationEndpoint = ").Append((object?)AuthorizationEndpoint);
+        builder.Append(", ClientAuthentication = ").Append((object?)ClientAuthentication);
+        builder.Append(", ClientId = ").Append((object?)ClientId);
+        builder.Append(", ClientSecret = ").Append(ClientSecret is null ? null : "***");
+        builder.Append(", CustomScope = ").Append((object?)CustomScope);
+        builder.Append(", DiscoveryEndpoint = ").Append((object?)DiscoveryEndpoint);
+        builder.Append(", EmailAddressMapping = ").Append((object?)EmailAddressMapping);
+        builder.Append(", EmailMapping = ").Append((object?)EmailMapping);
+        builder.Append(", Enabled = ").Append((object?)Enabled);
+        builder.Append(", EndSessionEndpoint = ").Append((object?)EndSessionEndpoint);
+        builder.Append(", EssentialAcrValues = ").Append((object?)EssentialAcrValues);
+        builder.Append(", FirstNameMapping = ").Append((object?)FirstNameMapping);
+        builder.Append(", FullNameMapping = ").Append((object?)FullNameMapping);
+        builder.Append(", IdpConfigurationId = ").Append((object?)IdpConfigurationId);
+        builder.Append(", IdpConfigurationName = ").Append((object?)IdpConfigurationName);
+        builder.Append(", JwksUri = ").Append((object?)JwksUri);
+        builder.Append(", KnownProviderAlias = ").Append((object?)KnownProviderAlias);
+        builder.Append(", LastNameMapping = ").Append((object?)LastNameMapping);
+        builder.Append(", Prompt = ").Append((object?)Prompt);
+        builder.Append(", SalesforceDomain = ").Append((object?)SalesforceDomain);
+        builder.Append(", TestLoginUrl = ").Append((object?)TestLoginUrl);
+        builder.Append(", TokenEndpoint = ").Append((object?)TokenEndpoint);
+        builder.Append(", UseFullName = ").Append((object?)UseFullName);
+        builder.Append(", UserinfoEndpoint = ").Append((object?)UserinfoEndpoint);
+        builder.Append(", VoluntaryAcrValues = ").Append((object?)VoluntaryAcrValues);
+        return true;
+    }
 }

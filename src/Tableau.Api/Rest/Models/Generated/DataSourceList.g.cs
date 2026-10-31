@@ -12,7 +12,7 @@ namespace Tableau.Api.Rest.Models;
 /// <summary>The schema's <c>dataSourceListType</c>.</summary>
 public sealed partial record DataSourceList
 {
-    /// <summary>The <c>datasource</c> elements, as a list.</summary>
+    /// <summary>The <c>datasource</c> elements, as a list, null when the list comes with no item, as <c>{}</c>.</summary>
     [JsonPropertyName("datasource")]
     [JsonConverter(typeof(TableauListConverter<DataSource>))]
     public IReadOnlyList<DataSource>? Datasource { get; init; }

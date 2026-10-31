@@ -5,6 +5,7 @@
 #nullable enable
 
 using System;
+using System.Text;
 using System.Text.Json.Serialization;
 
 namespace Tableau.Api.Rest.Models;
@@ -16,7 +17,7 @@ public sealed partial record PersonalAccessTokenWithSecret
     [JsonPropertyName("expiresAt")]
     public DateTimeOffset? ExpiresAt { get; init; }
 
-    /// <summary>The <c>secret</c> attribute.</summary>
+    /// <summary>The <c>secret</c> attribute, a secret: <c>ToString</c> prints it as <c>***</c>.</summary>
     [JsonPropertyName("secret")]
     public string? Secret { get; init; }
 
@@ -27,4 +28,14 @@ public sealed partial record PersonalAccessTokenWithSecret
     /// <summary>The <c>tokenName</c> attribute.</summary>
     [JsonPropertyName("tokenName")]
     public string? TokenName { get; init; }
+
+    /// <summary>Prints each member as a record does, a secret as <c>***</c> when it is set.</summary>
+    private bool PrintMembers(StringBuilder builder)
+    {
+        builder.Append("ExpiresAt = ").Append((object?)ExpiresAt);
+        builder.Append(", Secret = ").Append(Secret is null ? null : "***");
+        builder.Append(", TokenGuid = ").Append((object?)TokenGuid);
+        builder.Append(", TokenName = ").Append((object?)TokenName);
+        return true;
+    }
 }

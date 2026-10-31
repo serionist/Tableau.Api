@@ -58,9 +58,25 @@ public sealed class ModelRootsTests
     }
 
     [TestMethod]
-    public void TheOldTypesListOnlyShrinks() =>
-        Assert.IsLessThanOrEqualTo(OldPublicTypes.Most, OldPublicTypes.Names.Count,
-            "The old client only loses types: a new public type is a 2.0 type, which roots.xml lists.");
+    public void TheOldTypesListCountsItsTypes() =>
+        Assert.AreEqual(OldPublicTypes.Most, OldPublicTypes.Names.Count,
+            "Most is the count of the list, lowered with it as the old client loses types; the gate refuses it higher than on main.");
+
+    // A caller who imports Tableau.Api and the models namespace in one file gets CS0104 on a name both have. The old
+    // client's types clash on purpose, and go with it.
+    [TestMethod]
+    public void NoModelSharesItsNameWithAnotherPublicType()
+    {
+        var old = new HashSet<string>(OldPublicTypes.Names, StringComparer.Ordinal);
+        var exported = _library.GetExportedTypes();
+        var others = exported.Where(type => type.Namespace != "Tableau.Api.Rest.Models" && !old.Contains(type.FullName!))
+            .ToLookup(type => type.Name, StringComparer.OrdinalIgnoreCase);
+
+        var clashes = exported.Where(type => type.Namespace == "Tableau.Api.Rest.Models" && others[type.Name].Any())
+            .Select(type => $"{type.FullName} and {string.Join(", ", others[type.Name].Select(other => other.FullName))}").ToList();
+
+        Assert.IsEmpty(clashes, string.Join("; ", clashes));
+    }
 
     [TestMethod]
     public void TheModelsAreRootedByTheirNamespace()

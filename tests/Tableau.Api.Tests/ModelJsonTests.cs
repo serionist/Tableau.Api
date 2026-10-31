@@ -128,6 +128,30 @@ public sealed class ModelJsonTests
     }
 
     [TestMethod]
+    public void ADefaultEnumerationValueIsNotWritten()
+    {
+        var thrown = Assert.ThrowsExactly<JsonException>(() => Write(new User { SiteRole = default(SiteRole) }));
+
+        Assert.Contains("A default SiteRole has no text to write", thrown.Message);
+    }
+
+    // A list with attributes of its own is a record, so its empty wrapper is a record without the list, where a plain
+    // wrapper's is an empty list.
+    [TestMethod]
+    public void AListWithAttributesReadsItsEmptyWrapperAsARecordWithNoList()
+    {
+        var empty = Read<TsResponse>("""{"datasources":{},"workbooks":{}}""");
+        var full = Read<TsResponse>("""{"datasources":{"datasource":[{"id":"a"}],"includeAll":true}}""");
+
+        Assert.AreEqual(new DataSourceList(), empty.Datasources);
+        Assert.IsNotNull(empty.Workbooks);
+        Assert.IsEmpty(empty.Workbooks);
+        Assert.IsTrue(full.Datasources!.IncludeAll);
+        Assert.AreEqual("a", full.Datasources.Datasource!.Single().Id);
+        Assert.AreEqual("""{"datasources":{}}""", Write(new TsResponse { Datasources = new DataSourceList() }));
+    }
+
+    [TestMethod]
     [DataRow("""{"siteRole":1}""")]
     [DataRow("""{"siteRole":true}""")]
     [DataRow("""{"siteRole":{}}""")]

@@ -29,5 +29,11 @@ internal sealed class TableauEnumConverter<T> : JsonConverter<T> where T : struc
             : throw new JsonException($"Expected a string for {typeof(T).Name}, found {reader.TokenType}.");
 
     /// <inheritdoc/>
-    public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options) => writer.WriteStringValue(value.Value);
+    /// <remarks>
+    /// A default value has no text, and JSON null would tell Tableau something else, so it fails: a member left unset is
+    /// null and isn't written at all.
+    /// </remarks>
+    public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options) =>
+        writer.WriteStringValue(value.Value ?? throw new JsonException(
+            $"A default {typeof(T).Name} has no text to write: give it a value, or leave the member null."));
 }

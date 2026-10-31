@@ -41,7 +41,7 @@ public readonly partial record struct JobType(string Value) : ITableauEnum<JobTy
     public static JobType RefreshThumbnails { get; } = new("RefreshThumbnails");
 
     /// <summary><c>ResyncTCMUsersCsv</c>.</summary>
-    public static JobType ResyncTCMUsersCsv { get; } = new("ResyncTCMUsersCsv");
+    public static JobType ResyncTcmUsersCsv { get; } = new("ResyncTCMUsersCsv");
 
     /// <summary><c>RunFlow</c>.</summary>
     public static JobType RunFlow { get; } = new("RunFlow");

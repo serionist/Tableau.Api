@@ -17,7 +17,7 @@ public sealed partial record LinkUserSiteRole
 
     /// <summary>The <c>idp</c> attribute.</summary>
     [JsonPropertyName("idp")]
-    public LinkUserIDP? Idp { get; init; }
+    public LinkUserIdp? Idp { get; init; }
 
     /// <summary>The <c>idpConfigurationId</c> attribute.</summary>
     [JsonPropertyName("idpConfigurationId")]

@@ -14,7 +14,7 @@ namespace Tableau.Api.Rest.Models;
 public readonly partial record struct SiteUserAuthSetting(string Value) : ITableauEnum<SiteUserAuthSetting>
 {
     /// <summary><c>OpenID</c>.</summary>
-    public static SiteUserAuthSetting OpenID { get; } = new("OpenID");
+    public static SiteUserAuthSetting OpenId { get; } = new("OpenID");
 
     /// <summary><c>SAML</c>.</summary>
     public static SiteUserAuthSetting Saml { get; } = new("SAML");

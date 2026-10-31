@@ -12,7 +12,7 @@ namespace Tableau.Api.Rest.Models;
 /// <summary>The schema's <c>publishToSalesforceRequestType</c>.</summary>
 public sealed partial record PublishToSalesforceRequest
 {
-    /// <summary>The <c>viewLuids</c> elements, as a list.</summary>
+    /// <summary>The <c>viewLuids</c> elements, as a list, null when the list comes with no item, as <c>{}</c>.</summary>
     [JsonPropertyName("viewLuids")]
     [JsonConverter(typeof(TableauListConverter<string>))]
     public IReadOnlyList<string>? ViewLuids { get; init; }

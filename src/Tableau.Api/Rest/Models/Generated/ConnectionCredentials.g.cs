@@ -4,6 +4,7 @@
 // Don't edit it: change the schema or the generator, then run `dotnet run eng/generate-models.cs`.
 #nullable enable
 
+using System.Text;
 using System.Text.Json.Serialization;
 
 namespace Tableau.Api.Rest.Models;
@@ -23,7 +24,17 @@ public sealed partial record ConnectionCredentials
     [JsonPropertyName("oAuth")]
     public string? OAuth { get; init; }
 
-    /// <summary>The <c>password</c> attribute.</summary>
+    /// <summary>The <c>password</c> attribute, a secret: <c>ToString</c> prints it as <c>***</c>.</summary>
     [JsonPropertyName("password")]
     public string? Password { get; init; }
+
+    /// <summary>Prints each member as a record does, a secret as <c>***</c> when it is set.</summary>
+    private bool PrintMembers(StringBuilder builder)
+    {
+        builder.Append("Embed = ").Append((object?)Embed);
+        builder.Append(", Name = ").Append((object?)Name);
+        builder.Append(", OAuth = ").Append((object?)OAuth);
+        builder.Append(", Password = ").Append(Password is null ? null : "***");
+        return true;
+    }
 }

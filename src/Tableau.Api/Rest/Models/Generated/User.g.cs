@@ -6,6 +6,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Text;
 using System.Text.Json.Serialization;
 
 namespace Tableau.Api.Rest.Models;
@@ -102,7 +103,7 @@ public sealed partial record User
     [JsonPropertyName("ownsContent")]
     public bool? OwnsContent { get; init; }
 
-    /// <summary>The <c>password</c> attribute.</summary>
+    /// <summary>The <c>password</c> attribute, a secret: <c>ToString</c> prints it as <c>***</c>.</summary>
     [JsonPropertyName("password")]
     public string? Password { get; init; }
 
@@ -121,4 +122,37 @@ public sealed partial record User
     /// <summary>The <c>suppressGettingStarted</c> attribute.</summary>
     [JsonPropertyName("suppressGettingStarted")]
     public bool? SuppressGettingStarted { get; init; }
+
+    /// <summary>Prints each member as a record does, a secret as <c>***</c> when it is set.</summary>
+    private bool PrintMembers(StringBuilder builder)
+    {
+        builder.Append("Domain = ").Append((object?)Domain);
+        builder.Append(", Groups = ").Append((object?)Groups);
+        builder.Append(", PublishingLimits = ").Append((object?)PublishingLimits);
+        builder.Append(", AuthSetting = ").Append((object?)AuthSetting);
+        builder.Append(", ContentAdmin = ").Append((object?)ContentAdmin);
+        builder.Append(", Email = ").Append((object?)Email);
+        builder.Append(", ExternalAuthUserId = ").Append((object?)ExternalAuthUserId);
+        builder.Append(", FullName = ").Append((object?)FullName);
+        builder.Append(", GlsiMinimumSiteRole = ").Append((object?)GlsiMinimumSiteRole);
+        builder.Append(", Id = ").Append((object?)Id);
+        builder.Append(", Identifier = ").Append((object?)Identifier);
+        builder.Append(", IdentityPoolName = ").Append((object?)IdentityPoolName);
+        builder.Append(", IdentityPoolUuid = ").Append((object?)IdentityPoolUuid);
+        builder.Append(", IdentityUuid = ").Append((object?)IdentityUuid);
+        builder.Append(", IdpConfigurationId = ").Append((object?)IdpConfigurationId);
+        builder.Append(", IdpConfigurationName = ").Append((object?)IdpConfigurationName);
+        builder.Append(", Language = ").Append((object?)Language);
+        builder.Append(", LastLogin = ").Append((object?)LastLogin);
+        builder.Append(", Locale = ").Append((object?)Locale);
+        builder.Append(", Name = ").Append((object?)Name);
+        builder.Append(", NewUserId = ").Append((object?)NewUserId);
+        builder.Append(", OwnsContent = ").Append((object?)OwnsContent);
+        builder.Append(", Password = ").Append(Password is null ? null : "***");
+        builder.Append(", Publish = ").Append((object?)Publish);
+        builder.Append(", Role = ").Append((object?)Role);
+        builder.Append(", SiteRole = ").Append((object?)SiteRole);
+        builder.Append(", SuppressGettingStarted = ").Append((object?)SuppressGettingStarted);
+        return true;
+    }
 }

@@ -205,7 +205,7 @@ internal sealed class SiteAuthConfigurationListConverter() : TableauWrappedListC
 internal sealed class SiteListConverter() : TableauWrappedListConverter<Site>("site");
 
 /// <summary>Reads and writes the schema's <c>siteOIDCConfigurationListType</c>: its <c>siteOIDCConfiguration</c> elements, as a list, inside the wrapper object.</summary>
-internal sealed class SiteOIDCConfigurationListConverter() : TableauWrappedListConverter<SiteOIDCConfiguration>("siteOIDCConfiguration");
+internal sealed class SiteOidcConfigurationListConverter() : TableauWrappedListConverter<SiteOidcConfiguration>("siteOIDCConfiguration");
 
 /// <summary>Reads and writes the schema's <c>statusNoteListType</c>: its <c>statusNote</c> elements, as a list, inside the wrapper object.</summary>
 internal sealed class StatusNoteListConverter() : TableauWrappedListConverter<StatusNote>("statusNote");

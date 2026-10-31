@@ -12,7 +12,7 @@ namespace Tableau.Api.Rest.Models;
 /// <summary>The schema's <c>policyType</c>.</summary>
 public sealed partial record Policy
 {
-    /// <summary>The <c>valueList</c> elements, as a list.</summary>
+    /// <summary>The <c>valueList</c> elements, as a list, null when the list comes with no item, as <c>{}</c>.</summary>
     [JsonPropertyName("valueList")]
     [JsonConverter(typeof(TableauListConverter<string>))]
     public IReadOnlyList<string>? ValueList { get; init; }

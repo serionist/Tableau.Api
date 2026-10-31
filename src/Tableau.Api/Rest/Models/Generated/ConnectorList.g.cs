@@ -12,7 +12,7 @@ namespace Tableau.Api.Rest.Models;
 /// <summary>The schema's <c>connectorListType</c>.</summary>
 public sealed partial record ConnectorList
 {
-    /// <summary>The <c>connector</c> elements, as a list.</summary>
+    /// <summary>The <c>connector</c> elements, as a list, null when the list comes with no item, as <c>{}</c>.</summary>
     [JsonPropertyName("connector")]
     [JsonConverter(typeof(TableauListConverter<Connector>))]
     public IReadOnlyList<Connector>? Connector { get; init; }

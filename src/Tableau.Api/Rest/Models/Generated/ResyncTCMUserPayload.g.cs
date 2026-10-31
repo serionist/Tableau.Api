@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Tableau.Api.Rest.Models;
 
 /// <summary>The schema's <c>resyncTCMUserPayloadType</c>.</summary>
-public sealed partial record ResyncTCMUserPayload
+public sealed partial record ResyncTcmUserPayload
 {
     /// <summary>The <c>resyncJobId</c> attribute.</summary>
     [JsonPropertyName("resyncJobId")]

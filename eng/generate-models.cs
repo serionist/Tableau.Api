@@ -22,17 +22,24 @@
 //   read and written inside its wrapper object, {"tag":[...]}, by a converter generated for it. A repeated element beside
 //   others is an IReadOnlyList of its own. Both read a single object as a list of one.
 // - xs:choice is one property per alternative. xs:extension takes the base's members; a type that others extend takes
-//   theirs too, since JSON carries no xsi:type to tell them apart. Text beside attributes is the property Value.
+//   theirs too, since JSON carries no xsi:type to tell them apart, and a subtype nothing names is not written. Text
+//   beside attributes is the property Value.
+// - Names are the schema's in Pascal case, with a run of capitals cased as one word: siteOIDCConfigurationType is
+//   SiteOidcConfiguration. A few are renamed, each with its reason (_renames).
+// - A record with a password, a token or a secret (_secrets) prints it as *** in ToString.
 // Anything else stops it with an error naming the construct, so a new schema can't drop a type or a member silently.
+// So does a SHA-256 in eng/schema/README.md that isn't the schema's, which keeps the README true to the file.
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Schema;
 
 const string SchemaFile = "eng/schema/ts-api_3_29.xsd";
+const string SchemaReadme = "eng/schema/README.md";
 const string OutputFolder = "src/Tableau.Api/Rest/Models/Generated";
 const string Usage = "Usage: dotnet run eng/generate-models.cs -- [--check]";
 
@@ -51,7 +58,16 @@ try
 {
     var bytes = File.ReadAllBytes(Path.Combine(root, SchemaFile));
     var model = new Reader().Read(bytes);
-    files = Emitter.Files(model, SchemaFile, Convert.ToHexStringLower(SHA256.HashData(bytes)));
+    var hash = Convert.ToHexStringLower(SHA256.HashData(bytes));
+    var readme = Path.Combine(root, SchemaReadme);
+    var recorded = File.Exists(readme) ? Regex.Match(File.ReadAllText(readme), @"\|\s*SHA-256\s*\|\s*`([0-9a-f]{64})`") : Match.Empty;
+    if (!recorded.Success) throw new SchemaException($"{SchemaReadme} records no SHA-256 for {SchemaFile}, in its table");
+    if (recorded.Groups[1].Value != hash)
+    {
+        throw new SchemaException($"{SchemaReadme} records the SHA-256 {recorded.Groups[1].Value}, but {SchemaFile}'s is {hash}: "
+            + "a new schema updates the README's table");
+    }
+    files = Emitter.Files(model, SchemaFile, hash);
     summary = $"{model.Records.Count(record => record.IsPublic)} records, {model.Enums.Count} enumerations and "
         + $"{model.Wrappers.Count} list converters from {SchemaFile}";
 }
@@ -61,8 +77,11 @@ catch (SchemaException e)
     return 1;
 }
 
+// A folder in the output is never the generator's, so it is listed too, with a slash, and fails the check.
 var present = Directory.Exists(output)
-    ? Directory.GetFiles(output).Select(Path.GetFileName).OfType<string>().Order(StringComparer.Ordinal).ToList()
+    ? Directory.GetFiles(output).Select(Path.GetFileName).OfType<string>()
+        .Concat(Directory.GetDirectories(output).Select(folder => Path.GetFileName(folder) + "/"))
+        .Order(StringComparer.Ordinal).ToList()
     : [];
 if (check)
 {
@@ -132,7 +151,8 @@ internal sealed record TypeRef(string Name)
     public static readonly TypeRef TimeOnly = new("TimeOnly");
 }
 
-internal sealed record Property(string JsonName, string Name, TypeRef Type, ListKind List, string? Converter, string Doc);
+internal sealed record Property(string JsonName, string Name, TypeRef Type, ListKind List, string? Converter, string Doc,
+    bool Secret = false);
 
 internal sealed record RecordModel(string Name, string Doc, bool IsPublic, List<Property> Properties);
 
@@ -145,12 +165,34 @@ internal sealed record SchemaModel(List<RecordModel> Records, List<EnumModel> En
 /// <summary>Reads the compiled schema into the models, naming each type once.</summary>
 internal sealed class Reader
 {
-    // Names that would hide a type a C# file imports by default: Task would hide System.Threading.Tasks.Task in every
-    // caller's file that also imports the models' namespace, which an async one does.
+    // Names that would clash with a type a caller's file also imports. Task would hide System.Threading.Tasks.Task in
+    // every file that imports the models' namespace, which an async one does; TableauCredentials is the name of the
+    // client's credentials in Tableau.Api, which a caller's file imports beside the models.
     private static readonly Dictionary<string, string> _renames = new(StringComparer.Ordinal)
     {
         ["taskType"] = "TableauTask",
+        ["tableauCredentialsType"] = "Credentials",
     };
+
+    // The attributes that hold a password, a token or a secret, by the type that declares them: a record prints them as
+    // *** in ToString, so a log line or a debugger never shows one. A pair the schema no longer has stops the generator,
+    // so the list can't go stale unnoticed.
+    private static readonly HashSet<(string Type, string Attribute)> _secrets =
+    [
+        ("apiTokenType", "secret"),
+        ("connectedApplicationSecretType", "value"),
+        ("connectionCredentialsType", "password"),
+        ("connectionType", "password"),
+        ("personalAccessTokenWithSecretType", "secret"),
+        ("serverApiTokenType", "apiToken"),
+        ("serviceTokenType", "tokenSecret"),
+        ("siteOIDCConfigurationType", "clientSecret"),
+        ("tableauCredentialsType", "jwt"),
+        ("tableauCredentialsType", "password"),
+        ("tableauCredentialsType", "personalAccessTokenSecret"),
+        ("tableauCredentialsType", "token"),
+        ("userType", "password"),
+    ];
 
     // The namespaces a C# file imports by default (implicit usings) and the one every generated file imports: a model
     // with the name of a type in them would hide it, or be hidden.
@@ -160,9 +202,9 @@ internal sealed class Reader
         "System.Threading.Tasks", "System.Text.Json.Serialization",
     };
 
-    // Names the generated code itself declares or inherits: the hand-written types beside the models, and the members
-    // of a record, of an enumeration's struct and of the serializer context.
-    // The context names a property after each type, beside its own members.
+    // Names the generated code itself declares or inherits: the hand-written types beside the models, the members of the
+    // serializer context, which names a property after each type, and below, the members of a record and of an
+    // enumeration's struct.
     private static readonly HashSet<string> _reserved = new(StringComparer.Ordinal)
     {
         "TableauJsonContext", "TableauListConverter", "TableauWrappedListConverter", "TableauLists", "TableauEnumConverter",
@@ -187,6 +229,7 @@ internal sealed class Reader
     private readonly Dictionary<XmlSchemaComplexType, List<XmlSchemaComplexType>> _extensions = [];
     private readonly List<RecordModel> _recordModels = [];
     private readonly List<EnumModel> _enumModels = [];
+    private readonly HashSet<(string Type, string Attribute)> _secretsFound = [];
 
     public SchemaModel Read(byte[] bytes)
     {
@@ -195,10 +238,19 @@ internal sealed class Reader
             .OrderBy(type => type.QualifiedName.Name, StringComparer.Ordinal).ToList();
         foreach (var type in types.OfType<XmlSchemaComplexType>())
         {
-            if (type.DerivedBy == XmlSchemaDerivationMethod.Extension && type.BaseXmlSchemaType is XmlSchemaComplexType { QualifiedName.IsEmpty: false } baseType)
+            if (Base(type) is { } baseType)
             {
                 if (!_extensions.TryGetValue(baseType, out var derived)) _extensions[baseType] = derived = [];
                 derived.Add(type);
+            }
+        }
+        // A base holds its subtypes' members, but not theirs in turn, so a deeper chain would drop members.
+        foreach (var (baseType, derived) in _extensions)
+        {
+            if (derived.FirstOrDefault(_extensions.ContainsKey) is { } deeper)
+            {
+                throw new SchemaException($"{Describe(deeper)} extends {Describe(baseType)} and is extended in turn, by "
+                    + $"{string.Join(", ", _extensions[deeper].Select(Describe))}: one level of extension is mapped");
             }
         }
 
@@ -218,6 +270,9 @@ internal sealed class Reader
                 case XmlSchemaComplexType complex when IsWrapper(complex, out var item):
                     Wrapper(complex, item);
                     break;
+                // A subtype's members are its base's too, so it is written only when an element names it.
+                case XmlSchemaComplexType complex when Base(complex) is not null:
+                    break;
                 case XmlSchemaComplexType complex:
                     Record(complex);
                     break;
@@ -228,6 +283,8 @@ internal sealed class Reader
         }
 
         while (_pending.TryDequeue(out var next)) Build(next.Type, next.Name, next.Doc, next.IsPublic);
+        if (_secrets.Except(_secretsFound).FirstOrDefault() is { Type: not null } missing)
+            throw new SchemaException($"the secret {missing.Attribute} of <c>{missing.Type}</c> is not in the schema: update _secrets");
 
         CheckImportedNames();
         return new SchemaModel(
@@ -288,8 +345,17 @@ internal sealed class Reader
             throw new SchemaException($"{where}: an attribute named value would take the name of the element's text");
         if (type.ContentType == XmlSchemaContentType.ElementOnly)
         {
-            foreach (var element in Elements(type.ContentTypeParticle, where))
-                Add(properties, owner, where, ElementProperty(element, where));
+            var elements = Elements(type.ContentTypeParticle, where);
+            // A list with attributes of its own is a record, not a wrapper, so an empty one, {}, reads as a record whose
+            // list is null, where an empty wrapper reads as an empty list.
+            var listWithAttributes = elements is [{ MaxOccurs: > 1 }] && type.AttributeUses.Count > 0;
+            foreach (var element in elements)
+            {
+                var property = ElementProperty(element, where);
+                if (listWithAttributes)
+                    property = property with { Doc = property.Doc[..^1] + ", null when the list comes with no item, as <c>{}</c>." };
+                Add(properties, owner, where, property);
+            }
         }
 
         var attributes = type.AttributeUses.Values.Cast<XmlSchemaAttribute>()
@@ -298,8 +364,11 @@ internal sealed class Reader
         foreach (var attribute in attributes)
         {
             var json = attribute.QualifiedName.Name;
+            var secret = _secrets.Contains((type.QualifiedName.Name, json));
+            if (secret) _secretsFound.Add((type.QualifiedName.Name, json));
             Add(properties, owner, where, new Property(json, Member(json, where), Simple(attribute.AttributeSchemaType!), ListKind.None, null,
-                $"The <c>{Xml(json)}</c> attribute."));
+                secret ? $"The <c>{Xml(json)}</c> attribute, a secret: <c>ToString</c> prints it as <c>***</c>." : $"The <c>{Xml(json)}</c> attribute.",
+                secret));
         }
     }
 
@@ -319,6 +388,11 @@ internal sealed class Reader
             throw new SchemaException($"{where}: two members would be named {property.Name}");
         properties.Add(property);
     }
+
+    private static XmlSchemaComplexType? Base(XmlSchemaComplexType type) =>
+        type.DerivedBy == XmlSchemaDerivationMethod.Extension && type.BaseXmlSchemaType is XmlSchemaComplexType { QualifiedName.IsEmpty: false } baseType
+            ? baseType
+            : null;
 
     private static string Shape(Property property) => property.List == ListKind.None ? property.Type.Name : $"a list of {property.Type.Name}";
 
@@ -486,7 +560,7 @@ internal sealed class Reader
         var members = new List<(string Member, string Value)>();
         foreach (var value in values)
         {
-            var member = EnumMember(value, where);
+            var member = Pascal(value);
             if (member == name || _enumMembers.Contains(member))
                 throw new SchemaException($"{where}: the value {value} would be named {member}, which its struct already uses");
             if (members.Any(known => string.Equals(known.Member, member, StringComparison.OrdinalIgnoreCase)))
@@ -574,25 +648,37 @@ internal sealed class Reader
         _ => "an anonymous type",
     };
 
-    /// <summary>An identifier from a schema name: each run of letters and digits, its first letter in upper case.</summary>
+    /// <summary>
+    /// An identifier from a schema name or an enumeration value: each run of letters and digits, its first letter in
+    /// upper case and each run of capitals cased as one word, so siteOIDCConfiguration is SiteOidcConfiguration,
+    /// groupAssertionsSAMLEnabled GroupAssertionsSamlEnabled and ADD_SITE_ROLE AddSiteRole. A capital that starts a
+    /// word in lower case stays one: OAuth stays OAuth.
+    /// </summary>
     internal static string Pascal(string text)
     {
-        var name = string.Concat(Parts(text).Select(part => char.ToUpperInvariant(part[0]) + part[1..]));
+        var name = string.Concat(Parts(text).Select(Word));
         return name.Length == 0 || char.IsDigit(name[0]) ? throw new SchemaException($"can't make an identifier of {text}") : name;
     }
 
-    /// <summary>
-    /// An enumeration value's identifier: as <see cref="Pascal"/>, with a part in capitals written as a word, so
-    /// ADD_SITE_ROLE is AddSiteRole and SAML Saml, while OpenID stays OpenID.
-    /// </summary>
-    internal static string EnumMember(string value, string where)
+    private static string Word(string part)
     {
-        var name = string.Concat(Parts(value).Select(part => part.Length > 1 && part.All(c => !char.IsLower(c))
-            ? char.ToUpperInvariant(part[0]) + part[1..].ToLowerInvariant()
-            : char.ToUpperInvariant(part[0]) + part[1..]));
-        return name.Length == 0 || char.IsDigit(name[0]) ? throw new SchemaException($"{where}: can't make an identifier of the value {value}") : name;
+        var chars = part.ToCharArray();
+        chars[0] = char.ToUpperInvariant(chars[0]);
+        for (var i = 0; i < chars.Length;)
+        {
+            if (!char.IsUpper(chars[i]))
+            {
+                i++;
+                continue;
+            }
+            var end = i;
+            while (end < chars.Length && char.IsUpper(chars[end])) end++;
+            var last = end < chars.Length && char.IsLower(chars[end]) ? end - 1 : end;
+            for (var j = i + 1; j < last; j++) chars[j] = char.ToLowerInvariant(chars[j]);
+            i = end;
+        }
+        return new string(chars);
     }
-
     private static List<string> Parts(string text)
     {
         var parts = new List<string>();
@@ -640,6 +726,8 @@ internal static class Emitter
         var usings = new SortedSet<string>(StringComparer.Ordinal) { "System.Text.Json.Serialization" };
         if (record.Properties.Any(property => property.List != ListKind.None)) usings.Add("System.Collections.Generic");
         if (record.Properties.Any(property => property.Type == TypeRef.DateTimeOffset || property.Type == TypeRef.TimeOnly)) usings.Add("System");
+        var secrets = record.Properties.Any(property => property.Secret);
+        if (secrets) usings.Add("System.Text");
         Usings(text, usings);
         Summary(text, "", record.Doc);
         text.Append(CultureInfo.InvariantCulture, $"{(record.IsPublic ? "public" : "internal")} sealed partial record {record.Name}\n{{\n");
@@ -657,6 +745,21 @@ internal static class Emitter
             if (property.List == ListKind.Direct) text.Append(CultureInfo.InvariantCulture, $"    [JsonConverter(typeof(TableauListConverter<{property.Type.Name}>))]\n");
             if (property.List == ListKind.Wrapped) text.Append(CultureInfo.InvariantCulture, $"    [JsonConverter(typeof({property.Converter}))]\n");
             text.Append(CultureInfo.InvariantCulture, $"    public {type} {property.Name} {{ get; init; }}\n");
+        }
+        if (secrets)
+        {
+            // The record's ToString, as the compiler writes it, but for the secrets.
+            text.Append('\n');
+            Summary(text, "    ", "Prints each member as a record does, a secret as <c>***</c> when it is set.");
+            text.Append("    private bool PrintMembers(StringBuilder builder)\n    {\n");
+            for (var i = 0; i < record.Properties.Count; i++)
+            {
+                var property = record.Properties[i];
+                var value = property.Secret ? $"{property.Name} is null ? null : \"***\"" : $"(object?){property.Name}";
+                var separator = i > 0 ? ", " : "";
+                text.Append(CultureInfo.InvariantCulture, $"        builder.Append(\"{separator}{property.Name} = \").Append({value});\n");
+            }
+            text.Append("        return true;\n    }\n");
         }
         return text.Append("}\n").ToString();
     }
