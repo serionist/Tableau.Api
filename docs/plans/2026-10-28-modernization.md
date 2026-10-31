@@ -315,7 +315,7 @@ services.AddTableauClient("prod", o =>
     {
         o.ServerUrl = new Uri("https://tableau.example.com/tableau/"); // its path is kept
         o.Site = "finance";                                          // content URL; "" is the default site
-        o.ApiVersion = TableauApiVersion.Negotiate;                  // or pinned, such as new(3, 27)
+        o.ApiVersion = null;                                         // negotiated; or pinned, such as new Version(3, 27)
         o.Deployment = TableauDeployment.Auto;                       // Server or Cloud, or detected
     })
     .UseConnectedAppDirectTrust(sp => sp.GetRequiredService<MySecrets>().TableauDirectTrust);
@@ -347,21 +347,24 @@ catch (TableauException e) when (e.Kind == TableauErrorKind.RateLimited)
 - **Mocking:** sub-clients are classes with virtual methods and a protected constructor (the Azure SDK pattern), not
   interfaces, so adding a method in a minor breaks no implementer.
 - **Options:** `TableauClientOptions` (above, plus `AllowUnsupportedServerVersion`, `DangerousAcceptAnyServerCertificate`,
-  `AllowInsecureHttp`, timeouts and resilience), immutable once built, bound from configuration by the binder source
-  generator and validated at start-up by the options validation source generator. Both stay AOT safe.
+  `AllowInsecureHttp`, `RequestTimeout`, `TransferTimeout` and, from S10, resilience), read-only once a client is built,
+  bound from configuration by the binder source generator and validated at start-up by the options validation source
+  generator. Both stay AOT safe. As built in S9, `ApiVersion` is a `Version?`, null negotiating: the binder's generator
+  reads a struct of the library's as all zeros, so a `TableauApiVersion` type couldn't bind.
 - **DI and typed clients:**
   - `AddTableauClient(name, ...)` registers a typed client over a named `HttpClient`, keyed by name, and returns a
     builder for credentials and resilience. An unnamed overload registers the default client.
   - Typed clients are transient, so the long-lived state of each named client (session, negotiated version,
     deployment, rate-limit back-off) lives in a singleton keyed by the name.
-- **Without DI:** `TableauClient.Create(options, credentials, loggerFactory)` builds the same pipeline over one
-  `SocketsHttpHandler` with `PooledConnectionLifetime`. A constructor takes a caller's `HttpClient`, which the client
-  never disposes. The client is `IAsyncDisposable` and signs out on dispose (F18).
+- **Without DI:** `TableauClient.Create(options, loggerFactory)` (S9; S11 adds the credentials) builds the same pipeline
+  over one `SocketsHttpHandler` with `PooledConnectionLifetime`. A constructor takes a caller's `HttpClient`, which the
+  client never disposes. The client is `IDisposable` and `IAsyncDisposable` (F18), so a container can end it either
+  way; from S11 one that owns its state signs out on dispose, never a DI transient, whose session is the name's.
 
 **Endpoint descriptors and gates (F4, F16):**
 
 ```csharp
-internal sealed record Endpoint(string Name, HttpMethod Method, string Template, TableauApiVersion MinVersion,
+internal sealed record Endpoint(string Name, HttpMethod Method, string Template, Version MinVersion,
     TableauDeployments Deployments, bool Idempotent, TransferKind Transfer);
 ```
 
@@ -712,7 +715,7 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
 | S6 | main | Reformat, alone | none | #32 | #33 | done: squash `80c76d7` |
 | S7 | main | Test platform and coverage | F26 F28 | #34 | #35 | done: squash `4ba9b69` |
 | S8 | main | Models, generator, AOT | F14 F23 F50 | #37 | #38 | done: squash `ffc43f5` |
-| S9 | main | Client core | F4 F16 F18 F20 F21 F22 F35 F36 F37 F38 F46 F47 F48 | #39 | | in review |
+| S9 | main | Client core | F4 F16 F18 F20 F21 F22 F35 F36 F37 F38 F46 F47 F48 | #39 | #40 | in review |
 | S10 | main | Resilience and downloads | F17 F19 F42 | | | todo |
 | S11 | main | Sessions and the live suite | F27 F34 | | | todo |
 | S12 | main | Port: server, sites, projects, users, groups, favorites; paging and filters | F13 F33 | | | todo |
@@ -1048,7 +1051,9 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
 ### S10. Resilience and downloads
 
 - **Goal:** retries that are safe, 429 honoured, long transfers that do not time out, and downloads that stream.
-- **Scope:** the resilience pipeline for DI and the factory; its options; the descriptor in the request options;
+- **Scope:** the resilience pipeline for DI and the factory; its options; the descriptor in the request options; a
+  builder method for the caller's own handlers (a proxy, a client certificate, a private certificate authority, a
+  delegating handler), an addition, since S9 clears the handlers an app gives every `HttpClient` from the named client;
   `TableauDownload`; the 429 body parser.
 - **Findings:** F17, F19, F42.
 - **Tests:**
@@ -1071,7 +1076,11 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
   - `client.Sessions` and `client.WithSession`; the old authentication methods deleted;
   - `live.yml`, the live settings (`TABLEAU_LIVE_*` variables), the run project and its sweep;
   - the recording handler;
-  - finish-work's live suite (How the work runs, Rule files).
+  - finish-work's live suite (How the work runs, Rule files);
+  - from S9's review: the sign-in descriptor keeps no `ResponseBody` on its exception, or it would hold the token; a
+    caller's `HttpClient` whose handler follows redirects sends `X-Tableau-Auth` before the pipeline sees the redirect,
+    so S11 decides to refuse such a client or warn; sign-out on dispose only for a client that owns its state, never a
+    DI transient.
 - **Findings:** F27, F34.
 - **Tests:**
   - **Offline:**
@@ -1213,7 +1222,9 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
     left in S16;
   - the AOT app's packages locked: `KnownILCompilerPack` pinned, as `src/Directory.Build.targets` pins the ILLink pack,
     and a lock file beside it;
-  - AGENTS.md's Traps rows whose guards were the deleted code (How the work runs, Rule files).
+  - AGENTS.md's Traps rows whose guards were the deleted code (How the work runs, Rule files);
+  - the duplicates S9 left beside the old client: `TableauHttp.BasePath` (now `RequestUri.BasePath`) and the old
+    `appendQueryValue`, which go with it.
 - **Findings:** F30, F43, F45 (its endpoint list goes to the steps and follow-ups in the Research tracker).
 - **Tests:**
   - one request at 64 MB and below, chunks above (set small in tests);
@@ -1694,6 +1705,7 @@ and start the steps", and on the owner calls they have answered since (Q7 to Q9)
 | 2026-10-31 | S8 | Draft PR #38. review-code round 1, three fresh reviewers on `6de5397`: no blocker or major, eight minors, all fixed, and every improvement taken; the record is `docs/reviews/2026-10-31-models-and-aot-code.md`. @serionist agreed on #37 to every departure from its words (the namespace, `TableauTask`, `Credentials`, nullable lists, list records, numeric enumerations as `long?`, `monthDay` as `string`, anonymous types named owner and element, the casing, unreachable subtypes left out), and on #38 to the coverage exclusion. **Fixes:** a subtype extended in turn stops the generator, since a base holds only its direct subtypes' members; `--check` fails on a folder in the output; `OldPublicTypes.Most` equals the list's count, and the gate's new quick-lane `old types` check refuses it higher than at the base; AGENTS.md back to 148 lines; the 13 password, token and secret attributes print as `***` in a record's `ToString`, from one list in the generator, with a test that every string member named like a secret is on it or on a list of names that hold none; `tableauCredentialsType` becomes `Credentials`, since S11's `TableauCredentials` lives in `Tableau.Api`, and a test fails on a model that shares a name with another public type outside the old client; a list with attributes of its own (`DataSourceList`, `ConnectorList`, `SalesforceAppList`, `ServiceTokenList`) reads `{}` as a record whose list is null, which its doc comment says and a test pins, since reading `[]` there would write an empty list back, or need a hook that only init-only members' backing fields could take; a default enumeration value fails to write, where it wrote JSON null. **Improvements:** one casing rule, a run of capitals as one word, for types, members and values, which renamed 13 names (`SiteOidcConfiguration`, `LinkUserIdp`, `ResyncTcmUserPayload`, `GroupAssertionsSamlEnabled`, `StorageUsedMb`, `OpenId`, `TableauIdWithMfa` among them) and clashed with nothing; the five flow parameter domain subtypes, which nothing names, are no longer written, so 197 records in 251 files; the generator compares the SHA-256 in `eng/schema/README.md` with the schema's; the selftest refuses `xs:list`, `xs:any`, `xs:all`, mixed content, a complexContent restriction, `xs:anyAttribute`, a repeated sequence, a `foo` beside a `fooType` and a subtype extended in turn (414 cases, 35 s); coverage leaves out only the library's `obj/`; the review lens checks a model change by its fixture, manifest entry, counts and roots; S9, S12 and S17 hold the notes on the context, numbers in requests and the AOT app's lock. Tests 146 to 154; coverage 92.88% of lines and 89.65% of branches, the floors unchanged. |
 | 2026-10-31 | S8 | Done: PR #38 merged as `ffc43f5`, closing #37. |
 | 2026-10-31 | S9 | Built on `39-client-core` for #39, from `origin/main` at `ffc43f5`; @serionist agreed on #39 to both doors, the client API shape and the supported floor. **The client** (`src/Tableau.Api/`): `TableauClient` with `Server`, its first sub-client, and `GetInfoAsync`; `TableauClientOptions`, read-only once a client is built, checked by the options validation source generator's code, which calls the options' `IValidatableObject` for the rules no attribute states; `AddTableauClient(name, configure)` and its unnamed overload, which register named options validated at start-up, a named `HttpClient` (`Tableau.Api.TableauClient:{name}`) whose primary handler the library builds and whose factory loggers go, a keyed singleton state and a keyed transient client, the unnamed one also unkeyed; `TableauClient.Create(options, loggerFactory)`, over one `SocketsHttpHandler` that renews its connections every five minutes, and a constructor over a caller's `HttpClient`, never disposed; `TableauException` with `TableauErrorKind`. The old `ServerInfo` method and its file are deleted, one more break in the ApiCompat ledger (19). **The pipeline** (`Pipeline/`, internal): `Endpoint` descriptors in `Endpoints`, their templates under `api/` (`{version}/...`, `-/...`, `metadata/graphql`; `{name}`, `{name:luid}`); `RequestUri` with 1.2.6's path and query rules (`UriEscaping` moved out of `RequestPath.cs`) and the exact path check; the deployment gate before anything is sent, the version gates after the version is known; redirects followed in code to the same scheme, host and port only, five at most, 307 and 308 with the body, 301 to 303 for GET and HEAD, and a caller's handler that followed one elsewhere caught; `X-Tableau-Auth` on the request; timeouts as `Timeout`, the caller's cancellation thrown again with its own token; errors read from Tableau's `{"error":{...}}` and `api/-`'s `{"httpErrorCode","message"}`, the body cut to 4 KB; `LoggerMessage` lines at Debug, query values as `***`, warnings only for `DangerousAcceptAnyServerCertificate`, plain http and a server below the floor. **Versions:** Server Info is asked at 3.23 and, on a 404, at 2.4, once per named client, under a lock, and capped at 3.29; below 3.23 every call throws unless allowed, then one warning; a pinned version is used as given, above 3.29 too. **Looked up:** Server Info needs no sign-in, from 2.4 (the reference); Tableau Cloud's hosts are `online.tableau.com` and its pods under it (`10ax`, `prod-useast-a` and the others), no other domain found; keyed typed clients through `IHttpClientFactory` and keyed DI; the configuration binder's generator binds `Version`, `Uri`, `TimeSpan`, enums and booleans, and reads a struct of the library's as all zeros without a word, so `ApiVersion` is a `Version?`, null negotiating; the options validation generator calls `IValidatableObject.Validate`; `CertificateChainPolicy` with `RevocationMode.Online` and the four revocation-unknown flags, which supersedes `CertificateRevocationCheckMode`. **Revocation, verified offline on Windows and Linux:** a certificate authority made per test, its revocation list served by a second fake server: a revoked leaf refused, a listed-good one accepted, one whose list can't be reached accepted. **SYSLIB1220, verified:** a caller's own `JsonSerializerContext` that lists a model warns SYSLIB1220 and SYSLIB1030 at build, since the models' converters are internal, and throws `NotSupportedException` at run time; reflection-based System.Text.Json reads and writes them. `TableauJsonContext` stays internal: a public one would need the envelopes in a context of their own and reshapes with every schema, and adding it later is a minor (Later). **Live check,** Tableau Server 2025.1 (REST API 3.25), read-only, no sign-in, by the new `ServerInfoSiteTests` (`Live`, `TABLEAU_LIVE_SERVER_URL`) and a scratch probe outside the clone that printed shapes only: Server Info answers JSON at 2.4, 3.23 and 3.25 without a token, `{"serverInfo":{"productVersion":{"value","build"},"prepConductorVersion","restApiVersion":"3.25"}}` (no `prepConductorVersion` at 2.4); a version above the server's answers 404 with code `404001`, 2.0 answers `404008`, `api/-` answers `{"httpErrorCode","message"}`; the error code is a string; no request id header, but `X-Tableau: Tableau Server` on every answer, a signal for Tableau Cloud not checked; certificates validated with revocation online, on Windows. Both site tests passed. **Tests:** 154 to 299, every row the plan lists: the gates per descriptor and by deployment, the floor with and without the opt-in, negotiation once under concurrency and again after a failure, redirects, TLS, revocation, cookies, path and query rows over 1.2.6's table, the base path, the three URL shapes, any 2xx, every error shape, timeouts, logs without a secret or a query value, DI keyed and default with options from configuration and refused at start-up, mocking, and `ConventionsTests` over `roots.xml`'s types. S3's tests of F2, F3, F6 and F39 now have 2.0 twins; the old ones stay while the old client does. The native AOT app calls the client over a handler serving fixtures, binds the options from configuration in the binary and refuses bad ones: published natively on win-x64 here with no warning, 15 MB, every check passed. Coverage 93.93% of lines and 92.32% of branches; the floors rise to 93% and 92%. **Departures,** in the PR's door list: `ApiVersion` is a `Version?`, null negotiating, since the binder's generator can't read a struct of the library's; `Create` takes no credentials until S11 brings `TableauCredentials`; the sub-client is `ServerClient`; a caller's `HttpClient` refuses `DangerousAcceptAnyServerCertificate`; a pinned version above 3.29 is used as given; the request id is read from `X-Request-Id`. The one `SuppressMessage` (CA5359) is on the callback `DangerousAcceptAnyServerCertificate` asks for. |
+| 2026-10-31 | S9 | Draft PR #40. review-code round 1, three fresh reviewers on `ae98f14`: one major, eleven minors, all fixed on the branch, and every improvement taken; the coordinator keeps the record, `docs/reviews/2026-10-31-client-core-code.md`. **The major:** `TableauClient` was `IAsyncDisposable` alone, so a container's synchronous `Dispose` of a scope or the provider that had made one threw and left the rest undisposed; it is `IDisposable` too, in the standard pattern, with tests of a synchronous scope and provider. **Minors:** the named client's handler is built from the name's read-only state, not the options monitor, so a reload can't reach a later handler; the handlers an app gives every `HttpClient` (`ConfigureHttpClientDefaults`) are cleared from the named client; a redirect a caller's own handler followed says the request went there; an error body whose strings can't be read gives the status alone; concurrent first calls share one negotiation, on no caller's token, and a failure is kept by none; a LUID must be the value itself, not one `Guid` parsing forgives; CHANGELOG's 1.2.6 section is restored and its bullets unglued; the revocation tests name the revoked leaf by its own serial, a first byte from 0x01 to 0xFF; every `RecordingLogger` is checked at the suite's end for secrets and for a 2.0 line showing a query value, a redirect among the logged calls; a redirect to another host on the same port is refused; both lens files name the 2.0 surface under public-api. **Improvements:** the conventions test finds the sub-clients from `TableauClient`'s properties; a revocation answer is waited for 10 seconds at most (`UrlRetrievalTimeout`); the floor's and an unreadable version's exceptions are logged as the pipeline's are and carry the call's method; the design above shows what S9 built; S10, S11 and S17 hold the notes the review left; AGENTS.md keeps the old client's "on Tableau Server and Tableau Cloud". Tests 299 to 313; coverage 93.96% of lines and 92.48% of branches, the floors unchanged. |
 
 ## For the maintainers
 

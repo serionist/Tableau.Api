@@ -6,8 +6,8 @@ Codex reads it directly; the gate caps it at 150 lines.
 ## What this is
 
 A .NET client for Tableau's REST API and its internal Vizportal API, published on nuget.org as `Tableau.Api` (last
-release 1.2.6, 2026-10-30, built for netstandard2.0, from `release/1.x`). `main` builds 2.0, for net10.0 only, on
-Newtonsoft.Json and Microsoft.Extensions' abstractions: logging, options, DI and `IHttpClientFactory`.
+release 1.2.6, 2026-10-30, built for netstandard2.0, from `release/1.x`). `main` builds 2.0 by #2's plan in
+`docs/plans/`, for net10.0 alone, on Newtonsoft.Json and Microsoft.Extensions: Logging, Options, DI, Http.
 
 - **`TableauClient`:** 2.0's client, with options, DI, one pipeline (`Pipeline/`: an `Endpoints` descriptor per call,
   the gates, redirects, errors) and a sub-client per area, `Server` first. JSON through the models in `Rest/Models/`.
@@ -15,7 +15,6 @@ Newtonsoft.Json and Microsoft.Extensions' abstractions: logging, options, DI and
   `XmlSerializer` and `Models/XmlSchema.cs` (REST API 3.16); each area goes as `TableauClient` takes it over.
 - **`VizPortalClient`:** Tableau's own web client's API (`/vizportal/api/web/v1/`), JSON through Newtonsoft.Json. It
   is internal and unversioned: Tableau documents none of it and may change it in any release.
-- **Where the work stands:** issue #2 modernizes the code by the plan in `docs/plans/`, which records the decisions.
 
 ## Where things are
 
@@ -110,8 +109,9 @@ maintainer agrees in its issue; the other can object on the PR before it merges.
   (`Tableau.Api.Rest.Models`, `.Models`, `.VizPortal.Models`): names, parameters, defaults, return types;
 - the target framework: net10.0 only for 2.x (#30); .NET Framework 4.6.1 and later stay on 1.2.x, on netstandard2.0;
 - the version scheme: 2.x from MinVer on `v` tags, at least 2.0; 1.x by `<Version>` on `release/1.x`, tags `v1.*`;
-- the Tableau versions claimed: `TableauClient`, REST API 3.23 (Server 2024.2) to 3.29 and Tableau Cloud, older only on
-  `AllowUnsupportedServerVersion` (`Pipeline/ApiVersions.cs`, #39); `TableauApiClient`, 2.0 up, above 3.14 used as 3.14.
+- the Tableau versions claimed: `TableauClient`, REST API 3.23 (Server 2024.2) to 3.29 and Tableau Cloud, older only
+  with `AllowUnsupportedServerVersion` (`Pipeline/ApiVersions.cs`, #39); `TableauApiClient`, REST API 2.0 and up, a
+  version above 3.14 used as 3.14 with a warning, on Tableau Server and Tableau Cloud.
 
 ## Traps
 

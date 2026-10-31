@@ -49,7 +49,9 @@ turns them off? A leak is a blocker.
 
 ## public-api
 
-Applies when: the plan changes a public member of `TableauApiClient`, `VizPortalClient` or a `Models` type.
+Applies when: the plan changes a public member of the 2.0 client (`TableauClient` and its sub-clients,
+`TableauClientOptions`, `AddTableauClient` and `TableauClientBuilder`, `TableauException`, the models in
+`Tableau.Api.Rest.Models`) or of the old one (`TableauApiClient`, `VizPortalClient`, a `Models` type).
 
 Is the break named, with how a caller's code moves over? A new parameter goes where it breaks no caller, or the old
 signature stays beside the new one. A silent break is a one-way door broken: a blocker.

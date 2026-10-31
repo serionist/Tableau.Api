@@ -63,11 +63,14 @@ A leak, or certificate checks off by default, is a blocker.
 
 ## public-api
 
-Applies when: the scope touches a public member of `TableauApiClient`, `VizPortalClient`, or a type in `Models/` or
-`VizPortal/Models/`.
+Applies when: the scope touches a public member of the 2.0 client (`TableauClient` and its sub-clients,
+`TableauClientOptions`, `AddTableauClient` and `TableauClientBuilder`, `TableauException` and `TableauErrorKind`, the
+models in `Tableau.Api.Rest.Models`) or of the old one (`TableauApiClient`, `VizPortalClient`, a type in `Models/` or
+`VizPortal/Models/`).
 
 - Does a public name, parameter, default or return type change? Named in the PR, with how callers move over? A
-  silent change is a one-way door broken: a blocker.
+  silent change is a one-way door broken: a blocker. On the 2.0 client: does a new public type join
+  `tests/Tableau.Api.Aot/roots.xml`, and does a sub-client keep its protected constructor and virtual methods?
 - A regenerated `XmlSchema.cs`: do the lower-case generated type names users already reference still exist?
 - Regenerated models (`eng/generate-models.cs`): does each change in `Rest/Models/Generated/` come from the schema or
   the generator, and is each renamed or dropped type or member named in the PR as a break?
