@@ -40,7 +40,8 @@ public sealed record TableauSession
     /// <summary>
     /// When the session is expected to end: 240 minutes after it began on Tableau Server, 120 on Tableau Cloud, or when
     /// the personal access token it signed in with expires, if that is sooner. A server's administrator can make a
-    /// session shorter, so a call can still find it ended.
+    /// session shorter, so a call can still find it ended. A client renews its own session five minutes before the
+    /// deployment's lifetime is up, not by a token's sooner end, which comes as a 401 that signs in again.
     /// </summary>
     public required DateTimeOffset ExpiresAt { get; init; }
 

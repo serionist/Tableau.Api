@@ -29,7 +29,19 @@ internal readonly record struct TableauRequest(
     IReadOnlyList<KeyValuePair<string, string?>>? Query = null,
     TsRequest? Body = null,
     string? Token = null,
-    string? SiteId = null);
+    string? SiteId = null)
+{
+    // The members a record prints, but the token, as ***: a request in a debugger or an assertion's message shows none.
+    private bool PrintMembers(StringBuilder builder)
+    {
+        builder.Append("PathValues = ").Append(PathValues)
+            .Append(", Query = ").Append(Query)
+            .Append(", Body = ").Append(Body)
+            .Append(", Token = ").Append(Token is null ? null : "***")
+            .Append(", SiteId = ").Append(SiteId);
+        return true;
+    }
+}
 
 /// <summary>
 /// The one path every REST call of the 2.0 client takes: the gates, the session, the request URI, the headers,
@@ -348,12 +360,14 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
                 if (response.RequestMessage?.RequestUri is { } answered && !RequestUri.SameOrigin(answered, uri))
                 {
                     var origin = RequestUri.Origin(answered);
-                    var signedOut = "";
+                    var signedOut = Endpoints.IsSignIn(endpoint)
+                        ? " The credentials it carried went there too: rotate them, a password or a personal access token's secret."
+                        : "";
                     if (token is not null && signOutWhereSent)
                     {
                         TableauLog.TokenSentElsewhere(state.Logger, state.DisplayName, origin);
                         state.Sessions.Discard(token);
-                        signedOut = await SignOutSentAsync(version, token).ConfigureAwait(false)
+                        signedOut = await SignOutSentAsync(version, token, cancellationToken).ConfigureAwait(false)
                             ? " The session whose token it carried is signed out."
                             : " The session whose token it carried couldn't be signed out, and ends on its own.";
                     }
@@ -425,10 +439,12 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
 
     // Signs out the session of a token a caller's handler sent to another host, so it stops working there: through the
     // same HttpClient, which may send this elsewhere too, so a redirect here signs nothing more out. Never throws, and
-    // never waits longer than a dispose's sign-out would.
-    private async Task<bool> SignOutSentAsync(Version version, string token)
+    // waits no longer than a dispose's sign-out would, nor than the call's own time, so a dispose that sent the token
+    // keeps its bound.
+    private async Task<bool> SignOutSentAsync(Version version, string token, CancellationToken cancellationToken)
     {
-        using var timeout = new CancellationTokenSource(TableauSessions.SignOutTimeout);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TableauSessions.SignOutTimeout);
         try
         {
             await CallAsync(Endpoints.SignOut, version, new TableauRequest(Token: token), static (_, _, _) => Task.FromResult(true),

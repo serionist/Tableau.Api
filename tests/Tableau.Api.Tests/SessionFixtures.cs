@@ -55,12 +55,13 @@ internal static class SessionFixtures
         TableauCredentials.ConnectedAppDirectTrust(AppClientId, AppSecretId, AppSecretValue, AppUser,
             ["tableau:content:read", "tableau:projects:*"]);
 
-    /// <summary>Tableau's answer to a sign-in in the invented site, with the token given.</summary>
-    public static FakeResponse SignedIn(string token = Fixtures.SessionToken, string? estimatedTimeToExpiration = null)
+    /// <summary>Tableau's answer to a sign-in in the invented site, with the token and the user given.</summary>
+    public static FakeResponse SignedIn(string token = Fixtures.SessionToken, string? estimatedTimeToExpiration = null,
+        string userId = Fixtures.UserId)
     {
         var expiry = estimatedTimeToExpiration is null ? "" : $",\"estimatedTimeToExpiration\":\"{estimatedTimeToExpiration}\"";
         return FakeResponse.Json(200, $$$"""
-            {"credentials":{"site":{"id":"{{{Fixtures.SiteId}}}","contentUrl":"{{{Fixtures.SiteContentUrl}}}"},"user":{"id":"{{{Fixtures.UserId}}}"},"token":"{{{token}}}"{{{expiry}}}}}
+            {"credentials":{"site":{"id":"{{{Fixtures.SiteId}}}","contentUrl":"{{{Fixtures.SiteContentUrl}}}"},"user":{"id":"{{{userId}}}"},"token":"{{{token}}}"{{{expiry}}}}}
             """);
     }
 

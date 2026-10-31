@@ -65,10 +65,82 @@ public sealed class SignInTests
     }
 
     [TestMethod]
-    public async Task ImpersonationSendsTheUserOnTableauServer()
+    public async Task AJwtSignInIsSentOnceAndTheNextSignInHasANewJwt()
+    {
+        using var server = FakeTableauServer.Start();
+        var attempts = new SessionFixtures.Counter();
+        server.Map("POST", SessionFixtures.SignInPath, _ => attempts.Next() == 1
+            ? FakeResponse.Empty(503).WithHeader("Retry-After", "0")
+            : SessionFixtures.SignedIn());
+        var options = SessionFixtures.Options(server);
+        options.MaxRetries = 3;
+        await using var client = SessionFixtures.Client(options, null);
+
+        await ClientFixtures.FailsAsync(TableauErrorKind.Http, () => client.Sessions.SignInAsync(SessionFixtures.DirectTrust()));
+        await client.Sessions.SignInAsync(SessionFixtures.DirectTrust());
+
+        Assert.HasCount(2, server.Requests, "the refused JWT was not sent again: Tableau refuses a jti it has seen");
+        var jtis = server.Requests.Select(request => Decode(JsonDocument.Parse(request.BodyText).RootElement
+            .GetProperty("credentials").GetProperty("jwt").GetString()!.Split('.')[1]).GetProperty("jti").GetString()).ToArray();
+        Assert.AreNotEqual(jtis[0], jtis[1]);
+    }
+
+    [TestMethod]
+    public async Task APersonalAccessTokensSignInIsRetriedAfterA503()
+    {
+        using var server = FakeTableauServer.Start();
+        var attempts = new SessionFixtures.Counter();
+        server.Map("POST", SessionFixtures.SignInPath, _ => attempts.Next() == 1
+            ? FakeResponse.Empty(503).WithHeader("Retry-After", "0")
+            : SessionFixtures.SignedIn());
+        var options = SessionFixtures.Options(server);
+        options.MaxRetries = 3;
+        await using var client = SessionFixtures.Client(options, null);
+
+        await client.Sessions.SignInAsync(SessionFixtures.Pat());
+
+        Assert.HasCount(2, server.Requests);
+    }
+
+    [TestMethod]
+    public async Task APersonalAccessTokenImpersonatesFromThreeElevenOnly()
+    {
+        using var server = FakeTableauServer.Start();
+        var options = SessionFixtures.Options(server, "3.10");
+        options.AllowUnsupportedServerVersion = true;
+        await using var client = SessionFixtures.Client(options, null);
+
+        var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.UnsupportedApiVersion,
+            () => client.Sessions.SignInAsync(SessionFixtures.Pat(SessionFixtures.ImpersonatedUserId)));
+
+        Assert.Contains("needs REST API 3.11", thrown.Message);
+        Assert.IsEmpty(server.Requests);
+    }
+
+    [TestMethod]
+    public async Task AnImpersonatingSignInThatComesBackAsAnotherUserIsSignedOutAndRefused()
     {
         using var server = FakeTableauServer.Start();
         server.Map("POST", SessionFixtures.SignInPath, SessionFixtures.SignedIn());
+        server.Map("POST", SessionFixtures.SignOutPath, FakeResponse.Empty(204));
+        await using var client = SessionFixtures.Client(SessionFixtures.Options(server), null);
+
+        foreach (var credentials in new[] { SessionFixtures.Pat(SessionFixtures.ImpersonatedUserId), SessionFixtures.Password(SessionFixtures.ImpersonatedUserId) })
+        {
+            var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.Authentication, () => client.Sessions.SignInAsync(credentials));
+            Assert.Contains("came back as another user than the one it asked to impersonate", thrown.Message);
+        }
+
+        var signOuts = SessionFixtures.To(server, SessionFixtures.SignOutPath);
+        Assert.HasCount(2, signOuts, "each such session is signed out");
+        Assert.IsTrue(signOuts.All(signOut => signOut.Header("X-Tableau-Auth") == Fixtures.SessionToken));
+    }
+
+    [TestMethod]
+    public async Task ImpersonationSendsTheUserOnTableauServer()
+    {
+        using var server = FakeTableauServer.Start();
+        server.Map("POST", SessionFixtures.SignInPath, SessionFixtures.SignedIn(userId: SessionFixtures.ImpersonatedUserId.ToUpperInvariant()));
         await using var client = SessionFixtures.Client(SessionFixtures.Options(server), null);
 
         await client.Sessions.SignInAsync(SessionFixtures.Password(SessionFixtures.ImpersonatedUserId));

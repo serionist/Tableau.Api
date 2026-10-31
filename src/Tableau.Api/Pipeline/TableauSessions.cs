@@ -14,9 +14,18 @@ namespace Tableau.Api.Pipeline;
 /// holds its own, and signs it out when it is disposed.
 /// </summary>
 /// <remarks>
+/// <para>
 /// One sign-in at a time, since Tableau allows a personal access token one session: two at once would end each other.
 /// Callers that wait while a sign-in fails get its failure rather than trying again each, so twenty calls with a wrong
 /// password make one failed sign-in, not twenty, which a server's lockout would count.
+/// </para>
+/// <para>
+/// A session is renewed by its own lifetime, five minutes before 240 minutes on Tableau Server or 120 on Tableau Cloud.
+/// A personal access token that expires sooner shows in <see cref="TableauSession.ExpiresAt"/>, and its end comes as a
+/// 401, which signs in again as any other does: renewing by the token's time would sign in on every call in its last
+/// minutes, each sign-in ending the session before. A renewal that fails while the session hasn't reached
+/// <see cref="TableauSession.ExpiresAt"/> leaves the call in the session it has, and is tried again a minute later.
+/// </para>
 /// </remarks>
 /// <param name="state">The named client's state: its options, its clock, its deployment and its logger.</param>
 /// <param name="credentials">What the client signs in with, or null for a client that signs in only when told to.</param>
@@ -28,8 +37,11 @@ internal sealed class TableauSessions(TableauClientState state, TableauCredentia
     /// <summary>How long a session lasts on Tableau Cloud.</summary>
     public static readonly TimeSpan CloudLifetime = TimeSpan.FromMinutes(120);
 
-    /// <summary>How long before its end a session is replaced: five minutes, or half its life when that is shorter.</summary>
+    /// <summary>How long before its lifetime ends a session is replaced.</summary>
     public static readonly TimeSpan RenewBefore = TimeSpan.FromMinutes(5);
+
+    /// <summary>How long a session whose renewal failed serves before the renewal is tried again.</summary>
+    public static readonly TimeSpan RenewAgainAfter = TimeSpan.FromMinutes(1);
 
     /// <summary>
     /// How long signing out may take when a client is disposed, or after a token went to another host: it is never
@@ -88,17 +100,8 @@ internal sealed class TableauSessions(TableauClientState state, TableauCredentia
     /// </summary>
     public async Task SignOutOnDisposeAsync(TableauPipeline pipeline)
     {
-        if (Interlocked.Exchange(ref _held, null) is not { } held) return;
-        using var timeout = new CancellationTokenSource(SignOutTimeout);
-        try
-        {
-            await SignOutAsync(pipeline, held.Session, timeout.Token).ConfigureAwait(false);
-        }
-        catch (Exception e)
-        {
-            // Whatever went wrong, a dispose doesn't throw: the session then ends on its own.
-            TableauLog.SignOutFailed(state.Logger, state.DisplayName, e);
-        }
+        if (Interlocked.Exchange(ref _held, null) is { } held)
+            await SignOutQuietlyAsync(pipeline, held.Session).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -128,8 +131,33 @@ internal sealed class TableauSessions(TableauClientState state, TableauCredentia
         var answer = await pipeline.SendAtAsync(endpoint, version, new TableauRequest(Body: new TsRequest { Credentials = body }),
             static answer => answer.Credentials, "credentials", cancellationToken).ConfigureAwait(false);
         var session = Session(pipeline, endpoint, version, answer, site, userName);
+        // A server that ignored the user to impersonate signs in as the credentials' owner, whom no call meant to act as.
+        if (credentials.ImpersonateUserId is { } asked && !string.Equals(asked, session.UserId, StringComparison.OrdinalIgnoreCase))
+        {
+            await SignOutQuietlyAsync(pipeline, session).ConfigureAwait(false);
+            throw pipeline.Failed(endpoint, null, new TableauException(TableauErrorKind.Authentication,
+                $"{endpoint.Name} came back as another user than the one it asked to impersonate, so its session was signed out. "
+                + "Impersonation needs a server administrator's credentials, and for a personal access token Tableau Server "
+                + "2021.1 or later with tsm authentication pat-impersonation enable.")
+            { Method = endpoint.Method });
+        }
         TableauLog.SignedIn(state.Logger, state.DisplayName, credentials.Kind, session.ExpiresAt);
         return session;
+    }
+
+    /// <summary>Signs a session out, never throwing and waiting <see cref="SignOutTimeout"/> at most; a failure is logged.</summary>
+    public static async Task SignOutQuietlyAsync(TableauPipeline pipeline, TableauSession session)
+    {
+        using var timeout = new CancellationTokenSource(SignOutTimeout);
+        try
+        {
+            await SignOutAsync(pipeline, session, timeout.Token).ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            // Whatever went wrong, the caller goes on: the session then ends on its own.
+            TableauLog.SignOutFailed(pipeline.State.Logger, pipeline.State.DisplayName, e);
+        }
     }
 
     /// <summary>Switch Site: a session on another site, from the one given, whose token the server then ends.</summary>
@@ -157,7 +185,7 @@ internal sealed class TableauSessions(TableauClientState state, TableauCredentia
     /// </summary>
     public static DateTimeOffset ExpiresAt(DateTimeOffset now, TableauDeployment deployment, string? estimatedTimeToExpiration)
     {
-        var lifetime = deployment == TableauDeployment.Cloud ? CloudLifetime : ServerLifetime;
+        var lifetime = Lifetime(deployment);
         if (TokenLifetime(estimatedTimeToExpiration) is { } token && token < lifetime)
             lifetime = token;
         return now + lifetime;
@@ -182,33 +210,42 @@ internal sealed class TableauSessions(TableauClientState state, TableauCredentia
     // One sign-in at a time. A caller that waited while another signed in takes that session; one that arrived before
     // another's sign-in failed, the attempt under way when it came among them, takes that failure; a caller whose session
     // the server refused signs in again, unless another did meanwhile. A cancelled sign-in is no failure: the next caller
-    // tries for itself.
+    // tries for itself. A session only due for renewal, not yet at its end, serves on while its renewal fails.
     private async ValueTask<TableauSession> SignInAsync(TableauPipeline pipeline, TableauSession? failed, CancellationToken cancellationToken)
     {
         var failuresSeen = Volatile.Read(ref _failures);
         await _signIn.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            if (_held is { } held && !ReferenceEquals(held.Session, failed) && state.TimeProvider.GetUtcNow() < held.RenewAt)
+            var held = _held;
+            var now = state.TimeProvider.GetUtcNow();
+            if (held is not null && !ReferenceEquals(held.Session, failed) && now < held.RenewAt)
                 return held.Session;
+            var fallback = failed is null && held is not null && now < held.Session.ExpiresAt ? held : null;
+            // A failed renewal before the session's end left it held, with a later RenewAt, so a caller that waited for it
+            // took that session above; one that comes here waited for a sign-in that failed after a 401, or a first one.
             if (Volatile.Read(ref _failures) != failuresSeen && _failure is { } failure)
                 failure.Throw();
             if (failed is not null)
                 TableauLog.SigningInAgain(state.Logger, state.DisplayName, "the server refused the session with a 401");
-            else if (_held is not null)
+            else if (held is not null)
                 TableauLog.SigningInAgain(state.Logger, state.DisplayName, "the session is due to end");
             try
             {
                 var session = await SignInAsync(pipeline, credentials!, state.Options.Site, cancellationToken).ConfigureAwait(false);
                 _failure = null;
-                Volatile.Write(ref _held, new Held(session, RenewAt(session)));
+                Volatile.Write(ref _held, new Held(session, state.TimeProvider.GetUtcNow() + Lifetime(state.Deployment) - RenewBefore));
                 return session;
             }
             catch (TableauException e)
             {
                 _failure = ExceptionDispatchInfo.Capture(e);
                 Interlocked.Increment(ref _failures);
-                throw;
+                if (fallback is null) throw;
+                var again = now + RenewAgainAfter;
+                Volatile.Write(ref _held, fallback with { RenewAt = again < fallback.Session.ExpiresAt ? again : fallback.Session.ExpiresAt });
+                TableauLog.RenewalFailed(state.Logger, state.DisplayName, fallback.Session.ExpiresAt, e);
+                return fallback.Session;
             }
         }
         finally
@@ -217,11 +254,7 @@ internal sealed class TableauSessions(TableauClientState state, TableauCredentia
         }
     }
 
-    private DateTimeOffset RenewAt(TableauSession session)
-    {
-        var left = session.ExpiresAt - state.TimeProvider.GetUtcNow();
-        return session.ExpiresAt - (left / 2 < RenewBefore ? left / 2 : RenewBefore);
-    }
+    private static TimeSpan Lifetime(TableauDeployment deployment) => deployment == TableauDeployment.Cloud ? CloudLifetime : ServerLifetime;
 
     private static TableauSession Session(TableauPipeline pipeline, Endpoint endpoint, Version version, Credentials answer, string site,
         string? userName)

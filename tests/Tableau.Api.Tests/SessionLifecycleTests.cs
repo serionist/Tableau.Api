@@ -158,39 +158,160 @@ public sealed class SessionLifecycleTests
     }
 
     [TestMethod]
-    public async Task ASessionWhoseTokenExpiresSoonerIsReplacedSooner()
+    public async Task ATokenThatExpiresSoonerShowsInExpiresAtAndTheSessionServesItsLifetime()
     {
         using var server = FakeTableauServer.Start();
         var signIns = new SessionFixtures.Counter();
         server.Map("POST", SessionFixtures.SignInPath, _ => SessionFixtures.SignedIn(signIns.Next() == 1 ? First : Second, "0:01:00"));
         server.Map("GET", SessionFixtures.ItemsPath, ClientFixtures.ServerInfo());
-        var time = new FakeTimeProvider(new DateTimeOffset(2026, 10, 31, 12, 0, 0, TimeSpan.Zero));
+        var start = new DateTimeOffset(2026, 10, 31, 12, 0, 0, TimeSpan.Zero);
+        var time = new FakeTimeProvider(start);
         await using var client = SessionFixtures.Client(SessionFixtures.Options(server), SessionFixtures.Pat(), time);
 
         await ClientFixtures.SendAsync(client, SessionFixtures.Items);
         time.Advance(TimeSpan.FromMinutes(56));
         await ClientFixtures.SendAsync(client, SessionFixtures.Items);
 
-        Assert.AreEqual(2, signIns.Count);
+        Assert.AreEqual(start + TimeSpan.FromMinutes(60), client.Pipeline.State.Sessions.Current!.ExpiresAt, "the token's sooner end, for the caller");
+        Assert.AreEqual(1, signIns.Count, "renewed by the session's lifetime, not the token's");
+        CollectionAssert.AreEqual(new[] { First, First },
+            SessionFixtures.To(server, SessionFixtures.ItemsPath).Select(call => call.Header("X-Tableau-Auth")).ToArray());
     }
 
     [TestMethod]
-    public async Task ASessionWhoseTokenIsAboutToExpireIsReplacedAtHalfItsLife()
+    public async Task ATokensLastMinuteSignsInOnceAndItsEndComesAsA401()
     {
         using var server = FakeTableauServer.Start();
         var signIns = new SessionFixtures.Counter();
-        server.Map("POST", SessionFixtures.SignInPath, _ => SessionFixtures.SignedIn(signIns.Next() == 1 ? First : Second, "0:00:08"));
+        server.Map("POST", SessionFixtures.SignInPath, _ => SessionFixtures.SignedIn(signIns.Next() == 1 ? First : Second, "0:00:00"));
+        var ended = false;
+        server.Map("GET", SessionFixtures.ItemsPath, request =>
+            Volatile.Read(ref ended) && request.Header("X-Tableau-Auth") == First ? SessionFixtures.Unauthorized() : ClientFixtures.ServerInfo());
+        var start = new DateTimeOffset(2026, 10, 31, 12, 0, 0, TimeSpan.Zero);
+        var time = new FakeTimeProvider(start);
+        await using var client = SessionFixtures.Client(SessionFixtures.Options(server), SessionFixtures.Pat(), time);
+
+        await ClientFixtures.SendAsync(client, SessionFixtures.Items);
+        var expiresAt = client.Pipeline.State.Sessions.Current!.ExpiresAt;
+        for (var call = 0; call < 2; call++)
+        {
+            time.Advance(TimeSpan.FromMinutes(1));
+            await ClientFixtures.SendAsync(client, SessionFixtures.Items);
+        }
+        Volatile.Write(ref ended, true);
+        await ClientFixtures.SendAsync(client, SessionFixtures.Items);
+
+        Assert.AreEqual(start, expiresAt, "a token at its end gives a session that ends now");
+        Assert.AreEqual(2, signIns.Count, "one sign-in, not one a call, until the token's end came as a 401");
+        CollectionAssert.AreEqual(new[] { First, First, First, First, Second },
+            SessionFixtures.To(server, SessionFixtures.ItemsPath).Select(call => call.Header("X-Tableau-Auth")).ToArray());
+    }
+
+    [TestMethod]
+    public async Task ARenewalThatFailsLeavesTheCallInTheSessionUntilItsEnd()
+    {
+        using var server = FakeTableauServer.Start();
+        var signIns = new SessionFixtures.Counter();
+        server.Map("POST", SessionFixtures.SignInPath, _ => signIns.Next() == 1
+            ? SessionFixtures.SignedIn(First)
+            : FakeResponse.Json(503, """{"error":{"code":"503000","summary":"Invented"}}"""));
         server.Map("GET", SessionFixtures.ItemsPath, ClientFixtures.ServerInfo());
         var time = new FakeTimeProvider(new DateTimeOffset(2026, 10, 31, 12, 0, 0, TimeSpan.Zero));
         await using var client = SessionFixtures.Client(SessionFixtures.Options(server), SessionFixtures.Pat(), time);
 
         await ClientFixtures.SendAsync(client, SessionFixtures.Items);
-        time.Advance(TimeSpan.FromMinutes(3));
+        time.Advance(TimeSpan.FromMinutes(236));
         await ClientFixtures.SendAsync(client, SessionFixtures.Items);
-        time.Advance(TimeSpan.FromMinutes(2));
+        time.Advance(TimeSpan.FromSeconds(30));
         await ClientFixtures.SendAsync(client, SessionFixtures.Items);
+        time.Advance(TimeSpan.FromMinutes(4));
+        await ClientFixtures.FailsAsync(TableauErrorKind.Http, () => ClientFixtures.SendAsync(client, SessionFixtures.Items));
 
-        Assert.AreEqual(2, signIns.Count, "an eight-minute session is renewed after four, not five before its end");
+        Assert.AreEqual(3, signIns.Count, "the failed renewal, none for the next minute, then one after the session's end");
+        CollectionAssert.AreEqual(new[] { First, First, First },
+            SessionFixtures.To(server, SessionFixtures.ItemsPath).Select(call => call.Header("X-Tableau-Auth")).ToArray());
+    }
+
+    [TestMethod]
+    public async Task ARenewalThatFailsInTheSessionsLastMinuteIsTriedAgainAtItsEnd()
+    {
+        using var server = FakeTableauServer.Start();
+        var signIns = new SessionFixtures.Counter();
+        server.Map("POST", SessionFixtures.SignInPath, _ => signIns.Next() == 1
+            ? SessionFixtures.SignedIn(First)
+            : FakeResponse.Json(503, """{"error":{"code":"503000","summary":"Invented"}}"""));
+        server.Map("GET", SessionFixtures.ItemsPath, ClientFixtures.ServerInfo());
+        var time = new FakeTimeProvider(new DateTimeOffset(2026, 10, 31, 12, 0, 0, TimeSpan.Zero));
+        await using var client = SessionFixtures.Client(SessionFixtures.Options(server), SessionFixtures.Pat(), time);
+
+        await ClientFixtures.SendAsync(client, SessionFixtures.Items);
+        time.Advance(TimeSpan.FromMinutes(239.5));
+        await ClientFixtures.SendAsync(client, SessionFixtures.Items);
+        time.Advance(TimeSpan.FromMinutes(0.3));
+        await ClientFixtures.SendAsync(client, SessionFixtures.Items);
+        time.Advance(TimeSpan.FromMinutes(0.5));
+        await ClientFixtures.FailsAsync(TableauErrorKind.Http, () => ClientFixtures.SendAsync(client, SessionFixtures.Items));
+
+        Assert.AreEqual(3, signIns.Count, "tried again at the session's end, sooner than a minute later");
+    }
+
+    [TestMethod]
+    public async Task ACancelledSignInIsNoFailureForTheCallersWaiting()
+    {
+        using var server = FakeTableauServer.Start();
+        using var release = new ManualResetEventSlim();
+        var signIns = new SessionFixtures.Counter();
+        server.Map("POST", SessionFixtures.SignInPath, _ =>
+        {
+            if (signIns.Next() == 1) release.Wait(TimeSpan.FromSeconds(20));
+            return SessionFixtures.SignedIn();
+        });
+        server.Map("GET", SessionFixtures.ItemsPath, ClientFixtures.ServerInfo());
+        await using var client = SessionFixtures.Client(SessionFixtures.Options(server), SessionFixtures.Pat());
+        using var cancelled = new CancellationTokenSource();
+
+        var first = ClientFixtures.SendAsync(client, SessionFixtures.Items, cancellationToken: cancelled.Token);
+        await ClientFixtures.WaitUntilAsync(() => signIns.Count == 1);
+        var second = ClientFixtures.SendAsync(client, SessionFixtures.Items);
+        await cancelled.CancelAsync();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => first);
+        await second;
+        release.Set();
+
+        Assert.AreEqual(2, signIns.Count, "the waiting caller signed in for itself");
+        Assert.HasCount(1, SessionFixtures.To(server, SessionFixtures.ItemsPath));
+    }
+
+    [TestMethod]
+    public async Task ASynchronousDisposeSignsOutUnderASingleThreadedContext()
+    {
+        using var server = FakeTableauServer.Start();
+        SessionFixtures.MapSignIns(server, First);
+        server.Map("GET", SessionFixtures.ItemsPath, ClientFixtures.ServerInfo());
+        server.Map("POST", SessionFixtures.SignOutPath, FakeResponse.Empty(204));
+        using var client = SessionFixtures.Client(SessionFixtures.Options(server), SessionFixtures.Pat());
+        await ClientFixtures.SendAsync(client, SessionFixtures.Items);
+        Exception? failed = null;
+
+        // A thread whose context never runs what is posted to it, as a UI thread blocked in Dispose doesn't.
+        var thread = new Thread(() =>
+        {
+            SynchronizationContext.SetSynchronizationContext(new NeverRuns());
+            try
+            {
+                client.Dispose();
+            }
+            catch (Exception e)
+            {
+                failed = e;
+            }
+        });
+        thread.Start();
+
+        Assert.IsTrue(thread.Join(TimeSpan.FromSeconds(15)), "Dispose deadlocked on its caller's context");
+        Assert.IsNull(failed);
+        Assert.AreEqual(First, SessionFixtures.To(server, SessionFixtures.SignOutPath).Single().Header("X-Tableau-Auth"));
     }
 
     [TestMethod]
@@ -427,6 +548,16 @@ public sealed class SessionLifecycleTests
         to.AllowInsecureHttp = from.AllowInsecureHttp;
         to.RequestTimeout = from.RequestTimeout;
         to.MaxRetries = from.MaxRetries;
+    }
+
+    /// <summary>A context that queues what is posted to it and never runs it.</summary>
+    private sealed class NeverRuns : SynchronizationContext
+    {
+        public override void Post(SendOrPostCallback d, object? state)
+        {
+        }
+
+        public override void Send(SendOrPostCallback d, object? state) => throw new InvalidOperationException("Nothing runs on this context.");
     }
 
     /// <summary>A vault of the caller's, which gives a secret when asked.</summary>

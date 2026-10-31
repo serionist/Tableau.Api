@@ -189,6 +189,36 @@ public sealed class SessionApiTests
     }
 
     [TestMethod]
+    public async Task ASignInACallersHandlerSentElsewhereSaysToRotateTheCredentials()
+    {
+        using var server = FakeTableauServer.Start();
+        using var elsewhere = FakeTableauServer.Start();
+        server.Map("POST", SessionFixtures.SignInPath, FakeResponse.Redirect(307, new Uri(elsewhere.BaseUrl, SessionFixtures.SignInPath).ToString()));
+        elsewhere.Map("POST", SessionFixtures.SignInPath, SessionFixtures.SignedIn());
+        using var following = new SocketsHttpHandler { AllowAutoRedirect = true, UseCookies = false };
+        using var http = new HttpClient(following, disposeHandler: false);
+        await using var client = new TableauClient(http, SessionFixtures.Options(server), loggerFactory: Fixtures.Log.Factory);
+
+        var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.Redirect, () => client.Sessions.SignInAsync(SessionFixtures.Password()));
+
+        Assert.Contains("The credentials it carried went there too: rotate them", thrown.Message);
+        Assert.Contains(Fixtures.Password, elsewhere.Requests.Single().BodyText, "the handler sent them there, as the message says");
+    }
+
+    [TestMethod]
+    public void ARequestPrintsNoToken()
+    {
+        var request = new Pipeline.TableauRequest(PathValues: ["p1"], Token: Fixtures.SessionToken, SiteId: Fixtures.SiteId);
+
+        var text = request.ToString();
+
+        Assert.DoesNotContain(Fixtures.SessionToken, text);
+        Assert.Contains("Token = ***", text);
+        Assert.Contains(Fixtures.SiteId, text);
+        Assert.Contains("Token = ,", new Pipeline.TableauRequest().ToString());
+    }
+
+    [TestMethod]
     public async Task ASignOutOfASentTokenThatFailsSaysSo()
     {
         using var server = FakeTableauServer.Start();

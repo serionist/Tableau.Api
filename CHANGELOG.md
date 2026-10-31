@@ -82,15 +82,17 @@ and [the migration guide](docs/migration-2.0.md) lists every change from 1.2.5 a
   - The client and its sub-clients are classes with virtual members and protected constructors, for mocks.
   - **Sessions:** give the client `TableauCredentials` (`TableauClient.Create`, its constructor over an `HttpClient`, or
     `AddTableauClient(...).UseCredentials`) and it signs in on the first call that needs a session, one sign-in at a
-    time, signs in again five minutes before the session is due to end (240 minutes on Tableau Server, 120 on Tableau
-    Cloud, sooner when a personal access token expires first) and once after a 401, sending the refused call again,
-    and signs out when you dispose it. A client from DI shares its name's session and signs nothing out.
-  - **Credentials:** `PersonalAccessToken` and `Password`, each optionally impersonating a user on Tableau Server;
-    `ConnectedAppDirectTrust`, which mints the connected app's JWT at each sign-in with HMAC-SHA256, valid five minutes;
-    `Jwt`, for a JWT minted elsewhere; `UnifiedAccessToken`, Tableau Cloud's from REST API 3.27. Each secret can come
-    from a delegate, such as a vault's, called at each sign-in. Impersonation on Tableau Cloud and a unified access
-    token on Tableau Server are refused before anything is sent. `ToString` names the kind and the user, never a
-    secret.
+    time, signs in again five minutes before the session's 240 minutes on Tableau Server or 120 on Tableau Cloud are
+    up, and once after a 401, sending the refused call again, and signs out when you dispose it. A renewal that fails
+    leaves the call in the session it has until the session ends. A client from DI shares its name's session and signs
+    nothing out.
+  - **Credentials:** `PersonalAccessToken` and `Password`, each optionally impersonating a user on Tableau Server, a
+    token's from Tableau Server 2021.1; `ConnectedAppDirectTrust`, which mints the connected app's JWT at each sign-in
+    with HMAC-SHA256, valid five minutes; `Jwt`, for a JWT minted elsewhere; `UnifiedAccessToken`, Tableau Cloud's from
+    REST API 3.27. Each secret can come from a delegate, such as a vault's, called at each sign-in. Impersonation on
+    Tableau Cloud and a unified access token on Tableau Server are refused before anything is sent, and an impersonating
+    sign-in that comes back as another user is signed out and refused. A JWT's sign-in is never sent twice. `ToString`
+    names the kind and the user, never a secret.
   - **`client.Sessions`** signs in a session you hold, switches it to another site (Tableau Server only) and signs it
     out; `client.WithSession(session)` is a client that calls in it and never signs in, so one per site serves work
     across sites. `TableauSession` is a record with the site, the user, when it ends, the deployment and the version;
@@ -116,8 +118,9 @@ and [the migration guide](docs/migration-2.0.md) lists every change from 1.2.5 a
 - **A redirect fails,** where it was followed: use the address the exception names as the base URL.
 - **`TableauApiClient.ServerInfo` is gone:** use `TableauClient.Server.GetInfoAsync`, which returns the 2.0 model
   `ServerInfo` (the migration guide).
-- **`TableauApiClient`'s `SignIn`, `SignInWithPAT`, `SignOut` and `SwitchSite` are gone:** give `TableauClient` credentials,
-  or use `client.Sessions` (the migration guide).
+- **`TableauApiClient`'s `SignIn`, `SignInWithPAT`, `SignOut` and `SwitchSite` are gone:** give `TableauClient`
+  credentials, or use `client.Sessions` (the migration guide). Until an area moves to `TableauClient`, its old methods,
+  and Vizportal's, can't get a session from the library on `main`; 2.0.0 ships with every area moved.
 - **The package depends on Microsoft.Extensions' abstractions,** 10.0.14: Logging.Abstractions, Options,
   DependencyInjection.Abstractions and Http, in place of Microsoft.Extensions.Logging 2.2.0; and on Polly.Core 8.9.0,
   for the retries, which brings no other package.

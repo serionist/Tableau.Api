@@ -146,34 +146,40 @@ internal static class Endpoints
     { NeedsSession = false };
 
     // Sign In is one call with a body per kind of credentials, each from its own version, so each kind has its own
-    // descriptor, and its gates refuse a kind the server lacks before the credentials are read. Sending one twice leaves
-    // at most a session nobody uses, which ends on its own, or, with a personal access token, ends the first: a retry is
-    // safe. Its answer holds the session's token, so no exception keeps it.
+    // descriptor, and its gates refuse a kind the server lacks before the credentials are read. A password's or a
+    // personal access token's sent twice leaves at most a session nobody uses, which ends on its own, or, with a token,
+    // ends the first: a retry is safe. A JWT's is never sent twice: Tableau refuses a JWT whose jti it has seen, and a
+    // late attempt may pass the JWT's exp; the next call mints or asks for a new one. Its answer holds the session's
+    // token, so no exception keeps it.
 
     /// <summary>Sign In with a user's name and password (REST API 1.0).</summary>
-    public static readonly Endpoint SignIn = SignInAs("Sign In", new Version(1, 0), TableauDeployments.Both);
+    public static readonly Endpoint SignIn = SignInAs("Sign In", new Version(1, 0), TableauDeployments.Both, idempotent: true);
 
     /// <summary>Sign In with a name and password, impersonating another user: Tableau Server only.</summary>
     public static readonly Endpoint SignInImpersonating = SignInAs("Sign In, impersonating a user", new Version(1, 0),
-        TableauDeployments.Server);
+        TableauDeployments.Server, idempotent: true);
 
     /// <summary>Sign In with a personal access token (REST API 3.6, Tableau Server 2019.4).</summary>
     public static readonly Endpoint SignInWithPersonalAccessToken = SignInAs("Sign In with a personal access token",
-        new Version(3, 6), TableauDeployments.Both);
+        new Version(3, 6), TableauDeployments.Both, idempotent: true);
 
-    /// <summary>Sign In with a personal access token, impersonating another user: Tableau Server only.</summary>
+    /// <summary>
+    /// Sign In with a personal access token, impersonating another user: Tableau Server only, from REST API 3.11 (Tableau
+    /// Server 2021.1), with <c>tsm authentication pat-impersonation enable</c> on the server.
+    /// </summary>
     public static readonly Endpoint SignInWithPersonalAccessTokenImpersonating = SignInAs(
-        "Sign In with a personal access token, impersonating a user", new Version(3, 6), TableauDeployments.Server);
+        "Sign In with a personal access token, impersonating a user", new Version(3, 11), TableauDeployments.Server, idempotent: true);
 
     /// <summary>
     /// Sign In with a JWT: a connected app's, by direct trust or OAuth 2.0 trust (REST API 3.17, Tableau Server 2022.3;
-    /// Tableau Cloud from 3.16).
+    /// Tableau Cloud from 3.16). Never sent twice.
     /// </summary>
-    public static readonly Endpoint SignInWithJwt = SignInAs("Sign In with a JWT", new Version(3, 17), TableauDeployments.Both);
+    public static readonly Endpoint SignInWithJwt = SignInAs("Sign In with a JWT", new Version(3, 17), TableauDeployments.Both,
+        idempotent: false);
 
-    /// <summary>Sign In with a unified access token's JWT, <c>isUat</c>: Tableau Cloud only, REST API 3.27.</summary>
+    /// <summary>Sign In with a unified access token's JWT, <c>isUat</c>: Tableau Cloud only, REST API 3.27. Never sent twice.</summary>
     public static readonly Endpoint SignInWithUnifiedAccessToken = SignInAs("Sign In with a unified access token",
-        new Version(3, 27), TableauDeployments.Cloud);
+        new Version(3, 27), TableauDeployments.Cloud, idempotent: false);
 
     /// <summary>Sign Out: ends the session whose token it sends, answering 204. Ending it twice ends it once.</summary>
     public static readonly Endpoint SignOut = new("Sign Out", HttpMethod.Post, "{version}/auth/signout", new Version(1, 0),
@@ -195,7 +201,10 @@ internal static class Endpoints
         SignInWithJwt, SignInWithUnifiedAccessToken, SignOut, SwitchSite,
     ];
 
-    private static Endpoint SignInAs(string name, Version minVersion, TableauDeployments deployments) =>
-        new(name, HttpMethod.Post, SignInTemplate, minVersion, deployments, Idempotent: true, TransferKind.None)
+    /// <summary>Whether a descriptor is a Sign In's, whose body holds credentials.</summary>
+    public static bool IsSignIn(Endpoint endpoint) => endpoint.Template == SignInTemplate;
+
+    private static Endpoint SignInAs(string name, Version minVersion, TableauDeployments deployments, bool idempotent) =>
+        new(name, HttpMethod.Post, SignInTemplate, minVersion, deployments, idempotent, TransferKind.None)
         { NeedsSession = false, KeepsBody = false };
 }

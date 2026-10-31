@@ -134,6 +134,10 @@ services.AddTableauClient("prod", options => configuration.GetSection("Tableau:P
 | `SwitchSite(session, newSiteContentUrl, cancelToken)` | `client.Sessions.SwitchSiteAsync(session, site, cancellationToken)` | Tableau Server only; the session you switch from ends |
 | `Tableau.Api.Models.TableauSession`, mutable, its `Token` public, its `UserName` always null | `Tableau.Api.TableauSession`, a record whose token is internal and never printed; `UserName` is the user's, or the token's name for a PAT | Call through `client.WithSession(session)`. The 1.x type stays until the old client goes, and the old client's methods still take it |
 
+On `main` until 2.0.0, an area not yet moved to `TableauClient` can't get a session from the library: its old
+`TableauApiClient` methods, and Vizportal's, take a `Models.TableauSession` that no sign-in makes now, and the new
+session's token is internal. Each area moves in its own step, and 2.0.0 ships with every one moved.
+
 Also new: `TableauCredentials.ConnectedAppDirectTrust`, which mints a connected app's JWT at each sign-in;
 `TableauCredentials.Jwt`, for a JWT minted elsewhere; and `TableauCredentials.UnifiedAccessToken`, Tableau Cloud's,
 from REST API 3.27. A sign-in's `TableauException` keeps none of Tableau's answer. A namespace that imports both

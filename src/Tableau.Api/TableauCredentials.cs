@@ -38,8 +38,14 @@ public abstract class TableauCredentials
 
     /// <summary>
     /// A personal access token: its name and its secret. Optionally impersonating another user, by that user's LUID, which
-    /// only Tableau Server allows, and only to a server administrator's token.
+    /// only Tableau Server allows: from Tableau Server 2021.1 (REST API 3.11), to a server administrator's token, once the
+    /// server's administrator has run <c>tsm authentication pat-impersonation enable</c>.
     /// </summary>
+    /// <remarks>
+    /// A sign-in that impersonates and comes back as another user than the one asked for, as from a server that ignored
+    /// the request, is signed out at once and fails with <see cref="TableauErrorKind.Authentication"/>, so no call acts
+    /// as the token's owner by mistake.
+    /// </remarks>
     /// <param name="name">The token's name, which the session's <see cref="TableauSession.UserName"/> takes.</param>
     /// <param name="secret">The token's secret.</param>
     /// <param name="impersonateUserId">The LUID of the user to act as, or null. Refused before sending on Tableau Cloud.</param>
@@ -141,6 +147,10 @@ public abstract class TableauCredentials
     /// A user's name and password. Optionally impersonating another user, by that user's LUID, which only Tableau Server
     /// allows, and only to a server administrator. Tableau Cloud takes no password when multi-factor authentication is on.
     /// </summary>
+    /// <remarks>
+    /// A sign-in that impersonates and comes back as another user than the one asked for is signed out at once and fails
+    /// with <see cref="TableauErrorKind.Authentication"/>.
+    /// </remarks>
     /// <param name="name">The user's name.</param>
     /// <param name="password">The user's password.</param>
     /// <param name="impersonateUserId">The LUID of the user to act as, or null. Refused before sending on Tableau Cloud.</param>
@@ -169,6 +179,9 @@ public abstract class TableauCredentials
 
     /// <summary>The kind, as a log line and <see cref="ToString"/> name it.</summary>
     internal abstract string Kind { get; }
+
+    /// <summary>The LUID of the user a sign-in impersonates, or null.</summary>
+    internal virtual string? ImpersonateUserId => null;
 
     /// <summary>Who <see cref="ToString"/> names: the user, or the token's name; never a secret.</summary>
     private protected abstract string? Shown { get; }
@@ -221,6 +234,8 @@ public abstract class TableauCredentials
     {
         internal override string Kind => "PersonalAccessToken";
 
+        internal override string? ImpersonateUserId => impersonateUserId;
+
         private protected override string? Shown => impersonateUserId is null ? name : $"{name}, as {impersonateUserId}";
 
         internal override Endpoint Endpoint => impersonateUserId is null
@@ -245,6 +260,8 @@ public abstract class TableauCredentials
         : TableauCredentials
     {
         internal override string Kind => "Password";
+
+        internal override string? ImpersonateUserId => impersonateUserId;
 
         private protected override string? Shown => impersonateUserId is null ? name : $"{name}, as {impersonateUserId}";
 

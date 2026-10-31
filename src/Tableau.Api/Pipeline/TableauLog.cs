@@ -64,6 +64,10 @@ internal static partial class TableauLog
         Message = "Tableau client {Client}: signing out failed; the session ends on its own")]
     public static partial void SignOutFailed(ILogger logger, string client, Exception exception);
 
+    [LoggerMessage(EventId = 16, Level = LogLevel.Debug,
+        Message = "Tableau client {Client}: signing in again failed; the session it has serves until {ExpiresAt:O}, and a minute from now it tries again")]
+    public static partial void RenewalFailed(ILogger logger, string client, DateTimeOffset expiresAt, Exception exception);
+
     [LoggerMessage(EventId = 15, Level = LogLevel.Debug,
         Message = "Tableau client {Client}: the HttpClient's own handler sent a session's token to {Origin}; signing that session out")]
     public static partial void TokenSentElsewhere(ILogger logger, string client, string origin);
