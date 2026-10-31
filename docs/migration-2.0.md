@@ -95,8 +95,8 @@ What changes for a caller who moves a call over:
   `TransferTimeout` instead, for the whole of it, with no limit by default.
 - **Downloads,** as their areas move over: a `TableauDownload`, returned once the headers have come, whose `Content`
   streams from the server, where 1.2.5 read the whole file into memory first. Dispose it; `SaveToFileAsync` writes it
-  to a file. Its `FileName` is cleaned to a name alone, and `Kind` says what it is, where 1.2.5's data source download
-  returned a `DatasourceFileType`.
+  to a file. Its `FileName` is cleaned to a name alone, and `Kind` says what it is, as the `DatasourceFileType` beside
+  the stream of the old `DownloadDataSource` did.
 
 | 1.2.5 | 2.0 | How to move over |
 |---|---|---|
