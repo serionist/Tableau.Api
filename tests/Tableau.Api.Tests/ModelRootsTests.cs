@@ -17,7 +17,8 @@ public sealed class ModelRootsTests
 {
     private static readonly Assembly _library = typeof(TableauApiClient).Assembly;
 
-    private static (HashSet<string> Namespaces, HashSet<string> Types) Roots()
+    /// <summary>The namespaces and types roots.xml keeps, which the conventions test reads too.</summary>
+    internal static (HashSet<string> Namespaces, HashSet<string> Types) Roots()
     {
         using var stream = typeof(ModelRootsTests).Assembly.GetManifestResourceStream("roots.xml")!;
         var assembly = XDocument.Load(stream).Root!.Elements("assembly")
@@ -27,7 +28,7 @@ public sealed class ModelRootsTests
             new HashSet<string>(assembly.Elements("type").Select(element => (string)element.Attribute("fullname")!), StringComparer.Ordinal));
     }
 
-    private static bool Rooted(Type type, (HashSet<string> Namespaces, HashSet<string> Types) roots) =>
+    internal static bool Rooted(Type type, (HashSet<string> Namespaces, HashSet<string> Types) roots) =>
         roots.Types.Contains(type.FullName!) || (type.Namespace is { } name && roots.Namespaces.Contains(name));
 
     [TestMethod]

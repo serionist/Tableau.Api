@@ -35,19 +35,22 @@ Real bugs a user would hit. The lenses below are where this repo breaks most; th
 
 ## rest-contract
 
-Applies when: the scope touches `TableauApiClient*.cs`, `buildUri`, `apiRequest`, or a type in `Models/`.
+Applies when: the scope touches `TableauApiClient*.cs`, `buildUri`, `apiRequest`, a sub-client of `TableauClient`,
+`Pipeline/` (an `Endpoints` descriptor, `TableauPipeline`, `RequestUri`), or a type in `Models/` or `Rest/Models/`.
 
 - Does each request match the REST API reference: method, path (`sites/{site-id}/...`), query names, body, expected
   status? `AGENTS.md`, Traps, lists the endpoints that got this wrong before.
-- Does its `[ApiVersion]` name the version the reference gives, and `[OnPremiseOnly]` mark what Tableau Cloud lacks?
+- Does its descriptor in `Endpoints` (the 2.0 client) name the version the reference gives, `Server` alone for what
+  Tableau Cloud lacks, and whether it is idempotent and moves a file? On the old client, does its `[ApiVersion]` name
+  the version, and `[OnPremiseOnly]` mark what Tableau Cloud lacks?
 - Does it still deserialise what older versions send (the `tableausoftware.com` namespace) and what Tableau Cloud
   sends (`TableauIDWithMFA`)?
 - Pagination: page size and number checked, every page reachable.
 
 ## credentials
 
-Applies when: the scope touches sign-in, `TableauSession`, tokens, impersonation, logging, Vizportal's cookies, or
-`IgnoreSSLErrors`.
+Applies when: the scope touches sign-in, `TableauSession`, tokens, impersonation, logging, Vizportal's cookies,
+`IgnoreSSLErrors` or `DangerousAcceptAnyServerCertificate`.
 
 Name the concrete leak and what it gains.
 
@@ -60,11 +63,14 @@ A leak, or certificate checks off by default, is a blocker.
 
 ## public-api
 
-Applies when: the scope touches a public member of `TableauApiClient`, `VizPortalClient`, or a type in `Models/` or
-`VizPortal/Models/`.
+Applies when: the scope touches a public member of the 2.0 client (`TableauClient` and its sub-clients,
+`TableauClientOptions`, `AddTableauClient` and `TableauClientBuilder`, `TableauException` and `TableauErrorKind`, the
+models in `Tableau.Api.Rest.Models`) or of the old one (`TableauApiClient`, `VizPortalClient`, a type in `Models/` or
+`VizPortal/Models/`).
 
 - Does a public name, parameter, default or return type change? Named in the PR, with how callers move over? A
-  silent change is a one-way door broken: a blocker.
+  silent change is a one-way door broken: a blocker. On the 2.0 client: does a new public type join
+  `tests/Tableau.Api.Aot/roots.xml`, and does a sub-client keep its protected constructor and virtual methods?
 - A regenerated `XmlSchema.cs`: do the lower-case generated type names users already reference still exist?
 - Regenerated models (`eng/generate-models.cs`): does each change in `Rest/Models/Generated/` come from the schema or
   the generator, and is each renamed or dropped type or member named in the PR as a break?
@@ -117,7 +123,9 @@ Applies when: the scope touches the target framework, packages, paths, files, en
 
 - The target framework: `main` targets net10.0 only; .NET Framework users stay on 1.2.x, on netstandard2.0. A change
   to the target, a second one included, is a one-way door (`AGENTS.md`).
-- Tableau Server and Tableau Cloud, and every REST API version the client claims.
+- Tableau Server and Tableau Cloud, and every REST API version a client claims: `TableauClient` 3.23 (Tableau Server
+  2024.2) to 3.29 and Tableau Cloud, older only with `AllowUnsupportedServerVersion`; `TableauApiClient` 2.0 and up. A
+  change to that claim is a one-way door (`AGENTS.md`).
 - Windows and Linux: path separators, `\r\n`, text read and written as UTF-8 explicitly, a tool assumed on PATH.
 
 ## harness-integrity

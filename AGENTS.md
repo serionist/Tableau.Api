@@ -6,21 +6,21 @@ Codex reads it directly; the gate caps it at 150 lines.
 ## What this is
 
 A .NET client for Tableau's REST API and its internal Vizportal API, published on nuget.org as `Tableau.Api` (last
-release 1.2.6, 2026-10-30, built for netstandard2.0, from `release/1.x`). `main` builds 2.0, for net10.0 only, on
-Newtonsoft.Json and Microsoft.Extensions.Logging.
+release 1.2.6, 2026-10-30, netstandard2.0, from `release/1.x`). `main` builds 2.0 (#2, `docs/plans/`), net10.0 only,
+on Newtonsoft.Json, Microsoft.Extensions.Logging.Abstractions, .Options, .DependencyInjection.Abstractions and .Http.
 
-- **`TableauApiClient`:** the REST API, one partial class per area (`TableauApiClient_<Area>.cs`). It sends and reads
-  XML through `XmlSerializer`, with the types in `Models/XmlSchema.cs`, generated from Tableau's REST API 3.16 schema.
+- **`TableauClient`:** 2.0's client, with options, DI, one pipeline (`Pipeline/`: an `Endpoints` descriptor per call,
+  the gates, redirects, errors) and a sub-client per area, `Server` first. JSON through the models in `Rest/Models/`.
+- **`TableauApiClient`:** the old REST client, one partial class per area (`TableauApiClient_<Area>.cs`), XML through
+  `XmlSerializer` and `Models/XmlSchema.cs` (REST API 3.16); each area goes as `TableauClient` takes it over.
 - **`VizPortalClient`:** Tableau's own web client's API (`/vizportal/api/web/v1/`), JSON through Newtonsoft.Json. It
   is internal and unversioned: Tableau documents none of it and may change it in any release.
-- **Where the work stands:** issue #2 modernizes the code by the plan in `docs/plans/`, which records the decisions.
-  Until then it is 2024's, with 1.2.6's request rules, Vizportal's certificate checks and 2.0's models (`Rest/Models/`).
 
 ## Where things are
 
 | Path | What |
 |---|---|
-| `src/` | `Directory.Build.targets`: the trim analyzer's package pinned, so an SDK patch leaves the lock file alone; `Directory.Build.props`: the package (MinVer from `v` tags, at least 2.0; the README; symbols; package validation against 1.2.5, with `Tableau.Api/CompatibilitySuppressions.xml` passing only the dropped netstandard2.0); `Tableau.Api/`, the library: `TableauApiClient.cs` (requests, `buildUri`, versions), `RequestPath.cs` (each value in a request path escaped and checked), `TableauHttp.cs` (the handler both clients use: certificates, no redirects, the base URL's path), `TableauApiClient_*.cs` (endpoints by area), `VizPortal/` (the Vizportal client and its `Models/`), `Rest/Models/` (2.0's JSON models: `Generated/`, which `eng/generate-models.cs` writes and nothing else edits; `TableauJsonContext` and the converters), `Models/` (`XmlSchema.cs`, generated; `how_to_generate_schema.txt`, the steps; `SchemaExtensions.cs`, `TableauSession.cs`), `Attributes/` (`ApiVersion`, `OnPremiseOnly`), `Enums/`, `Exceptions/`, `PartialStream.cs`, `Tableau.Api.csproj` |
+| `src/` | `Directory.Build.targets`: the trim analyzer's package pinned, so an SDK patch leaves the lock file alone; `Directory.Build.props`: the package (MinVer from `v` tags, at least 2.0; the README; symbols; package validation against 1.2.5, with `Tableau.Api/CompatibilitySuppressions.xml` passing only the dropped netstandard2.0); `Tableau.Api/`, the library: `TableauClient.cs`, `TableauClientOptions.cs`, `TableauServiceCollectionExtensions.cs` (`AddTableauClient`), `TableauException.cs`, `ServerClient.cs` and `Pipeline/` (2.0's client: `TableauPipeline`, `RequestUri` with 1.2.6's path and query rules, `TableauHandler`, `ApiVersions`, `Endpoint`), `TableauApiClient.cs` (the old client's requests, `buildUri`, versions), `RequestPath.cs` (its paths, each value escaped and checked), `TableauHttp.cs` (the old clients' handler: certificates, no redirects, the base URL's path), `TableauApiClient_*.cs` (endpoints by area), `VizPortal/` (the Vizportal client and its `Models/`), `Rest/Models/` (2.0's JSON models: `Generated/`, which `eng/generate-models.cs` writes and nothing else edits; `TableauJsonContext` and the converters), `Models/` (`XmlSchema.cs`, generated; `how_to_generate_schema.txt`, the steps; `SchemaExtensions.cs`, `TableauSession.cs`), `Attributes/` (`ApiVersion`, `OnPremiseOnly`), `Enums/`, `Exceptions/`, `PartialStream.cs`, `Tableau.Api.csproj` |
 | `tests/` | `Directory.Build.props`: test applications on MSTest and Microsoft.Testing.Platform, with its coverage extension, never packed; `coverage.config`, what coverage measures: the library without `XmlSchema.cs` and what source generators write into its `obj/`; `Tableau.Api.Aot/`, the app CI publishes with native AOT, with `roots.xml`, the 2.0 types it keeps; `Tableau.Api.Tests/`, the tests: `Fixtures/` (Tableau's JSON bodies, invented, and `manifest.json`), `Fakes/` (`FakeTableauServer`, an HTTP/1.1 server on a loopback port, with a TLS mode, that records each request as sent; `RecordingLogger`, each log line), `Fixtures.cs` (the invented site, user and tokens), `TableauSite.cs` (`[SiteTest]` and the `Live` and `ServerOnly` categories), one class per behaviour |
 | `Tableau.Api.slnx` | the solution: the library, the tests and the native AOT app |
 | `eng/` | `gate.cs`, the gate, the hooks' entry points and the setup, as one .NET file-based app; `generate-models.cs`, 2.0's models from `schema/`, Tableau's xsd, whose README gives its URL and SHA-256 (`dotnet run eng/generate-models.cs` rewrites them, `-- --check` compares); `coverage-gate.cs`, the tests' coverage against the floors in `coverage.json`; `package-check.cs`, what a packed package must hold (`dotnet run eng/package-check.cs -- <folder> [<version>]`); `apicompat.cs`, 1.2.5's API against the build's, by the ApiCompat tool, and `apicompat/`: `1.2.5.xml`, the ledger of every break, and `Baseline.csproj`, the assemblies 1.2.5 compiles against |
@@ -76,8 +76,7 @@ the skills, *the developer* is the person driving the session; approving a plan 
 5. **finish-work:** `dotnet run eng/gate.cs -- full`, a draft PR, `review-code` until clean.
 6. **A maintainer** squash-merges.
 
-The skills in `.claude/skills/` run this loop: `start-work` (1 to 3), `review-plan`, `review-code`, `finish-work`
-(5), and `write-skill` for writing or fixing a skill.
+The skills run it: `start-work` (1 to 3), `review-plan`, `review-code`, `finish-work` (5), and `write-skill`.
 
 ## Writing
 
@@ -90,8 +89,7 @@ The skills in `.claude/skills/` run this loop: `start-work` (1 to 3), `review-pl
 
 ## Commits and PRs
 
-- A plain imperative subject that says what changed; a body that says why, ending `Refs #<n>`, `Closes #<n>` or
-  `Fixes #<n>`.
+- An imperative subject saying what changed; a body saying why, ending `Refs #<n>`, `Closes #<n>` or `Fixes #<n>`.
 - PRs are squash-merged: the PR title becomes the subject on `main`, its description the body.
 - No tool attribution anywhere: no AI co-author trailers, no "Generated with" lines, no session links, in commits,
   PR titles or PR bodies. `commit-msg` refuses them, and the gate checks every message on the branch.
@@ -106,12 +104,14 @@ maintainer agrees in its issue; the other can object on the PR before it merges.
 
 - the NuGet id `Tableau.Api`;
 - the root namespace `Tableau.Api`, and the namespaces under it;
-- the public API of `TableauApiClient`, `VizPortalClient` and the `Models` types users get back
-  (`Tableau.Api.Models`, `Tableau.Api.VizPortal.Models`): names, parameters, defaults, return types;
+- the public API of `TableauClient` (its sub-clients and their verbs, the options, `AddTableauClient`,
+  `TableauException` and its kinds), `TableauApiClient`, `VizPortalClient` and the models users get back
+  (`Tableau.Api.Rest.Models`, `.Models`, `.VizPortal.Models`): names, parameters, defaults, return types;
 - the target framework: net10.0 only for 2.x (#30); .NET Framework 4.6.1 and later stay on 1.2.x, on netstandard2.0;
 - the version scheme: 2.x from MinVer on `v` tags, at least 2.0; 1.x by `<Version>` on `release/1.x`, tags `v1.*`;
-- the Tableau versions it claims: REST API 2.0 and up, a version above 3.14 used as 3.14 with a warning
-  (`_minVersion`, `_maxVersion` in `TableauApiClient.cs`), on Tableau Server and Tableau Cloud.
+- the Tableau versions claimed: `TableauClient`, REST API 3.23 (Server 2024.2) to 3.29 and Tableau Cloud, older only
+  with `AllowUnsupportedServerVersion` (`Pipeline/ApiVersions.cs`, #39); `TableauApiClient`, REST API 2.0 and up, a
+  version above 3.14 used as 3.14 with a warning, on Tableau Server and Tableau Cloud.
 
 ## Traps
 
@@ -123,7 +123,7 @@ What this repo's history already paid for:
 | Older API versions answer in the `http://tableausoftware.com/api` namespace, which didn't deserialise | `a43049b`, `54ff383` | `_readResponseString` rewrites it to `http://tableau.com/api` |
 | Older API versions refused a request with the XML declaration or namespaces on `tsRequest` | `a43049b`, `6000591` | `getObjectAsRequestContent` strips both |
 | Tableau Cloud sends `TableauIDWithMFA` as a user's auth setting, which the 3.16 schema lacks | `4267562` | Added to `siteUserAuthSettingType` by hand; step 4 of `how_to_generate_schema.txt` re-adds it after a regeneration. 2.0's enumerations keep any value's text (`eng/generate-models.cs`), so the schema is never edited |
-| The constructor detected the version with `ServerInfo().Result`, logging through `Log` before it was set; removed a release later | `9be1ae9`, `a169131` | The caller names the version; a constructor sends no request |
+| The constructor detected the version with `ServerInfo().Result`, logging through `Log` before it was set; removed a release later | `9be1ae9`, `a169131` | A constructor sends no request: the old client takes the version it is given, `TableauClient` asks Server Info on its first call |
 | `AppendToFileUpload` POSTed a new upload instead of PUTting to `fileUploads/{id}` | `b5edc7b` | Method and path from the REST API reference |
 | `SwitchSite` sent the site's id where the API takes its content URL | `60e39fd` | `siteType.contentUrl` |
 | `QueryViewPreviewImage` and `UpdateGroup` left an id out of their path; each fix added a parameter, a public API break | `56a69c4`, `faf9c4a` | Every id the reference's path names is a parameter |
@@ -134,7 +134,7 @@ What this repo's history already paid for:
 - **Tableau's REST API:** the reference at https://help.tableau.com/current/api/rest_api/en-us/REST/rest_api_ref.htm,
   for the method, path, body and version of each endpoint, and its schema page for the xsd. Vizportal has no public
   reference: a change to it is checked on a live site.
-- **.NET** (`HttpClient`, `XmlSerializer`, logging, file-based apps): Microsoft Learn, through `.mcp.json`.
+- **.NET** (`HttpClient`, options, DI, logging, `XmlSerializer`, file-based apps): Microsoft Learn, through `.mcp.json`.
 - **Newtonsoft.Json:** Context7, through `.mcp.json`. Libraries move faster than any model's memory.
 
 ## Never

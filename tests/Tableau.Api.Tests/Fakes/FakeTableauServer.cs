@@ -65,6 +65,9 @@ internal sealed class FakeTableauServer : IDisposable
     /// </summary>
     public static FakeTableauServer StartTls() => new(UntrustedCertificate());
 
+    /// <summary>A server that speaks HTTPS with the certificate given, which it disposes when it stops.</summary>
+    public static FakeTableauServer StartTls(X509Certificate2 certificate) => new(certificate);
+
     /// <summary>
     /// Answer method and path with respond. The path is the request target before any `?`, as sent, escapes
     /// included. A request with no route gets a 404 with a Tableau error body, so the client throws.

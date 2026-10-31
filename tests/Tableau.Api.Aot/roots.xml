@@ -9,5 +9,14 @@
   <assembly fullname="Tableau.Api">
     <!-- The models generated from Tableau's schema, with their converters and the JSON context. -->
     <namespace fullname="Tableau.Api.Rest.Models" />
+    <!-- The client: its options, its registration with DI, its exception and its sub-clients. -->
+    <type fullname="Tableau.Api.ServerClient" />
+    <type fullname="Tableau.Api.TableauClient" />
+    <type fullname="Tableau.Api.TableauClientBuilder" />
+    <type fullname="Tableau.Api.TableauClientOptions" />
+    <type fullname="Tableau.Api.TableauDeployment" />
+    <type fullname="Tableau.Api.TableauErrorKind" />
+    <type fullname="Tableau.Api.TableauException" />
+    <type fullname="Tableau.Api.TableauServiceCollectionExtensions" />
   </assembly>
 </linker>

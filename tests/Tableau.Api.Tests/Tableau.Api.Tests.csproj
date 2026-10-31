@@ -3,12 +3,15 @@
   <!-- The offline tests: the library, as users get it, driven against a fake Tableau server on a loopback port, and its
        models against the JSON fixtures in Fixtures/. The test application's settings and its packages are in
        tests/Directory.Build.props. -->
+  <!-- The configuration binder's source generator binds the client's options here as an AOT app's would. -->
   <PropertyGroup>
     <ImplicitUsings>disable</ImplicitUsings>
+    <EnableConfigurationBindingGenerator>true</EnableConfigurationBindingGenerator>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Tableau.Api\Tableau.Api.csproj" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
   </ItemGroup>
 
   <ItemGroup>
