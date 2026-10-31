@@ -71,11 +71,8 @@ internal sealed class TableauSessions(TableauClientState state, TableauCredentia
     /// A new session for a call whose session the server refused: one another call signed in meanwhile, or a sign-in of
     /// this call's own.
     /// </summary>
-    public ValueTask<TableauSession> RenewAsync(TableauPipeline pipeline, TableauSession failed, CancellationToken cancellationToken)
-    {
-        TableauLog.SigningInAgain(state.Logger, state.DisplayName, "the server answered 401");
-        return SignInAsync(pipeline, failed, cancellationToken);
-    }
+    public ValueTask<TableauSession> RenewAsync(TableauPipeline pipeline, TableauSession failed, CancellationToken cancellationToken) =>
+        SignInAsync(pipeline, failed, cancellationToken);
 
     /// <summary>Drops the session held, if its token is the one given: one that went to another host.</summary>
     public void Discard(string token)
@@ -196,7 +193,9 @@ internal sealed class TableauSessions(TableauClientState state, TableauCredentia
                 return held.Session;
             if (Volatile.Read(ref _failures) != failuresSeen && _failure is { } failure)
                 failure.Throw();
-            if (_held is not null && failed is null)
+            if (failed is not null)
+                TableauLog.SigningInAgain(state.Logger, state.DisplayName, "the server refused the session with a 401");
+            else if (_held is not null)
                 TableauLog.SigningInAgain(state.Logger, state.DisplayName, "the session is due to end");
             try
             {
