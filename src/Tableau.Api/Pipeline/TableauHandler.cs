@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Net.Http;
 using System.Net.Security;
@@ -20,23 +21,45 @@ internal static class TableauHandler
     /// cookies, so nothing one response sets rides on another request or another session's; and validates the server's
     /// certificate, revoked ones refused, unless the options turn the check off.
     /// </summary>
-    public static SocketsHttpHandler Create(TableauClientOptions options) => Create(options, CertificatePolicy());
+    /// <param name="options">The client's options.</param>
+    /// <param name="configure">The caller's own settings, from <c>ConfigurePrimaryHandler</c>, in the order given.</param>
+    public static SocketsHttpHandler Create(TableauClientOptions options, IEnumerable<Action<SocketsHttpHandler>>? configure = null) =>
+        Create(options, CertificatePolicy(), configure);
 
-    /// <summary>The same, with the certificate policy given, which the tests point at a certificate authority of their own.</summary>
+    /// <summary>
+    /// The same, with the certificate policy given, which the tests point at a certificate authority of their own. The
+    /// handler starts with the library's settings; the caller's actions run on it; then the library's rules are set
+    /// again, whatever the actions did: no redirects, no cookies, and the certificate check the options ask for, with the
+    /// policy given where the actions left none. A chain policy the actions set, such as one that trusts a private
+    /// certificate authority, is kept.
+    /// </summary>
     [SuppressMessage("Security", "CA5359:Do Not Disable Certificate Validation", Justification = "Only when the caller sets "
         + "DangerousAcceptAnyServerCertificate, which asks for exactly this; the client logs a warning when it is built.")]
-    public static SocketsHttpHandler Create(TableauClientOptions options, X509ChainPolicy policy)
+    public static SocketsHttpHandler Create(TableauClientOptions options, X509ChainPolicy policy,
+        IEnumerable<Action<SocketsHttpHandler>>? configure = null)
     {
         var handler = new SocketsHttpHandler
         {
-            AllowAutoRedirect = false,
-            UseCookies = false,
             PooledConnectionLifetime = PooledConnectionLifetime,
             SslOptions = new SslClientAuthenticationOptions { CertificateChainPolicy = policy },
         };
-        if (options.DangerousAcceptAnyServerCertificate)
-            handler.SslOptions.RemoteCertificateValidationCallback = static (_, _, _, _) => true;
-        return handler;
+        try
+        {
+            foreach (var action in configure ?? [])
+                action(handler);
+            handler.AllowAutoRedirect = false;
+            handler.UseCookies = false;
+            handler.SslOptions.CertificateChainPolicy ??= policy;
+            handler.SslOptions.RemoteCertificateValidationCallback = options.DangerousAcceptAnyServerCertificate
+                ? static (_, _, _, _) => true
+                : null;
+            return handler;
+        }
+        catch
+        {
+            handler.Dispose();
+            throw;
+        }
     }
 
     /// <summary>

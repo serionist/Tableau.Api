@@ -164,7 +164,7 @@ public sealed class ClientCertificateTests
     }
 
     /// <summary>A certificate authority for one test: its root, a leaf for 127.0.0.1, and its revocation list.</summary>
-    private sealed class TestAuthority : IDisposable
+    internal sealed class TestAuthority : IDisposable
     {
         private readonly RSA _key = RSA.Create(2048);
         private readonly X509Certificate2 _root;
@@ -178,6 +178,9 @@ public sealed class ClientCertificateTests
             var now = DateTimeOffset.UtcNow;
             _root = request.CreateSelfSigned(now.AddMinutes(-5), now.AddHours(1));
         }
+
+        /// <summary>The authority's own certificate, which a client trusts to trust its leaves.</summary>
+        public X509Certificate2 Root => _root;
 
         /// <summary>
         /// Where server will serve the authority's revocation list: a path no other run has used, so no cache of a list

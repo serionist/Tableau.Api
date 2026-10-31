@@ -31,6 +31,8 @@ public sealed class ClientOptionsTests
         Assert.IsFalse(options.AllowInsecureHttp);
         Assert.AreEqual(TimeSpan.FromMinutes(2), options.RequestTimeout);
         Assert.AreEqual(Timeout.InfiniteTimeSpan, options.TransferTimeout);
+        Assert.AreEqual(3, options.MaxRetries);
+        Assert.AreEqual(TimeSpan.FromMinutes(2), options.MaxRetryAfter);
     }
 
     [TestMethod]
@@ -47,6 +49,9 @@ public sealed class ClientOptionsTests
     [DataRow("zero timeout", "RequestTimeout is 00:00:00")]
     [DataRow("negative timeout", "TransferTimeout is -00:00:01")]
     [DataRow("long timeout", "RequestTimeout is 30.00:00:00")]
+    [DataRow("negative retries", "MaxRetries is -1: give 0, for no retries, or more")]
+    [DataRow("negative retry after", "MaxRetryAfter is -00:00:01")]
+    [DataRow("long retry after", "MaxRetryAfter is 30.00:00:00")]
     public void BadOptionsAreRefusedWhenAClientIsBuilt(string what, string message)
     {
         var options = new TableauClientOptions { ServerUrl = new Uri("https://tableau.example.com/") };
@@ -65,6 +70,9 @@ public sealed class ClientOptionsTests
             case "zero timeout": options.RequestTimeout = TimeSpan.Zero; break;
             case "negative timeout": options.TransferTimeout = TimeSpan.FromSeconds(-1); break;
             case "long timeout": options.RequestTimeout = TimeSpan.FromDays(30); break;
+            case "negative retries": options.MaxRetries = -1; break;
+            case "negative retry after": options.MaxRetryAfter = TimeSpan.FromSeconds(-1); break;
+            case "long retry after": options.MaxRetryAfter = TimeSpan.FromDays(30); break;
         }
 
         var thrown = Assert.ThrowsExactly<ArgumentException>(() => TableauClient.Create(options));
@@ -84,6 +92,8 @@ public sealed class ClientOptionsTests
         Assert.ThrowsExactly<InvalidOperationException>(() => options.ServerUrl = new Uri("https://elsewhere.example.com/"));
         Assert.ThrowsExactly<InvalidOperationException>(() => options.DangerousAcceptAnyServerCertificate = true);
         Assert.ThrowsExactly<InvalidOperationException>(() => options.ApiVersion = new Version(3, 25));
+        Assert.ThrowsExactly<InvalidOperationException>(() => options.MaxRetries = 0);
+        Assert.ThrowsExactly<InvalidOperationException>(() => options.MaxRetryAfter = TimeSpan.Zero);
         Assert.AreEqual(new Uri("https://tableau.example.com/"), options.ServerUrl);
     }
 

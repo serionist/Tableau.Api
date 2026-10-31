@@ -294,12 +294,74 @@ internal sealed class FakeTableauServer : IDisposable
             .Append(' ').Append(response.Reason).Append("\r\n");
         if (response.ContentType is { } contentType) head.Append("Content-Type: ").Append(contentType).Append("\r\n");
         foreach (var header in response.Headers) head.Append(header.Key).Append(": ").Append(header.Value).Append("\r\n");
-        head.Append("Content-Length: ").Append(response.Body.Length.ToString(CultureInfo.InvariantCulture))
-            .Append("\r\nConnection: close\r\n\r\n");
-        var bytes = Encoding.ASCII.GetBytes(head.ToString());
+        if (response.Writer is not null && response.StreamedLength is null)
+            head.Append("Transfer-Encoding: chunked");
+        else
+            head.Append("Content-Length: ").Append((response.StreamedLength ?? response.Body.Length).ToString(CultureInfo.InvariantCulture));
+        head.Append("\r\nConnection: close\r\n\r\n");
+        // Latin-1, so a header's non-ASCII byte goes as written, as a server's raw Content-Disposition can.
+        var bytes = Encoding.Latin1.GetBytes(head.ToString());
         await stream.WriteAsync(bytes).ConfigureAwait(false);
-        await stream.WriteAsync(response.Body).ConfigureAwait(false);
+        if (response.Writer is { } writer)
+        {
+            if (response.StreamedLength is null)
+            {
+                await using var chunked = new ChunkedStream(stream);
+                await writer(chunked).ConfigureAwait(false);
+                await stream.WriteAsync("0\r\n\r\n"u8.ToArray()).ConfigureAwait(false);
+            }
+            else
+            {
+                await writer(stream).ConfigureAwait(false);
+            }
+        }
+        else
+        {
+            await stream.WriteAsync(response.Body).ConfigureAwait(false);
+        }
         await stream.FlushAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>Writes each write as one chunk of a chunked body; the caller writes the last, empty chunk.</summary>
+    private sealed class ChunkedStream(Stream inner) : Stream
+    {
+        public override bool CanRead => false;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => true;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override void Write(byte[] buffer, int offset, int count) =>
+            WriteAsync(buffer.AsMemory(offset, count)).AsTask().GetAwaiter().GetResult();
+
+        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            if (buffer.IsEmpty) return;
+            await inner.WriteAsync(Encoding.ASCII.GetBytes(buffer.Length.ToString("x", CultureInfo.InvariantCulture) + "\r\n"), cancellationToken)
+                .ConfigureAwait(false);
+            await inner.WriteAsync(buffer, cancellationToken).ConfigureAwait(false);
+            await inner.WriteAsync("\r\n"u8.ToArray(), cancellationToken).ConfigureAwait(false);
+            await inner.FlushAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+            WriteAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+
+        public override void Flush() => inner.Flush();
+
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
     }
 
     /// <summary>A connection's lines and bytes, through one buffer, so the body starts right after the head.</summary>

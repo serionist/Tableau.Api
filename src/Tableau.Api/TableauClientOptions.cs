@@ -20,7 +20,8 @@ namespace Tableau.Api;
 /// </para>
 /// <para>
 /// They are checked when the client is built, or at start-up under a host: a missing or relative server URL, plain
-/// http without <see cref="AllowInsecureHttp"/>, a version that isn't major.minor, or a timeout that isn't positive.
+/// http without <see cref="AllowInsecureHttp"/>, a version that isn't major.minor, a timeout that isn't positive, or a
+/// negative <see cref="MaxRetries"/> or <see cref="MaxRetryAfter"/>.
 /// </para>
 /// </remarks>
 public sealed class TableauClientOptions : IValidatableObject
@@ -36,6 +37,8 @@ public sealed class TableauClientOptions : IValidatableObject
     private bool _allowInsecureHttp;
     private TimeSpan _requestTimeout = TimeSpan.FromMinutes(2);
     private TimeSpan _transferTimeout = Timeout.InfiniteTimeSpan;
+    private int _maxRetries = 3;
+    private TimeSpan _maxRetryAfter = TimeSpan.FromMinutes(2);
     private bool _readOnly;
 
     /// <summary>
@@ -108,8 +111,10 @@ public sealed class TableauClientOptions : IValidatableObject
     }
 
     /// <summary>
-    /// How long a call that moves no file may take, from sending it to reading its answer: two minutes by default, or
-    /// <see cref="Timeout.InfiniteTimeSpan"/>. A call that takes longer fails with <see cref="TableauErrorKind.Timeout"/>.
+    /// How long each attempt of a call that moves no file may take, from sending it to reading its whole answer: two
+    /// minutes by default, or <see cref="Timeout.InfiniteTimeSpan"/>. An attempt that takes longer is retried when the
+    /// call is safe to send again (<see cref="MaxRetries"/>); the last one fails the call with
+    /// <see cref="TableauErrorKind.Timeout"/>. The waits between attempts don't count.
     /// </summary>
     public TimeSpan RequestTimeout
     {
@@ -118,13 +123,41 @@ public sealed class TableauClientOptions : IValidatableObject
     }
 
     /// <summary>
-    /// How long a call that downloads or uploads a file may take: no limit by default (<see cref="Timeout.InfiniteTimeSpan"/>),
-    /// since a large file on a slow line takes what it takes.
+    /// How long a call that downloads or uploads a file may take, all of it: its attempts, the waits between them and,
+    /// for a download, reading the file to its end. No limit by default (<see cref="Timeout.InfiniteTimeSpan"/>), since
+    /// a large file on a slow line takes what it takes; <see cref="RequestTimeout"/> doesn't apply to such a call. A call
+    /// that takes longer fails with <see cref="TableauErrorKind.Timeout"/>.
     /// </summary>
     public TimeSpan TransferTimeout
     {
         get => _transferTimeout;
         set => Set(ref _transferTimeout, value);
+    }
+
+    /// <summary>
+    /// How many times a call is sent again after its first attempt fails for a reason that may pass: a 408, a 429, a
+    /// 5xx, a connection that failed or an attempt that took longer than <see cref="RequestTimeout"/>. Three by default;
+    /// 0 turns retries off. Only a call that is safe to send twice is retried, such as a read, an update of a resource
+    /// or a delete; a publish, a create or a run is sent once. The client waits between attempts as the server asks
+    /// (<c>Retry-After</c>, or the wait a 429's body names), otherwise from about two seconds, doubling, with jitter.
+    /// </summary>
+    public int MaxRetries
+    {
+        get => _maxRetries;
+        set => Set(ref _maxRetries, value);
+    }
+
+    /// <summary>
+    /// The longest wait the client accepts from a server that asks it to come back later, by a 429's
+    /// <c>Retry-After</c> header or its body, or a 503's header: two minutes by default. A server that asks for longer
+    /// isn't waited for: the call fails at once, with <see cref="TableauErrorKind.RateLimited"/> for a 429, and
+    /// <see cref="TableauException.RetryAfter"/> says how long the server asked for. Tableau Cloud's hourly limits ask
+    /// for minutes, which a batch job may rather schedule than wait out in a call.
+    /// </summary>
+    public TimeSpan MaxRetryAfter
+    {
+        get => _maxRetryAfter;
+        set => Set(ref _maxRetryAfter, value);
     }
 
     /// <summary>Makes the options read-only, once a client is built from them.</summary>
@@ -166,6 +199,10 @@ public sealed class TableauClientOptions : IValidatableObject
             if (timeout != Timeout.InfiniteTimeSpan && (timeout <= TimeSpan.Zero || timeout > _longestTimeout))
                 yield return (name, $"{name} is {timeout}: give a positive time up to 24 days, or Timeout.InfiniteTimeSpan.");
         }
+        if (MaxRetries < 0)
+            yield return (nameof(MaxRetries), $"MaxRetries is {MaxRetries}: give 0, for no retries, or more.");
+        if (MaxRetryAfter < TimeSpan.Zero || MaxRetryAfter > _longestTimeout)
+            yield return (nameof(MaxRetryAfter), $"MaxRetryAfter is {MaxRetryAfter}: give a time from zero up to 24 days.");
     }
 
     /// <inheritdoc/>

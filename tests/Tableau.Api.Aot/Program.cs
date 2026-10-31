@@ -7,13 +7,15 @@
 // - the shapes Tableau's JSON takes are read for real: a token, numbers sent as strings, a list empty, of one and of
 //   many, a value this version doesn't know, text beside an attribute, a time;
 // - the client calls through its pipeline, over a handler that answers from the fixtures: the version negotiated
-//   through Server Info, Server Info itself, and Tableau's error body read into a TableauException;
-// - the client from DI, its options bound from configuration by the binder's source generator, and bad options
-//   refused at start-up by the options validation source generator's code.
+//   through Server Info, Server Info itself, Tableau's error body read into a TableauException, a call retried after a
+//   503 by the resilience handler, and a download whose name is cleaned, whose kind is known and which saves to a file;
+// - the client from DI, its options bound from configuration by the binder's source generator, its primary handler
+//   configured and a handler of the caller's in its chain, and bad options refused at start-up by the options
+//   validation source generator's code.
 //
 // In the native binary reflection-based JSON is off, so a converter that reached for it would fail here. Later steps
-// add their paths: a sign-in, a page, a download, a publish, a Vizportal call. It prints a line per check and exits
-// with 1 on the first failure.
+// add their paths: a sign-in, a page, a publish, a Vizportal call. It prints a line per check and exits with 1 on the
+// first failure.
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -30,6 +32,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Tableau.Api;
+using Tableau.Api.Pipeline;
 using Tableau.Api.Rest.Models;
 using Tableau.Api.Tests;
 
@@ -87,6 +90,36 @@ try
         {
             Check("Tableau's error body is read", e is { Kind: TableauErrorKind.NotFound, ErrorCode: "404006", Summary: "Resource Not Found" });
         }
+
+        await using var retrying = new TableauClient(http, new TableauClientOptions
+        {
+            ServerUrl = new Uri("https://tableau.example.com/"),
+            ApiVersion = new Version(3, 25),
+        });
+        var flaky = new Endpoint("Flaky call", HttpMethod.Get, "{version}/flaky", new Version(2, 0), TableauDeployments.Both,
+            Idempotent: true, TransferKind.None);
+        var retried = await retrying.Pipeline.SendAsync(flaky, default, static body => body.ServerInfo, "serverInfo", CancellationToken.None);
+        Check("a call that answered 503 is retried and succeeds", retried.ProductVersion?.Value == "2025.1.0"
+            && FixtureHandler.Paths.Count(path => path == "/api/3.25/flaky") == 2);
+
+        var content = new Endpoint("Download Workbook", HttpMethod.Get, "{version}/workbooks/w1/content", new Version(2, 0),
+            TableauDeployments.Both, Idempotent: true, TransferKind.Download);
+        await using var download = await retrying.Pipeline.DownloadAsync(content, default, CancellationToken.None);
+        Check("a download's name is cleaned and its kind known", download is
+        {
+            FileName: "Superstore.twbx", Kind: TableauFileKind.PackagedWorkbook, ContentType: "application/octet-stream",
+            Length: 1024,
+        });
+        var saved = Path.Combine(Path.GetTempPath(), $"Tableau.Api.Aot-{Guid.NewGuid():N}.twbx");
+        try
+        {
+            await download.SaveToFileAsync(saved);
+            Check("a download streams to a file", File.ReadAllBytes(saved).SequenceEqual(FixtureHandler.Workbook));
+        }
+        finally
+        {
+            File.Delete(saved);
+        }
     }
 
     var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
@@ -97,7 +130,14 @@ try
         ["Tableau:RequestTimeout"] = "00:00:45",
     }).Build();
     var services = new ServiceCollection();
-    services.AddTableauClient("prod", options => configuration.GetSection("Tableau").Bind(options));
+    var primaryConfigured = false;
+    services.AddTableauClient("prod", options => configuration.GetSection("Tableau").Bind(options))
+        .ConfigurePrimaryHandler(handler =>
+        {
+            handler.ConnectTimeout = TimeSpan.FromSeconds(30);
+            primaryConfigured = true;
+        })
+        .AddHttpMessageHandler(_ => new FixtureAnswers());
     services.AddTableauClient("bad", options => options.ServerUrl = new Uri("http://tableau.example.com/"));
     await using (var provider = services.BuildServiceProvider())
     {
@@ -105,7 +145,11 @@ try
         Check("the options bind from configuration", bound is { ApiVersion: { Major: 3, Minor: 27 }, Deployment: TableauDeployment.Cloud }
             && bound.RequestTimeout == TimeSpan.FromSeconds(45) && bound.ServerUrl?.AbsolutePath == "/tableau/");
         await using var scope = provider.CreateAsyncScope();
-        Check("the keyed client resolves", scope.ServiceProvider.GetRequiredKeyedService<TableauClient>("prod") is not null);
+        var prod = scope.ServiceProvider.GetRequiredKeyedService<TableauClient>("prod");
+        Check("the keyed client resolves, its primary handler configured", prod is not null && primaryConfigured);
+        var answered = await prod!.Server.GetInfoAsync();
+        Check("the keyed client calls through a handler of the caller's", answered.ProductVersion?.Value == "2025.1.0"
+            && FixtureHandler.Paths[^1] == "/tableau/api/3.27/serverinfo");
         try
         {
             provider.GetRequiredService<IStartupValidator>().Validate();
@@ -145,22 +189,43 @@ static void Check(string what, bool passed, string? detail = null)
         throw new InvalidOperationException($"{what} failed.");
 }
 
-/// <summary>Tableau, as the fixtures answer it: Server Info at 3.23 and 3.25, the error fixture for anything else.</summary>
+/// <summary>
+/// Tableau, as the fixtures answer it: Server Info at 3.23, 3.25 and, under a path prefix, 3.27; a call that answers 503
+/// once, then Server Info; a workbook's file, its name as Tableau's reference writes it; the error fixture for anything
+/// else.
+/// </summary>
 internal sealed class FixtureHandler : HttpMessageHandler
 {
+    private static int _flaky;
+
     public static List<string> Paths { get; } = [];
 
-    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    /// <summary>The workbook's bytes: a zip's signature, then a pattern.</summary>
+    public static byte[] Workbook { get; } = [(byte)'P', (byte)'K', 3, 4, .. Enumerable.Range(0, 1020).Select(i => (byte)(i % 251))];
+
+    public static HttpResponseMessage Answer(HttpRequestMessage request)
     {
         var path = request.RequestUri!.AbsolutePath;
         Paths.Add(path);
-        var found = path is "/api/3.23/serverinfo" or "/api/3.25/serverinfo";
-        return Task.FromResult(new HttpResponseMessage(found ? HttpStatusCode.OK : HttpStatusCode.NotFound)
+        if (path == "/api/3.25/workbooks/w1/content")
+        {
+            var file = new ByteArrayContent(Workbook);
+            file.Headers.TryAddWithoutValidation("Content-Type", "application/octet-stream");
+            file.Headers.TryAddWithoutValidation("Content-Disposition", "name=\"tableau_workbook\"; filename=\"..\\Superstore.twbx\"");
+            return new HttpResponseMessage(HttpStatusCode.OK) { RequestMessage = request, Content = file };
+        }
+        if (path == "/api/3.25/flaky" && Interlocked.Increment(ref _flaky) == 1)
+            return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) { RequestMessage = request, Headers = { RetryAfter = new(TimeSpan.Zero) } };
+        var found = path is "/api/3.23/serverinfo" or "/api/3.25/serverinfo" or "/tableau/api/3.27/serverinfo" or "/api/3.25/flaky";
+        return new HttpResponseMessage(found ? HttpStatusCode.OK : HttpStatusCode.NotFound)
         {
             RequestMessage = request,
             Content = new StringContent(Fixture(found ? "server-info.json" : "error.json"), Encoding.UTF8, "application/json"),
-        });
+        };
     }
+
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+        Task.FromResult(Answer(request));
 
     private static string Fixture(string name)
     {
@@ -168,4 +233,11 @@ internal sealed class FixtureHandler : HttpMessageHandler
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd();
     }
+}
+
+/// <summary>A handler of the caller's, added with AddHttpMessageHandler, that answers as the fixtures do and sends nothing on.</summary>
+internal sealed class FixtureAnswers : DelegatingHandler
+{
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+        Task.FromResult(FixtureHandler.Answer(request));
 }

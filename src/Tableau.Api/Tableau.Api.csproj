@@ -15,11 +15,13 @@
   </PropertyGroup>
 
   <!-- The abstractions a caller's host provides the rest of: logging, options with their validation, DI, and the
-       HttpClient factory that AddTableauClient registers its named client with. Newtonsoft.Json is the old Vizportal
-       client's, and goes with it. -->
+       HttpClient factory that AddTableauClient registers its named client with. Http.Resilience gives the retries their
+       handler and Polly underneath; the client builds its pipeline itself, so none of it registers services or logs.
+       Newtonsoft.Json is the old Vizportal client's, and goes with it. -->
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options" />
     <PackageReference Include="Newtonsoft.Json" />
