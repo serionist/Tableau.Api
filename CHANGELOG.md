@@ -28,7 +28,7 @@ and [the migration guide](docs/migration-2.0.md) lists every change from 1.2.5 a
 ### Added
 
 - **2.0's models of Tableau's REST API,** in `Tableau.Api.Rest.Models`, generated from Tableau's newest schema, REST
-  API 3.29: 202 records, such as `Workbook` for the schema's `workbookType`, and 50 enumerations, ahead of the client
+  API 3.29: 197 records, such as `Workbook` for the schema's `workbookType`, and 50 enumerations, ahead of the client
   that will return and take them. The 1.x types in `Tableau.Api.Models` stay until the client that uses them is
   replaced.
   - Every member is nullable and has an `init` setter, under the schema's name in JSON.
@@ -37,6 +37,7 @@ and [the migration guide](docs/migration-2.0.md) lists every change from 1.2.5 a
   - An enumeration is a struct that keeps its text, such as `SiteRole`, so a value Tableau adds later reads instead of
     failing the response; the values the schema knows are its static properties, such as `SiteRole.Creator`.
   - A number Tableau sends as a string reads as a number.
+  - A record's `ToString` prints a password, a token or a secret as `***`, such as `Credentials.Password`.
 - **The library builds with the trim and native AOT analyzers on** (`IsAotCompatible`), and the models pass them: they
   read and write JSON through System.Text.Json's source generator, with no reflection, and CI runs them in a native
   AOT app. The 1.x client is exempt: its `XmlSerializer` and Newtonsoft.Json code doesn't work trimmed or under native

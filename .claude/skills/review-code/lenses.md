@@ -83,6 +83,9 @@ Applies when: the scope touches `src/Tableau.Api/VizPortal/`.
 - The offline tests in `tests/Tableau.Api.Tests/`: does a change to a request, a model or the Vizportal client add one
   there, against `FakeTableauServer`, that asserts what goes on the wire (the request line, a header, the body)? Does a
   new method that builds a path keep `EveryMethodPathTests`' count true?
+- A 2.0 model change, which the fake server doesn't fit: is it pinned by a fixture in
+  `tests/Tableau.Api.Tests/Fixtures/` with its `manifest.json` entry, are `EveryModelTests`' counts true, and is each new
+  public type in `tests/Tableau.Api.Aot/roots.xml`?
 - The `Live` and `ServerOnly` tests need a site: does the PR say what ran, against which Tableau Server version or
   Tableau Cloud, and what it can't cover? A Server-only change: did its `ServerOnly` tests run by hand on a Tableau
   Server, and does the PR say what Tableau Cloud couldn't show? Is a failure compared with `main`'s run on the same

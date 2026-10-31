@@ -12,7 +12,8 @@ generates the 2.0 models in `src/Tableau.Api/Rest/Models/Generated/` from it, an
 | SHA-256 | `af214a0ba183c6bf355384a27cd9fa41e9a87d0837b96c201ed5b5473d21c3d4` |
 
 - **Kept as published:** `.gitattributes` stores it with no line-ending conversion, CRLF included, so the SHA-256 above
-  is the file's on every OS and matches a fresh download.
+  is the file's on every OS and matches a fresh download. The generator stops when the table's SHA-256 isn't the
+  schema's, so the table can't fall behind the file.
 - **Never edited by hand.** A value Tableau sends that the schema lacks is handled by the models, not the schema: an
   enumeration is a struct that keeps any text.
 - **A newer schema:** `ts-api_3_30.xsd` answered 404 on 2026-10-28 and on 2026-10-31. When it is published, download it
