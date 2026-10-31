@@ -45,7 +45,8 @@ included.
      agent, in parallel. On your own branch a refuter may reproduce it with a short program against the library or a
      selftest case, never against a live site. One that can't settle it leaves the finding open.
    - Over about 30 files or 1,500 changed lines: split the lenses across several reviewers, then merge and refute.
-     `Models/XmlSchema.cs` is generated: review the steps that made it, not its 11,000 lines.
+     `Models/XmlSchema.cs` is generated: review the steps that made it, not its 11,000 lines. `Rest/Models/Generated/`
+     is `eng/generate-models.cs`'s: review the generator and the schema, and read the models' diff as API.
    - No agents in your tool: apply every lens yourself, then refute each finding, and say in the record that the
      author reviewed their own change.
 5. **Write the round** to `docs/reviews/<date>-<slug>-code.md` for a change, as `docs/reviews/README.md` says: round 1

@@ -66,6 +66,8 @@ Applies when: the scope touches a public member of `TableauApiClient`, `VizPorta
 - Does a public name, parameter, default or return type change? Named in the PR, with how callers move over? A
   silent change is a one-way door broken: a blocker.
 - A regenerated `XmlSchema.cs`: do the lower-case generated type names users already reference still exist?
+- Regenerated models (`eng/generate-models.cs`): does each change in `Rest/Models/Generated/` come from the schema or
+  the generator, and is each renamed or dropped type or member named in the PR as a break?
 
 ## vizportal
 
@@ -95,8 +97,8 @@ A missing check for new behaviour is major; a missing edge-case test is minor.
 
 ## docs-freshness
 
-- Did the docs that describe the scope move with it: the XML doc comments, `how_to_generate_schema.txt`, `AGENTS.md`
-  for a changed path, command or rule?
+- Did the docs that describe the scope move with it: the XML doc comments, `eng/schema/README.md` or
+  `how_to_generate_schema.txt`, `AGENTS.md` for a changed path, command or rule?
 - Does anything cite a path, a command, a flag or a setting that no longer exists?
 - A comment or doc outside `docs/plans/` and `docs/reviews/` that cites a plan or review id instead of the reason?
 

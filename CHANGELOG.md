@@ -25,6 +25,23 @@ and [the migration guide](docs/migration-2.0.md) lists every change from 1.2.5 a
     and port it pointed to;
   - the session token goes on each request, not on the HTTP client's default headers.
 
+### Added
+
+- **2.0's models of Tableau's REST API,** in `Tableau.Api.Rest.Models`, generated from Tableau's newest schema, REST
+  API 3.29: 202 records, such as `Workbook` for the schema's `workbookType`, and 50 enumerations, ahead of the client
+  that will return and take them. The 1.x types in `Tableau.Api.Models` stay until the client that uses them is
+  replaced.
+  - Every member is nullable and has an `init` setter, under the schema's name in JSON.
+  - A list is an `IReadOnlyList<T>`, read from Tableau's wrapper object, such as `"tags":{"tag":[...]}`; an empty
+    wrapper reads as an empty list, and a missing one as null.
+  - An enumeration is a struct that keeps its text, such as `SiteRole`, so a value Tableau adds later reads instead of
+    failing the response; the values the schema knows are its static properties, such as `SiteRole.Creator`.
+  - A number Tableau sends as a string reads as a number.
+- **The library builds with the trim and native AOT analyzers on** (`IsAotCompatible`), and the models pass them: they
+  read and write JSON through System.Text.Json's source generator, with no reflection, and CI runs them in a native
+  AOT app. The 1.x client is exempt: its `XmlSerializer` and Newtonsoft.Json code doesn't work trimmed or under native
+  AOT, and goes before 2.0.0.
+
 ### Changed
 
 - **The package targets net10.0 only,** where `main` targeted netstandard2.1 and 1.2.x targets netstandard2.0. On

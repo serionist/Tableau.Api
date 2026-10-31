@@ -30,7 +30,7 @@ start: an issue, a plan when it needs one, the plan approved, and a branch. `fin
    - every endpoint it calls, in Tableau's REST API reference for the versions it claims, and every .NET API through
      Microsoft Learn (`AGENTS.md`, Look up APIs before coding against them).
 3. **Decide whether it needs a plan,** by the rule in `docs/plans/README.md`. Unsure: ask, and recommend one for
-   anything that touches a one-way door, authentication, the schema in `XmlSchema.cs`, or the harness.
+   anything that touches a one-way door, authentication, the schema (`eng/schema/`, or `XmlSchema.cs`), or the harness.
 4. **Start the branch** `<n>-<slug>` from `origin/main`, after `git fetch origin`, before the plan is written, so
    every commit of the plan lands on the branch. Ask where, as one question with a recommendation:
    - a new branch here, `git switch -c <n>-<slug> origin/main`, when the checkout is clean and nothing else runs in
