@@ -85,6 +85,18 @@ What changes for a caller who moves a call over:
   `IgnoreSSLErrors`' successor, and logs a warning; a certificate its issuer revoked is refused; a redirect is
   followed only to the same scheme, host and port; no cookie is kept between requests.
 - **Options** can't change once a client is built from them.
+- **Retries:** 1.2.5 sent each call once. A call that is safe to send twice, such as a read, is now sent again after
+  a 408, a 429, a 5xx, a connection that failed or an attempt longer than `RequestTimeout`, three times by default
+  (`MaxRetries`; 0 turns them off). A 429 or 503 is waited out as the server asks, up to `MaxRetryAfter`, two minutes
+  by default; a longer wait throws `TableauErrorKind.RateLimited` at once, with `RetryAfter`. A publish, a create or a
+  run is never sent twice. Retries of your own, such as a resilience handler on every `HttpClient`, don't reach the
+  client: set `MaxRetries` to 0 and add yours with `AddTableauClient(...).AddHttpMessageHandler(...)`.
+- **Timeouts:** `RequestTimeout` limits each attempt, two minutes by default; a download or an upload has
+  `TransferTimeout` instead, for the whole of it, with no limit by default.
+- **Downloads,** as their areas move over: a `TableauDownload`, returned once the headers have come, whose `Content`
+  streams from the server, where 1.2.5 read the whole file into memory first. Dispose it; `SaveToFileAsync` writes it
+  to a file. Its `FileName` is cleaned to a name alone, and `Kind` says what it is, where 1.2.5's data source download
+  returned a `DatasourceFileType`.
 
 | 1.2.5 | 2.0 | How to move over |
 |---|---|---|
@@ -96,4 +108,5 @@ What changes for a caller who moves a call over:
 |---|---|---|
 | Microsoft.Extensions.Logging | 2.1.1 | 10.0.14, through Microsoft.Extensions.Http; the library itself references Microsoft.Extensions.Logging.Abstractions alone |
 | Microsoft.Extensions.Http, .Options, .DependencyInjection.Abstractions | none | 10.0.14, for `AddTableauClient` and the client's options |
+| Microsoft.Extensions.Http.Resilience | none | 10.11.0, for the client's retries and attempt timeout, with Polly.Core 8 under it; none of its types is in the library's API, and the library registers none of its services |
 | Newtonsoft.Json | none | 13.0.4, for the Vizportal client |
