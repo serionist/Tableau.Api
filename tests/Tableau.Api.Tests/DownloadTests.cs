@@ -454,7 +454,8 @@ public sealed class DownloadTests : IDisposable
         using var unreadable = new MemoryStream();
         unreadable.Dispose();
         Assert.ThrowsExactly<ArgumentException>(() => new TableauDownload(unreadable));
-        Assert.ThrowsExactly<ArgumentException>(() => new TableauDownload(new MemoryStream(), length: -1));
+        var negative = Assert.ThrowsExactly<ArgumentException>(() => new TableauDownload(new MemoryStream(), length: -1));
+        Assert.Contains("The length is -1: give 0 or more, or null.", negative.Message);
     }
 
     private static Endpoint Content() => ClientFixtures.Download("{version}/workbooks/w1/content");

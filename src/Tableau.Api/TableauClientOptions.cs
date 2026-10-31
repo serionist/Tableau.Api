@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.ComponentModel.DataAnnotations;
 using System.Threading;
 using Microsoft.Extensions.Options;
@@ -200,7 +201,7 @@ public sealed class TableauClientOptions : IValidatableObject
                 yield return (name, $"{name} is {timeout}: give a positive time up to 24 days, or Timeout.InfiniteTimeSpan.");
         }
         if (MaxRetries < 0)
-            yield return (nameof(MaxRetries), $"MaxRetries is {MaxRetries}: give 0, for no retries, or more.");
+            yield return (nameof(MaxRetries), string.Create(CultureInfo.InvariantCulture, $"MaxRetries is {MaxRetries}: give 0, for no retries, or more."));
         if (MaxRetryAfter < TimeSpan.Zero || MaxRetryAfter > _longestTimeout)
             yield return (nameof(MaxRetryAfter), $"MaxRetryAfter is {MaxRetryAfter}: give a time from zero up to 24 days.");
     }

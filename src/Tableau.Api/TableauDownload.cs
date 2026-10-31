@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Net.Http;
 using System.Threading;
@@ -42,7 +43,7 @@ public sealed class TableauDownload : IDisposable, IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(content);
         if (!content.CanRead) throw new ArgumentException("The content must be a stream that can be read.", nameof(content));
-        if (length < 0) throw new ArgumentException($"The length is {length}: give 0 or more, or null.", nameof(length));
+        if (length < 0) throw new ArgumentException(string.Create(CultureInfo.InvariantCulture, $"The length is {length}: give 0 or more, or null."), nameof(length));
         _content = new DownloadStream(content, ReadOnlyMemory<byte>.Empty, call: null);
         FileName = DownloadFiles.Clean(fileName);
         ContentType = contentType;

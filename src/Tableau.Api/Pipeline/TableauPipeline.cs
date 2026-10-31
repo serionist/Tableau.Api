@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -453,16 +454,19 @@ internal sealed class DownloadCall(TableauPipeline pipeline, Endpoint endpoint, 
         if (transferToken.IsCancellationRequested)
         {
             return pipeline.Failed(endpoint, path, new TableauException(TableauErrorKind.Timeout,
-                $"{endpoint.Name} ({endpoint.Method} {path}) took longer than its TransferTimeout allows, after {read} bytes of its "
+                $"{endpoint.Name} ({endpoint.Method} {path}) took longer than its TransferTimeout allows, after {Bytes(read)} bytes of its "
                 + "file.", exception)
             { Method = endpoint.Method, RequestPath = path });
         }
         if (exception is IOException or HttpRequestException)
         {
             return pipeline.Failed(endpoint, path, new TableauException(TableauErrorKind.Http,
-                $"{endpoint.Name} ({endpoint.Method} {path}) broke off after {read} bytes of its file: {exception.Message}", exception)
+                $"{endpoint.Name} ({endpoint.Method} {path}) broke off after {Bytes(read)} bytes of its file: {exception.Message}", exception)
             { Method = endpoint.Method, RequestPath = path });
         }
         return exception;
     }
+
+    // A count as every culture reads it.
+    private static string Bytes(long read) => read.ToString(CultureInfo.InvariantCulture);
 }
