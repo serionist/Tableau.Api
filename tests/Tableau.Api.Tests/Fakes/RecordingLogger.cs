@@ -6,24 +6,53 @@ using Microsoft.Extensions.Logging;
 
 namespace Tableau.Api.Tests.Fakes;
 
-/// <summary>An ILogger that keeps every line the library logs, its exception's text included.</summary>
+/// <summary>
+/// An ILogger that keeps every line the library logs, its level and its exception's text included; and the logger
+/// factory that hands it out, for the 2.0 client, which takes a factory.
+/// </summary>
 internal sealed class RecordingLogger : ILogger
 {
     private readonly ConcurrentQueue<string> _lines = new();
 
+    public RecordingLogger()
+    {
+        Factory = new LoggerFactory(this);
+    }
+
+    /// <summary>A logger factory whose every logger is this one.</summary>
+    public ILoggerFactory Factory { get; }
+
     public IReadOnlyList<string> Lines => [.. _lines];
 
-    public IDisposable BeginScope<TState>(TState state) => NoScope.Instance;
+    public IDisposable BeginScope<TState>(TState state)
+        where TState : notnull => NoScope.Instance;
 
     public bool IsEnabled(LogLevel logLevel) => true;
 
-    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception,
-        Func<TState, Exception, string> formatter) =>
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+        Func<TState, Exception?, string> formatter) =>
         _lines.Enqueue($"{logLevel}: {formatter(state, exception)}{(exception is null ? "" : "\n" + exception)}");
 
     /// <summary>The lines that hold any of secrets.</summary>
     public IEnumerable<string> LinesHolding(IEnumerable<string> secrets) =>
         Lines.Where(line => secrets.Any(secret => line.Contains(secret, StringComparison.Ordinal)));
+
+    /// <summary>The lines logged at level.</summary>
+    public IReadOnlyList<string> At(LogLevel level) =>
+        [.. Lines.Where(line => line.StartsWith(level + ": ", StringComparison.Ordinal))];
+
+    private sealed class LoggerFactory(RecordingLogger logger) : ILoggerFactory
+    {
+        public ILogger CreateLogger(string categoryName) => logger;
+
+        public void AddProvider(ILoggerProvider provider)
+        {
+        }
+
+        public void Dispose()
+        {
+        }
+    }
 
     private sealed class NoScope : IDisposable
     {
