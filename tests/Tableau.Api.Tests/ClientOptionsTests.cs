@@ -179,6 +179,8 @@ public sealed class ClientOptionsTests
 
         Assert.AreEqual("3.99", info.RestApiVersion);
         Assert.ThrowsExactly<InvalidOperationException>(() => bare.Server);
+        Assert.ThrowsExactly<InvalidOperationException>(() => bare.Pipeline);
+        Assert.ThrowsExactly<ArgumentException>(() => new TableauClientState("", new TableauClientOptions(), null));
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => new BareServerClient().GetInfoAsync());
     }
 

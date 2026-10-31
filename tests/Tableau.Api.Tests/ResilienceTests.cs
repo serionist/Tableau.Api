@@ -217,6 +217,21 @@ public sealed class ResilienceTests
     }
 
     [TestMethod]
+    public async Task AConnectionThatBreaksIsHttpWithNoStatus()
+    {
+        using var server = FakeTableauServer.Start();
+        var broken = new System.IO.IOException("Invented: the connection broke.");
+        using var failing = new AlwaysFailing(broken);
+        using var http = new HttpClient(failing, disposeHandler: false);
+        await using var client = new TableauClient(http, ClientFixtures.Options(server), Fixtures.Log.Factory);
+
+        var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.Http, () => ClientFixtures.SendAsync(client, Items()));
+
+        Assert.AreSame(broken, thrown.InnerException);
+        Assert.IsNull(thrown.StatusCode);
+        Assert.Contains("got no answer: Invented: the connection broke.", thrown.Message);
+    }
+    [TestMethod]
     [DataRow(HttpRequestError.SecureConnectionError, null, true)]
     [DataRow(HttpRequestError.UserAuthenticationError, null, true)]
     [DataRow(HttpRequestError.VersionNegotiationError, null, true)]

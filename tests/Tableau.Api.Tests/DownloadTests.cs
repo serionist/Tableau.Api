@@ -357,6 +357,20 @@ public sealed class DownloadTests : IDisposable
 
         Assert.Contains("took longer than its TransferTimeout allows", thrown.Message);
     }
+    // A caller's HttpClient may hand back content whose stream fails as an HttpRequestException, not an IOException.
+    [TestMethod]
+    public async Task AContentStreamThatFailsAsARequestBreaksOffTheDownload()
+    {
+        using var server = FakeTableauServer.Start();
+        using var answering = new FailingContent();
+        using var http = new System.Net.Http.HttpClient(answering, disposeHandler: false);
+        await using var client = new TableauClient(http, ClientFixtures.Options(server), Fixtures.Log.Factory);
+
+        var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.Http, () => ClientFixtures.DownloadAsync(client, Content()));
+
+        Assert.Contains("broke off after 0 bytes of its file: Invented: the content failed.", thrown.Message);
+        Assert.IsInstanceOfType<System.Net.Http.HttpRequestException>(thrown.InnerException);
+    }
     [TestMethod]
     public async Task ACallThatIsNoDownloadIsRefusedBeforeSending()
     {
@@ -560,6 +574,51 @@ public sealed class DownloadTests : IDisposable
     private Task SaveAsync(TableauDownload download, bool overwrite) =>
         download.SaveToFileAsync(Path.Combine(Folder(), "any.twbx"), overwrite, TestContext.CancellationToken);
 
+    /// <summary>A handler that answers 200 with content whose every read fails as an HttpRequestException.</summary>
+    private sealed class FailingContent : System.Net.Http.HttpMessageHandler
+    {
+        protected override Task<System.Net.Http.HttpResponseMessage> SendAsync(System.Net.Http.HttpRequestMessage request,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                RequestMessage = request,
+                Content = new System.Net.Http.StreamContent(new FailingStream()),
+            });
+    }
+
+    /// <summary>A stream whose every read fails as an HttpRequestException.</summary>
+    private sealed class FailingStream : Stream
+    {
+        public override bool CanRead => true;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => false;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            throw new System.Net.Http.HttpRequestException("Invented: the content failed.");
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
+            throw new System.Net.Http.HttpRequestException("Invented: the content failed.");
+
+        public override void Flush()
+        {
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
     /// <summary>A new, empty folder of this test's own.</summary>
     private string Folder()
     {

@@ -174,7 +174,7 @@ internal static partial class TableauResilience
                 return true;
             case { Result: { } response } when IsTransient(response.StatusCode):
                 var wait = await ServerWaitAsync(response, state.TimeProvider, context.CancellationToken).ConfigureAwait(false);
-                return wait is null || wait <= state.Options.MaxRetryAfter;
+                return wait is not { } asked || asked <= state.Options.MaxRetryAfter;
             default:
                 return false;
         }
