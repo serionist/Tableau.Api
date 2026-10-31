@@ -172,6 +172,66 @@ public sealed class ResilienceTests
         Assert.HasCount(1, server.Requests);
     }
 
+    // A proxy that refuses the client's credentials answers 407, which sending again won't mend; a tunnel that failed
+    // otherwise may pass.
+    [TestMethod]
+    [DataRow(true, 1)]
+    [DataRow(false, 2)]
+    public async Task AProxyThatRefusesTheCredentialsIsNotRetried(bool refused, int attempts)
+    {
+        using var server = FakeTableauServer.Start();
+        var time = new FakeTimeProvider();
+        using var failing = new AlwaysFailing(new HttpRequestException(HttpRequestError.ProxyTunnelError, "Invented: the proxy refused.", null,
+            refused ? HttpStatusCode.ProxyAuthenticationRequired : HttpStatusCode.BadGateway));
+        using var http = new HttpClient(failing, disposeHandler: false);
+        await using var client = new TableauClient(http, ClientFixtures.Options(server, maxRetries: 1), Fixtures.Log.Factory, time);
+
+        var call = ClientFixtures.SendAsync(client, Items());
+        await ClientFixtures.WaitUntilAsync(() => failing.Attempts == 1);
+        await ClientFixtures.AdvanceUntilAsync(time, () => call.IsCompleted, _step, TimeSpan.FromMinutes(1));
+        await ClientFixtures.FailsAsync(TableauErrorKind.Http, () => call);
+
+        Assert.AreEqual(attempts, failing.Attempts);
+    }
+
+    // Inside the retries, a caller's HttpClient's handlers run within each attempt: a timeout or a cancellation of their
+    // own is neither retried nor taken for the client's own timeout.
+    [TestMethod]
+    [DataRow(true)]
+    [DataRow(false)]
+    public async Task AHandlersOwnTimeoutInsideTheRetriesIsNeitherRetriedNorATimeout(bool timeout)
+    {
+        using var server = FakeTableauServer.Start();
+        Exception own = timeout
+            ? new Polly.Timeout.TimeoutRejectedException("Invented: the caller's own timeout.")
+            : new OperationCanceledException("Invented: the caller's own cancellation.");
+        using var failing = new AlwaysFailing(own);
+        using var http = new HttpClient(failing, disposeHandler: false);
+        await using var client = new TableauClient(http, ClientFixtures.Options(server, maxRetries: 3), Fixtures.Log.Factory);
+
+        var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.Http, () => ClientFixtures.SendAsync(client, Items()));
+
+        Assert.AreEqual(1, failing.Attempts);
+        Assert.AreSame(own, thrown.InnerException);
+        Assert.Contains("got no answer: a handler", thrown.Message);
+    }
+
+    [TestMethod]
+    [DataRow(HttpRequestError.SecureConnectionError, null, true)]
+    [DataRow(HttpRequestError.UserAuthenticationError, null, true)]
+    [DataRow(HttpRequestError.VersionNegotiationError, null, true)]
+    [DataRow(HttpRequestError.ExtendedConnectNotSupported, null, true)]
+    [DataRow(HttpRequestError.ConfigurationLimitExceeded, null, true)]
+    [DataRow(HttpRequestError.ProxyTunnelError, 407, true)]
+    [DataRow(HttpRequestError.ProxyTunnelError, 502, false)]
+    [DataRow(HttpRequestError.ProxyTunnelError, null, false)]
+    [DataRow(HttpRequestError.ConnectionError, null, false)]
+    [DataRow(HttpRequestError.NameResolutionError, null, false)]
+    [DataRow(HttpRequestError.ResponseEnded, null, false)]
+    [DataRow(HttpRequestError.Unknown, null, false)]
+    public void AFailureSendingAgainWontMendIsPermanent(HttpRequestError error, int? status, bool permanent) =>
+        Assert.AreEqual(permanent, TableauResilience.IsPermanent(
+            new HttpRequestException(error, "Invented failure.", null, (HttpStatusCode?)status)));
     [TestMethod]
     public async Task ACertificateRefusedIsNotRetried()
     {
@@ -256,38 +316,46 @@ public sealed class ResilienceTests
     [TestMethod]
     public async Task A429WithRetryAfterWaitsThatLongOnTheClock()
     {
-        using var server = FakeTableauServer.Start();
-        server.Map("GET", ItemsPath, InTurn(Limited().WithHeader("Retry-After", "30"), ClientFixtures.ServerInfo()));
-        var time = new FakeTimeProvider();
-        await using var client = ClientFixtures.Client(ClientFixtures.Options(server, maxRetries: 3), time);
+        var (waited, retry) = await RetriedAfterAsync(_ => Limited().WithHeader("Retry-After", "30"));
 
-        var call = ClientFixtures.SendAsync(client, Items());
-        await ClientFixtures.WaitUntilAsync(() => server.Requests.Count == 1);
-        var waited = await ClientFixtures.AdvanceUntilAsync(time, () => server.Requests.Count == 2, _step, TimeSpan.FromMinutes(2));
-        await call;
-
+        Assert.Contains("failed (429); retry 1 of 3 in 30000 ms", retry);
         Assert.IsGreaterThanOrEqualTo(TimeSpan.FromSeconds(30), waited);
-        Assert.IsLessThan(TimeSpan.FromSeconds(35), waited);
+        Assert.IsLessThanOrEqualTo(TimeSpan.FromSeconds(33), waited);
     }
 
     [TestMethod]
     public async Task A429WithARetryAfterDateWaitsUntilThen()
     {
-        using var server = FakeTableauServer.Start();
-        var time = new FakeTimeProvider();
-        var until = time.GetUtcNow().AddSeconds(40).ToString("r", CultureInfo.InvariantCulture);
-        server.Map("GET", ItemsPath, InTurn(Limited().WithHeader("Retry-After", until), ClientFixtures.ServerInfo()));
-        await using var client = ClientFixtures.Client(ClientFixtures.Options(server, maxRetries: 3), time);
+        var (waited, retry) = await RetriedAfterAsync(time =>
+            Limited().WithHeader("Retry-After", time.GetUtcNow().AddSeconds(40).ToString("r", CultureInfo.InvariantCulture)));
 
-        var call = ClientFixtures.SendAsync(client, Items());
-        await ClientFixtures.WaitUntilAsync(() => server.Requests.Count == 1);
-        var waited = await ClientFixtures.AdvanceUntilAsync(time, () => server.Requests.Count == 2, _step, TimeSpan.FromMinutes(2));
-        await call;
-
+        Assert.Contains("failed (429); retry 1 of 3 in 40000 ms", retry);
         Assert.IsGreaterThanOrEqualTo(TimeSpan.FromSeconds(40), waited);
-        Assert.IsLessThan(TimeSpan.FromSeconds(45), waited);
+        Assert.IsLessThanOrEqualTo(TimeSpan.FromSeconds(43), waited);
     }
 
+    [TestMethod]
+    public async Task A503WithRetryAfterWaitsThatLongToo()
+    {
+        var (waited, retry) = await RetriedAfterAsync(_ => FakeResponse.Empty(503).WithHeader("Retry-After", "25"));
+
+        Assert.Contains("failed (503); retry 1 of 3 in 25000 ms", retry);
+        Assert.IsGreaterThanOrEqualTo(TimeSpan.FromSeconds(25), waited);
+    }
+
+    // Retry-After is honoured on a 429 and a 503 only: another status, such as a proxy's 502, is retried on the back-off,
+    // whatever wait it names, and never refused for one over the cap.
+    [TestMethod]
+    [DataRow(502)]
+    [DataRow(500)]
+    public async Task ARetryAfterOnAnotherStatusIsLeftToTheBackOff(int status)
+    {
+        var (waited, retry) = await RetriedAfterAsync(_ => FakeResponse.Empty(status).WithHeader("Retry-After", "600"));
+
+        Assert.Contains($"failed ({status}); retry 1 of 3 in ", retry);
+        Assert.DoesNotContain("in 600000 ms", retry);
+        Assert.IsLessThan(TimeSpan.FromSeconds(30), waited, "the first back-off is about two seconds");
+    }
     [TestMethod]
     public async Task A429OverTheCapThrowsRateLimitedAtOnce()
     {
@@ -337,20 +405,12 @@ public sealed class ResilienceTests
     [TestMethod]
     public async Task A429BodysWaitUnderTheCapIsWaited()
     {
-        using var server = FakeTableauServer.Start();
-        server.Map("GET", ItemsPath, InTurn(Limited("Too many requests. Please retry after 20 seconds."), ClientFixtures.ServerInfo()));
-        var time = new FakeTimeProvider();
-        await using var client = ClientFixtures.Client(ClientFixtures.Options(server, maxRetries: 3), time);
+        var (waited, retry) = await RetriedAfterAsync(_ => Limited("Too many requests. Please retry after 20 seconds."));
 
-        var call = ClientFixtures.SendAsync(client, Items());
-        await ClientFixtures.WaitUntilAsync(() => server.Requests.Count == 1);
-        var waited = await ClientFixtures.AdvanceUntilAsync(time, () => server.Requests.Count == 2, _step, TimeSpan.FromMinutes(2));
-        await call;
-
+        Assert.Contains("failed (429); retry 1 of 3 in 20000 ms", retry);
         Assert.IsGreaterThanOrEqualTo(TimeSpan.FromSeconds(20), waited);
-        Assert.IsLessThan(TimeSpan.FromSeconds(25), waited);
+        Assert.IsLessThanOrEqualTo(TimeSpan.FromSeconds(23), waited);
     }
-
     [TestMethod]
     public async Task A429ToACallThatIsntSafeToSendTwiceThrowsRateLimitedWithItsWait()
     {
@@ -457,6 +517,26 @@ public sealed class ResilienceTests
             ClientFixtures.Endpoint("{version}/items", "POST", transfer: TransferKind.Upload), options));
     }
 
+    /// <summary>
+    /// Sends a GET whose first answer is <paramref name="first"/> and whose second is Server Info, on a fake clock, and
+    /// returns how far the clock moved from the retry's log line, written as its wait is set, to the second request,
+    /// and that line. A slow first answer adds nothing, and a step's lag at most a second.
+    /// </summary>
+    private static async Task<(TimeSpan Waited, string Retry)> RetriedAfterAsync(Func<FakeTimeProvider, FakeResponse> first)
+    {
+        using var server = FakeTableauServer.Start();
+        var time = new FakeTimeProvider();
+        server.Map("GET", ItemsPath, InTurn(first(time), ClientFixtures.ServerInfo()));
+        var log = new RecordingLogger();
+        await using var client = TableauClient.CreateWithClock(ClientFixtures.Options(server, maxRetries: 3), log.Factory, time);
+
+        var call = ClientFixtures.SendAsync(client, Items());
+        await ClientFixtures.WaitUntilAsync(() => log.Lines.Any(line => line.Contains("retry 1 of 3", StringComparison.Ordinal)));
+        var waited = await ClientFixtures.AdvanceUntilAsync(time, () => server.Requests.Count == 2, _step, TimeSpan.FromMinutes(2));
+        await call;
+
+        return (waited, log.Lines.Single(line => line.Contains("retry 1 of 3", StringComparison.Ordinal)));
+    }
     private static Endpoint Items() => ClientFixtures.Endpoint("{version}/items");
 
     /// <summary>Tableau's 429 error body, with the detail given.</summary>
@@ -481,6 +561,19 @@ public sealed class ResilienceTests
             Interlocked.Increment(ref _attempts) == 1 ? throw exception : base.SendAsync(request, cancellationToken);
     }
 
+    /// <summary>A handler that fails every request with the exception given, and counts them.</summary>
+    private sealed class AlwaysFailing(Exception exception) : HttpMessageHandler
+    {
+        private int _attempts;
+
+        public int Attempts => Volatile.Read(ref _attempts);
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref _attempts);
+            throw exception;
+        }
+    }
     /// <summary>A handler that counts what passes through it to the handler given.</summary>
     private sealed class CountingHandler(HttpMessageHandler inner) : DelegatingHandler(inner)
     {

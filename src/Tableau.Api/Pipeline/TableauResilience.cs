@@ -8,28 +8,29 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.Retry;
-using Polly.Timeout;
 
 namespace Tableau.Api.Pipeline;
 
 /// <summary>
-/// The retries and the attempt timeout every request of a client goes through: one Polly pipeline per client, built
-/// from its read-only options, and run by Microsoft.Extensions.Http.Resilience's handler. A client from DI, one from
-/// <c>TableauClient.Create</c> and one over a caller's HttpClient all send through <see cref="Chain"/>'s handlers, in
-/// that order: the retries, then <see cref="TableauAttemptHandler"/>, which reads the answer within its attempt.
+/// The retries every request of a client goes through: one Polly pipeline per client, built from its read-only options
+/// and run by <see cref="TableauResilienceHandler"/>, which also times each attempt. A client from DI, one from
+/// <c>TableauClient.Create</c> and one over a caller's HttpClient all send through that handler, closest to the
+/// connection.
 /// </summary>
 /// <remarks>
-/// The pipeline is built here rather than with <c>AddResilienceHandler</c>, which would register services and
-/// telemetry in the caller's container and log every retry as a warning; the client logs its retries at Debug.
+/// Polly.Core alone: a handler of the library's own runs it, so no package of Microsoft's resilience libraries, which
+/// register services and telemetry and change how an app's logging source generator runs, reaches a caller's app.
 /// </remarks>
 internal static partial class TableauResilience
 {
     /// <summary>The key a request carries its endpoint's descriptor under, which the retry rule and the timeout read.</summary>
     public static readonly HttpRequestOptionsKey<Endpoint> EndpointKey = new("Tableau.Api.Endpoint");
+
+    /// <summary>The key the pipeline's context carries the request under, for the retry rule and its log line.</summary>
+    public static readonly ResiliencePropertyKey<HttpRequestMessage?> RequestKey = new("Tableau.Api.Request");
 
     /// <summary>The middle of the first back-off, when the server names no wait; each later one doubles, with jitter.</summary>
     public static readonly TimeSpan FirstBackOff = TimeSpan.FromSeconds(2);
@@ -37,17 +38,13 @@ internal static partial class TableauResilience
     /// <summary>The longest back-off, however many retries <see cref="TableauClientOptions.MaxRetries"/> allows.</summary>
     public static readonly TimeSpan LongestBackOff = TimeSpan.FromSeconds(30);
 
-    /// <summary>
-    /// The client's pipeline: retries (when <see cref="TableauClientOptions.MaxRetries"/> allows any) around an attempt
-    /// timeout, on the state's time provider.
-    /// </summary>
+    /// <summary>The client's pipeline: the retries, when <see cref="TableauClientOptions.MaxRetries"/> allows any, on its clock.</summary>
     public static ResiliencePipeline<HttpResponseMessage> Build(TableauClientState state)
     {
         var options = state.Options;
-        var builder = new ResiliencePipelineBuilder<HttpResponseMessage> { TimeProvider = state.TimeProvider };
-        if (options.MaxRetries > 0)
-        {
-            builder.AddRetry(new RetryStrategyOptions<HttpResponseMessage>
+        if (options.MaxRetries == 0) return ResiliencePipeline<HttpResponseMessage>.Empty;
+        return new ResiliencePipelineBuilder<HttpResponseMessage> { TimeProvider = state.TimeProvider }
+            .AddRetry(new RetryStrategyOptions<HttpResponseMessage>
             {
                 MaxRetryAttempts = options.MaxRetries,
                 BackoffType = DelayBackoffType.Exponential,
@@ -60,7 +57,7 @@ internal static partial class TableauResilience
                     : ValueTask.FromResult<TimeSpan?>(null),
                 OnRetry = args =>
                 {
-                    if (state.Logger.IsEnabled(LogLevel.Debug) && args.Context.GetRequestMessage() is { RequestUri: { } uri } request)
+                    if (state.Logger.IsEnabled(LogLevel.Debug) && RequestOf(args.Context) is { RequestUri: { } uri } request)
                     {
                         var path = RequestUri.Redacted(uri);
                         var reason = Reason(args.Outcome);
@@ -69,29 +66,19 @@ internal static partial class TableauResilience
                     }
                     return default;
                 },
-            });
-        }
-        builder.AddTimeout(new TimeoutStrategyOptions
-        {
-            TimeoutGenerator = args => ValueTask.FromResult(AttemptTimeout(EndpointOf(args.Context.GetRequestMessage()), options)),
-        });
-        return builder.Build();
+            })
+            .Build();
     }
 
-    /// <summary>The outer of the library's two handlers: the retries and the attempt timeout, with the client's pipeline.</summary>
-    public static DelegatingHandler RetryHandler(TableauClientState state) => new ResilienceHandler(state.Resilience);
+    /// <summary>The library's handler, for a named HttpClient's chain.</summary>
+    public static DelegatingHandler Handler(TableauClientState state) => new TableauResilienceHandler(state);
 
-    /// <summary>The inner of the two: <see cref="TableauAttemptHandler"/>, within each attempt.</summary>
-    public static DelegatingHandler AttemptHandler() => new TableauAttemptHandler();
-
-    /// <summary>The same handlers over <paramref name="inner"/>, for a client that builds its own chain.</summary>
+    /// <summary>The same handler over <paramref name="inner"/>, for a client that builds its own chain.</summary>
     public static HttpMessageHandler Chain(TableauClientState state, HttpMessageHandler inner)
     {
-        var attempt = AttemptHandler();
-        attempt.InnerHandler = inner;
-        var retry = RetryHandler(state);
-        retry.InnerHandler = attempt;
-        return retry;
+        var handler = Handler(state);
+        handler.InnerHandler = inner;
+        return handler;
     }
 
     /// <summary>
@@ -102,15 +89,17 @@ internal static partial class TableauResilience
         endpoint is null || endpoint.Transfer == TransferKind.None ? options.RequestTimeout : Timeout.InfiniteTimeSpan;
 
     /// <summary>
-    /// How long the server asked the client to wait before trying again: its <c>Retry-After</c> header, as a delay or
-    /// a date, or else, on a 429, the wait its body names. Null when it named none.
+    /// How long the server asked the client to wait before trying again: a 429's or a 503's <c>Retry-After</c> header, as
+    /// a delay or a date, or else the wait a 429's body names. Null when it named none, or for another status, which
+    /// the back-off times.
     /// </summary>
     public static async ValueTask<TimeSpan?> ServerWaitAsync(HttpResponseMessage response, TimeProvider time,
         CancellationToken cancellationToken)
     {
+        if (response.StatusCode is not (HttpStatusCode.TooManyRequests or HttpStatusCode.ServiceUnavailable)) return null;
         if (RetryAfter(response.Headers.RetryAfter, time) is { } header) return header;
         if (response.StatusCode != HttpStatusCode.TooManyRequests) return null;
-        // The attempt handler kept at most the error body's first 64 KB, in memory.
+        // The handler kept at most the error body's first 64 KB, in memory.
         var body = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
         return WaitInBody(Encoding.UTF8.GetString(body));
     }
@@ -149,19 +138,41 @@ internal static partial class TableauResilience
     public static Endpoint? EndpointOf(HttpRequestMessage? request) =>
         request is not null && request.Options.TryGetValue(EndpointKey, out var endpoint) ? endpoint : null;
 
+    /// <summary>
+    /// Whether an HTTP status may pass if the call is sent again: 408, 429, or a 5xx, as the retry rules of
+    /// Microsoft.Extensions.Http.Resilience take them.
+    /// </summary>
+    public static bool IsTransient(HttpStatusCode status) =>
+        status is HttpStatusCode.RequestTimeout or HttpStatusCode.TooManyRequests || (int)status >= 500;
+
+    /// <summary>
+    /// Failures that sending again won't mend: a certificate or a handshake refused, credentials a server or a proxy
+    /// refused, a protocol the server doesn't speak, a limit of the handler's configuration.
+    /// </summary>
+    public static bool IsPermanent(HttpRequestException exception) => exception.HttpRequestError switch
+    {
+        HttpRequestError.SecureConnectionError or HttpRequestError.UserAuthenticationError or HttpRequestError.VersionNegotiationError
+            or HttpRequestError.ExtendedConnectNotSupported or HttpRequestError.ConfigurationLimitExceeded => true,
+        HttpRequestError.ProxyTunnelError => exception.StatusCode == HttpStatusCode.ProxyAuthenticationRequired,
+        _ => false,
+    };
+
+    private static HttpRequestMessage? RequestOf(ResilienceContext context) => context.Properties.GetValue(RequestKey, null);
+
     // Retried: a call that is safe to send twice, whose attempt failed for a reason that may pass, unless the server
-    // asked for a longer wait than the options allow.
+    // asked for a longer wait than the options allow. A handler's own exception, a cancellation or a timeout of its
+    // own among them, isn't retried: the library can't tell whether it may pass.
     private static async ValueTask<bool> ShouldRetryAsync(Outcome<HttpResponseMessage> outcome, ResilienceContext context,
         TableauClientState state)
     {
-        if (EndpointOf(context.GetRequestMessage()) is not { Idempotent: true }) return false;
+        if (EndpointOf(RequestOf(context)) is not { Idempotent: true }) return false;
         switch (outcome)
         {
-            case { Exception: HttpRequestException { HttpRequestError: var error } }:
-                return !IsPermanent(error);
-            case { Exception: IOException or TimeoutRejectedException }:
+            case { Exception: HttpRequestException failed }:
+                return !IsPermanent(failed);
+            case { Exception: IOException or TableauAttemptTimeoutException }:
                 return true;
-            case { Result: { } response } when HttpClientResiliencePredicates.IsTransient(outcome):
+            case { Result: { } response } when IsTransient(response.StatusCode):
                 var wait = await ServerWaitAsync(response, state.TimeProvider, context.CancellationToken).ConfigureAwait(false);
                 return wait is null || wait <= state.Options.MaxRetryAfter;
             default:
@@ -169,17 +180,11 @@ internal static partial class TableauResilience
         }
     }
 
-    // Failures that sending again won't mend: a certificate or a handshake refused, credentials a proxy refused, a
-    // protocol the server doesn't speak, a limit of the handler's configuration.
-    private static bool IsPermanent(HttpRequestError error) => error is HttpRequestError.SecureConnectionError
-        or HttpRequestError.UserAuthenticationError or HttpRequestError.VersionNegotiationError
-        or HttpRequestError.ExtendedConnectNotSupported or HttpRequestError.ConfigurationLimitExceeded;
-
     // An outcome holds an answer or an exception.
     private static string Reason(Outcome<HttpResponseMessage> outcome) => outcome switch
     {
         { Result: { } response } => ((int)response.StatusCode).ToString(CultureInfo.InvariantCulture),
-        { Exception: TimeoutRejectedException } => "no answer within RequestTimeout",
+        { Exception: TableauAttemptTimeoutException } => "no answer within RequestTimeout",
         _ => outcome.Exception!.GetType().Name,
     };
 }

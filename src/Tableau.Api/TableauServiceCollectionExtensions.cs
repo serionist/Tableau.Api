@@ -88,8 +88,7 @@ public static class TableauServiceCollectionExtensions
                 handlers.Clear();
                 foreach (var handler in HandlerOptions(provider, name).Handlers)
                     handlers.Add(handler(provider));
-                handlers.Add(TableauResilience.RetryHandler(State(provider, name)));
-                handlers.Add(TableauResilience.AttemptHandler());
+                handlers.Add(TableauResilience.Handler(State(provider, name)));
             })
             .ConfigureHttpClient(client => client.Timeout = Timeout.InfiniteTimeSpan)
             .RemoveAllLoggers();
@@ -133,12 +132,14 @@ public static class TableauServiceCollectionExtensions
 /// <item><description>
 /// The library's rules are set again, whatever the actions did: no automatic redirects, no cookies, and the certificate
 /// check, with no <c>RemoteCertificateValidationCallback</c> but the one
-/// <see cref="TableauClientOptions.DangerousAcceptAnyServerCertificate"/> sets.
+/// <see cref="TableauClientOptions.DangerousAcceptAnyServerCertificate"/> sets. They are set on the handler's own copy of
+/// its <c>SslOptions</c>, so options an action gave it, shared with another client or an app's own handler, stay as
+/// they were.
 /// </description></item>
 /// <item><description>
 /// The handlers of <see cref="AddHttpMessageHandler"/> wrap it, the first added outermost; inside them, closest to the
-/// connection, the library's retries and attempt timeout. So a handler of yours sees each request once, however many
-/// attempts it takes, and its outcome after them; a redirect the client follows is another request.
+/// connection, the library's handler, with the retries and the attempt timeout. So a handler of yours sees each request
+/// once, however many attempts it takes, and its outcome after them; a redirect the client follows is another request.
 /// </description></item>
 /// </list>
 /// </remarks>
@@ -163,11 +164,22 @@ public sealed class TableauClientBuilder
     /// redirects, no cookies, and the certificate check.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// To trust a private certificate authority, give the handler a chain policy that trusts it:
     /// <c>handler.SslOptions.CertificateChainPolicy = new X509ChainPolicy { TrustMode = X509ChainTrustMode.CustomRootTrust,
-    /// CustomTrustStore = { authority } }</c>; a policy you set is kept, and replaces the library's, which checks
-    /// revocation online. A <c>RemoteCertificateValidationCallback</c> you set is replaced: only
-    /// <see cref="TableauClientOptions.DangerousAcceptAnyServerCertificate"/> turns the check off.
+    /// CustomTrustStore = { authority } }</c>. A chain policy you set is used as you set it, in place of the library's:
+    /// the library's tolerance of a revocation status that can't be learnt, and its 10-second wait for a revocation
+    /// answer, go with it, so the policy above fails a certificate whose revocation list can't be reached. Its flags and
+    /// its <c>RevocationMode</c> can loosen the check, such as <c>AllowUnknownCertificateAuthority</c>,
+    /// <c>IgnoreNotTimeValid</c>, or <c>IgnoreInvalidName</c>, which also turns off the check of the server's name, and
+    /// the client gives no warning for them.
+    /// </para>
+    /// <para>
+    /// A <c>RemoteCertificateValidationCallback</c> you set is replaced, so no callback turns the check off: only
+    /// <see cref="TableauClientOptions.DangerousAcceptAnyServerCertificate"/> does, with a warning. The client sets its
+    /// rules on its own copy of the handler's <c>SslOptions</c>, so options you share with another handler stay as you
+    /// set them.
+    /// </para>
     /// </remarks>
     /// <param name="configure">Sets the handler; it runs each time the factory makes one, every few minutes.</param>
     /// <returns>This builder.</returns>
@@ -184,8 +196,15 @@ public sealed class TableauClientBuilder
     /// <see cref="TableauClientOptions.MaxRetries"/> to 0 and add it here.
     /// </summary>
     /// <remarks>
-    /// An exception your handler throws fails the call with <see cref="TableauException"/>
-    /// (<see cref="TableauErrorKind.Http"/>), the exception as its cause; the caller's cancellation stays a cancellation.
+    /// <para>
+    /// An exception your handler throws, a timeout or a cancellation of its own among them, fails the call with
+    /// <see cref="TableauException"/> (<see cref="TableauErrorKind.Http"/>), the exception as its cause; the caller's
+    /// cancellation stays a cancellation.
+    /// </para>
+    /// <para>
+    /// A handler of yours that retries sees the request but not whether the call is safe to send twice, which the client's
+    /// own retries know: retry only GET, HEAD, PUT and DELETE, and never a POST, which publishes, creates or runs.
+    /// </para>
     /// </remarks>
     /// <param name="configureHandler">
     /// Makes a new handler each time it is called, from the scoped provider the factory gives the handler's lifetime.

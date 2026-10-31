@@ -40,7 +40,8 @@ public sealed class DownloadTests : IDisposable
     {
         using var server = FakeTableauServer.Start();
         var rest = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        server.Map("GET", ContentPath, Gated(FiveMegabytes, OneMegabyte, rest.Task,
+        // Chunked, with no length, as Tableau Server 2025.1 sends a workbook.
+        server.Map("GET", ContentPath, Gated(FiveMegabytes, OneMegabyte, rest.Task, sendLength: false,
             ("Content-Disposition", "name=\"tableau_workbook\"; filename=\"Superstore.twbx\"")));
         await using var client = ClientFixtures.Client(server);
 
@@ -57,7 +58,7 @@ public sealed class DownloadTests : IDisposable
         Assert.AreEqual("Superstore.twbx", download.FileName);
         Assert.AreEqual(TableauFileKind.PackagedWorkbook, download.Kind);
         Assert.AreEqual("application/octet-stream", download.ContentType);
-        Assert.AreEqual(FiveMegabytes, download.Length);
+        Assert.IsNull(download.Length, "no Content-Length came");
         CollectionAssert.AreEqual(Pattern(FiveMegabytes), all.ToArray());
     }
 
@@ -151,7 +152,7 @@ public sealed class DownloadTests : IDisposable
 
         var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.Timeout, () => ClientFixtures.DownloadAsync(client, Content()));
 
-        Assert.Contains("took longer than its TransferTimeout, or the HttpClient's Timeout, allows", thrown.Message);
+        Assert.Contains("took longer than its TransferTimeout allows", thrown.Message);
     }
 
     [TestMethod]
@@ -218,6 +219,9 @@ public sealed class DownloadTests : IDisposable
     [DataRow("attachment", null, TableauFileKind.Unknown)]
     [DataRow("attachment; =x; filename", null, TableauFileKind.Unknown)]
     [DataRow("attachment; filename*=bad.pdf", null, TableauFileKind.Unknown)]
+    [DataRow("attachment; filename*=UTF-8''; filename=\"good.twb\"", "good.twb", TableauFileKind.Workbook)]
+    [DataRow("attachment; filename=\"good.twb\"; filename*=UTF-8''..%2F..%2F", "good.twb", TableauFileKind.Workbook)]
+    [DataRow("attachment; filename*=UTF-8''%EE%80%80%E2%80%AE; filename=\"good.twb\"", "good.twb", TableauFileKind.Workbook)]
     [DataRow("attachment; filename*=UTF-8''100%25%zz.pdf", "100%%zz.pdf", TableauFileKind.Pdf)]
     public async Task TheFileNameIsANameAloneCleaned(string disposition, string? fileName, TableauFileKind kind)
     {
@@ -260,7 +264,7 @@ public sealed class DownloadTests : IDisposable
 
         var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.Http, () => ClientFixtures.DownloadAsync(client, Content()));
 
-        Assert.Contains("got no answer", thrown.Message);
+        Assert.Contains("broke off after 2 bytes of its file", thrown.Message);
     }
 
     [TestMethod]
@@ -277,6 +281,94 @@ public sealed class DownloadTests : IDisposable
         Assert.IsNull(DownloadFiles.Clean("\u0001\u0002"));
     }
 
+    // The cut comes before the trim and the device rule, so what it leaves is trimmed and checked too.
+    [TestMethod]
+    public void WhatTheCutLeavesIsTrimmedAndChecked()
+    {
+        var device = DownloadFiles.Clean("NUL" + new string(' ', 250) + "x.twbx");
+        var spaces = DownloadFiles.Clean("a" + new string(' ', 300) + "b");
+
+        Assert.AreEqual("_NUL" + new string(' ', 246) + ".twbx", device);
+        Assert.AreEqual(DownloadFiles.LongestName, Encoding.UTF8.GetByteCount(device!));
+        Assert.AreEqual("a", spaces);
+        Assert.AreEqual("_COM1.csv", DownloadFiles.Clean(" COM1.csv "));
+        Assert.AreEqual("report", DownloadFiles.Clean("report .\u00A0"));
+    }
+
+    // Linux and macOS take 255 bytes of UTF-8 in a name, which 100 characters of Japanese pass.
+    [TestMethod]
+    public void ALongNameIsCutByItsBytesOfUtf8()
+    {
+        var name = DownloadFiles.Clean(new string('日', 100) + ".twbx")!;
+
+        Assert.AreEqual(new string('日', 83) + ".twbx", name);
+        Assert.IsLessThanOrEqualTo(DownloadFiles.LongestName, Encoding.UTF8.GetByteCount(name));
+    }
+
+    [TestMethod]
+    public async Task SavingToAFolderIsRefusedBeforeAnythingIsRead()
+    {
+        using var server = FakeTableauServer.Start();
+        server.Map("GET", ContentPath, FakeResponse.File(Pattern(100), null));
+        await using var client = ClientFixtures.Client(server);
+        var folder = Folder();
+        Directory.CreateDirectory(Path.Combine(folder, "reports"));
+
+        await using var download = await ClientFixtures.DownloadAsync(client, Content());
+        var thrown = await Assert.ThrowsExactlyAsync<ArgumentException>(() => download.SaveToFileAsync(Path.Combine(folder, "reports"),
+            cancellationToken: TestContext.CancellationToken));
+        await download.SaveToFileAsync(Path.Combine(folder, "saved.bin"), cancellationToken: TestContext.CancellationToken);
+
+        Assert.Contains("names a folder", thrown.Message);
+        CollectionAssert.AreEqual(Pattern(100), await File.ReadAllBytesAsync(Path.Combine(folder, "saved.bin"), TestContext.CancellationToken));
+    }
+
+    [TestMethod]
+    public async Task ASaveThatCantOpenItsFileMayBeTriedAgain()
+    {
+        using var server = FakeTableauServer.Start();
+        server.Map("GET", ContentPath, FakeResponse.File(Pattern(100), null));
+        await using var client = ClientFixtures.Client(server);
+        var missing = Path.Combine(Folder(), "not yet");
+
+        await using var download = await ClientFixtures.DownloadAsync(client, Content());
+        await Assert.ThrowsExactlyAsync<DirectoryNotFoundException>(() => download.SaveToFileAsync(Path.Combine(missing, "saved.bin"),
+            cancellationToken: TestContext.CancellationToken));
+        Directory.CreateDirectory(missing);
+        await download.SaveToFileAsync(Path.Combine(missing, "saved.bin"), cancellationToken: TestContext.CancellationToken);
+
+        CollectionAssert.AreEqual(Pattern(100), await File.ReadAllBytesAsync(Path.Combine(missing, "saved.bin"), TestContext.CancellationToken));
+    }
+
+    [TestMethod]
+    public async Task TheTransferTimeoutStopsTheReadAhead()
+    {
+        using var server = FakeTableauServer.Start();
+        server.Map("GET", ContentPath, FakeResponse.Streamed(200, null, 100, async stream =>
+        {
+            await stream.FlushAsync();
+            await Never();
+        }));
+        var options = ClientFixtures.Options(server);
+        options.TransferTimeout = TimeSpan.FromMilliseconds(500);
+        await using var client = ClientFixtures.Client(options);
+
+        var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.Timeout, () => ClientFixtures.DownloadAsync(client, Content()));
+
+        Assert.Contains("took longer than its TransferTimeout allows", thrown.Message);
+    }
+    [TestMethod]
+    public async Task ACallThatIsNoDownloadIsRefusedBeforeSending()
+    {
+        using var server = FakeTableauServer.Start();
+        await using var client = ClientFixtures.Client(server);
+
+        var thrown = await Assert.ThrowsExactlyAsync<InvalidOperationException>(
+            () => ClientFixtures.DownloadAsync(client, ClientFixtures.Endpoint("{version}/workbooks/w1/content")));
+
+        Assert.Contains("is no download", thrown.Message);
+        Assert.IsEmpty(server.Requests);
+    }
     [TestMethod]
     public async Task ADownloadSavesToAFile()
     {
@@ -291,6 +383,7 @@ public sealed class DownloadTests : IDisposable
 
         CollectionAssert.AreEqual(Pattern(FiveMegabytes), await File.ReadAllBytesAsync(path, TestContext.CancellationToken));
         CollectionAssert.AreEqual(new[] { path }, Directory.GetFiles(folder));
+        Assert.AreEqual(FiveMegabytes, download.Length);
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => download.SaveToFileAsync(path, overwrite: true,
             cancellationToken: TestContext.CancellationToken));
     }
@@ -444,10 +537,14 @@ public sealed class DownloadTests : IDisposable
             await download.SaveToFileAsync(path, cancellationToken: TestContext.CancellationToken);
         }
         using var empty = new TableauDownload(new MemoryStream());
+        using var csv = new TableauDownload(new MemoryStream(), contentType: "text/csv; charset=utf-8");
 
         CollectionAssert.AreEqual(Pattern(64), await File.ReadAllBytesAsync(path, TestContext.CancellationToken));
         Assert.ThrowsExactly<ObjectDisposedException>(() => stream.ReadByte());
         Assert.AreEqual(TableauFileKind.Unknown, empty.Kind);
+        Assert.AreEqual(TableauFileKind.Csv, csv.Kind);
+        Assert.AreEqual(-1, csv.Content.ReadByte());
+        Assert.AreEqual("text/csv", csv.ContentType);
         Assert.IsNull(empty.FileName);
         Assert.AreEqual(0, await empty.Content.ReadAtLeastAsync(new byte[1], 1, throwOnEndOfStream: false));
         Assert.ThrowsExactly<ArgumentNullException>(() => new TableauDownload(null!));
@@ -482,10 +579,15 @@ public sealed class DownloadTests : IDisposable
     /// A file of <paramref name="length"/> bytes of <see cref="Pattern"/>, of which the server sends the first
     /// <paramref name="first"/> at once and the rest once <paramref name="rest"/> completes.
     /// </summary>
-    private static Func<RecordedRequest, FakeResponse> Gated(int length, int first, Task rest, params (string Name, string Value)[] headers)
+    private static Func<RecordedRequest, FakeResponse> Gated(int length, int first, Task rest, params (string Name, string Value)[] headers) =>
+        Gated(length, first, rest, sendLength: true, headers);
+
+    /// <summary>The same, sent with its length or, as Tableau Server sends a workbook, chunked, with none.</summary>
+    private static Func<RecordedRequest, FakeResponse> Gated(int length, int first, Task rest, bool sendLength,
+        params (string Name, string Value)[] headers)
     {
         var body = Pattern(length);
-        return _ => FakeResponse.Streamed(200, "application/octet-stream", length, async stream =>
+        return _ => FakeResponse.Streamed(200, "application/octet-stream", sendLength ? length : null, async stream =>
         {
             await stream.WriteAsync(body.AsMemory(0, first));
             await stream.FlushAsync();

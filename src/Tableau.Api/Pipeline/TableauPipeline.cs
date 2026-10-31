@@ -11,7 +11,6 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Polly.Timeout;
 using Tableau.Api.Rest.Models;
 
 namespace Tableau.Api.Pipeline;
@@ -93,34 +92,38 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
         }
         catch (Exception e)
         {
-            throw Failure(endpoint, path, e, cancellationToken);
+            throw Failure(endpoint, path, e, transfer, cancellationToken);
         }
     }
 
     /// <summary>
-    /// Sends a call whose answer is a file, and returns it as soon as its headers have come, its content still on the
-    /// wire, for the caller to read or save. The download owns the answer and the call's <see cref="TableauClientOptions.TransferTimeout"/>,
+    /// Sends a call whose answer is a file, and returns it once its headers have come, and, when neither the file's
+    /// name nor its media type says what it is, its first bytes, up to 8, its content still on the wire for the caller
+    /// to read or save. The download owns the answer and the call's <see cref="TableauClientOptions.TransferTimeout"/>,
     /// which runs until it is disposed. The gates are <see cref="SendAsync"/>'s.
     /// </summary>
-    /// <param name="endpoint">The call's descriptor.</param>
+    /// <param name="endpoint">The call's descriptor, a <see cref="TransferKind.Download"/>.</param>
     /// <param name="request">What it sends.</param>
     /// <param name="cancellationToken">The caller's token, which also stops reading the file.</param>
+    /// <exception cref="InvalidOperationException">The descriptor is no download.</exception>
     public async Task<TableauDownload> DownloadAsync(Endpoint endpoint, TableauRequest request, CancellationToken cancellationToken)
     {
+        // The handler times and reads an attempt by the descriptor: a download's answer it leaves on the wire, under no
+        // attempt timeout, and TransferTimeout runs here until the file is read and disposed.
+        if (endpoint.Transfer != TransferKind.Download)
+            throw new InvalidOperationException($"{endpoint.Name} is no download: its descriptor's transfer is {endpoint.Transfer}.");
         var version = await GatesAsync(endpoint, cancellationToken).ConfigureAwait(false);
         var (uri, path, body) = Prepare(endpoint, version, request);
-        // A download is a transfer, whatever its descriptor says: TransferTimeout runs until the file is read and disposed.
-        var transfer = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        transfer.CancelAfter(state.Options.TransferTimeout);
+        var transfer = TransferTimer(endpoint, cancellationToken);
         HttpResponseMessage? response = null;
         var started = Stopwatch.GetTimestamp();
         try
         {
-            response = await SendFollowingRedirectsAsync(endpoint, uri, path, body, request.Token, transfer.Token).ConfigureAwait(false);
+            response = await SendFollowingRedirectsAsync(endpoint, uri, path, body, request.Token, transfer!.Token).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
                 throw await ErrorAsync(endpoint, response, path, transfer.Token).ConfigureAwait(false);
-            var call = new DownloadCall(this, endpoint, path, cancellationToken, transfer.Token);
-            var download = await TableauDownload.OpenAsync(response, transfer, call).ConfigureAwait(false);
+            var call = new DownloadCall(this, endpoint, path, cancellationToken, transfer!.Token);
+            var download = await TableauDownload.OpenAsync(response, transfer!, call).ConfigureAwait(false);
             var elapsed = Stopwatch.GetElapsedTime(started);
             TableauLog.Answered(state.Logger, state.DisplayName, endpoint.Method, path, (int)response.StatusCode, elapsed.TotalMilliseconds);
             response = null;
@@ -129,7 +132,7 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
         }
         catch (Exception e)
         {
-            throw Failure(endpoint, path, e, cancellationToken);
+            throw Failure(endpoint, path, e, transfer, cancellationToken);
         }
         finally
         {
@@ -193,26 +196,34 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
         return timer;
     }
 
-    // What the caller receives for a failure: the caller's cancellation as itself, a timeout or a failed connection as
-    // TableauException, and the pipeline's own exceptions as they are, each logged at Debug.
-    private Exception Failure(Endpoint endpoint, string path, Exception exception, CancellationToken cancellationToken)
+    // What the caller receives for a failure: the caller's cancellation as itself; the attempt timeout, the transfer
+    // timeout or the HttpClient's own as Timeout; a failed connection, or a handler's own exception or cancellation, as
+    // Http; the pipeline's own exceptions as they are; each logged at Debug.
+    private Exception Failure(Endpoint endpoint, string path, Exception exception, CancellationTokenSource? transfer,
+        CancellationToken cancellationToken)
     {
         switch (exception)
         {
             case OperationCanceledException when cancellationToken.IsCancellationRequested:
                 // Thrown again with the caller's token, which the HttpClient only saw linked to the transfer's.
                 return Cancelled(endpoint, path, exception, cancellationToken);
-            case TimeoutRejectedException rejected:
-                // The cancellation the attempt timeout caused, as other timeouts give theirs: Polly stays inside the client.
+            case TableauAttemptTimeoutException attempt:
                 return Failed(endpoint, path, new TableauException(TableauErrorKind.Timeout,
                     $"{endpoint.Name} ({endpoint.Method} {path}): its last attempt took longer than its RequestTimeout allows.",
-                    rejected.InnerException ?? rejected)
+                    attempt.InnerException)
+                { Method = endpoint.Method, RequestPath = path });
+            case OperationCanceledException when transfer is { IsCancellationRequested: true }:
+                return Failed(endpoint, path, new TableauException(TableauErrorKind.Timeout,
+                    $"{endpoint.Name} ({endpoint.Method} {path}) took longer than its TransferTimeout allows.", exception)
+                { Method = endpoint.Method, RequestPath = path });
+            case OperationCanceledException { InnerException: TimeoutException }:
+                // How an HttpClient reports its own Timeout: a caller's, as the library's are infinite.
+                return Failed(endpoint, path, new TableauException(TableauErrorKind.Timeout,
+                    $"{endpoint.Name} ({endpoint.Method} {path}) took longer than the HttpClient's Timeout allows.", exception)
                 { Method = endpoint.Method, RequestPath = path });
             case OperationCanceledException:
-                // The transfer timeout, or the HttpClient's own: either way not the caller's cancellation.
-                var limit = endpoint.Transfer == TransferKind.None ? "the HttpClient's Timeout" : "its TransferTimeout, or the HttpClient's Timeout,";
-                return Failed(endpoint, path, new TableauException(TableauErrorKind.Timeout,
-                    $"{endpoint.Name} ({endpoint.Method} {path}) took longer than {limit} allows.", exception)
+                return Failed(endpoint, path, new TableauException(TableauErrorKind.Http,
+                    $"{endpoint.Name} ({endpoint.Method} {path}) got no answer: a handler cancelled it: {exception.Message}", exception)
                 { Method = endpoint.Method, RequestPath = path });
             case HttpRequestException or IOException:
                 return Failed(endpoint, path, new TableauException(TableauErrorKind.Http,
@@ -224,7 +235,6 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
                 return exception;
         }
     }
-
     private async Task<HttpResponseMessage> SendFollowingRedirectsAsync(Endpoint endpoint, Uri uri, string path, byte[]? body,
         string? token, CancellationToken cancellationToken)
     {
@@ -295,11 +305,12 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
                 ? await client.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false)
                 : await http.SendAsync(message, cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception e) when (e is not (OperationCanceledException or HttpRequestException or IOException or TimeoutRejectedException))
+        catch (Exception e) when (e is not (OperationCanceledException or HttpRequestException or IOException or TableauAttemptTimeoutException))
         {
-            // A handler of the caller's threw something of its own: the request got no answer, and the call fails as one
-            // that got none, with the handler's exception as the cause.
-            throw new HttpRequestException($"A handler failed the request: {e.Message}", e);
+            // A handler of the caller's threw something of its own, a timeout of its own among them: the request got no
+            // answer, and the call fails as one that got none, with the handler's exception as the cause.
+            throw new TableauException(TableauErrorKind.Http, $"{endpoint.Name} ({method} {path}) got no answer: a handler failed it: {e.Message}", e)
+            { Method = method, RequestPath = path };
         }
     }
 
@@ -346,7 +357,7 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
         CancellationToken cancellationToken)
     {
         // The chain kept at most the body's first 64 KB; this reads no more, whatever sent it.
-        var (bytes, length) = await ReadSomeAsync(response.Content, TableauAttemptHandler.ErrorBodyRead, cancellationToken)
+        var (bytes, length) = await ReadSomeAsync(response.Content, TableauResilienceHandler.ErrorBodyRead, cancellationToken)
             .ConfigureAwait(false);
         var (code, summary, detail) = TableauError(bytes, length);
         var status = response.StatusCode;
@@ -458,14 +469,17 @@ internal sealed class DownloadCall(TableauPipeline pipeline, Endpoint endpoint, 
                 + "file.", exception)
             { Method = endpoint.Method, RequestPath = path });
         }
-        if (exception is IOException or HttpRequestException)
-        {
-            return pipeline.Failed(endpoint, path, new TableauException(TableauErrorKind.Http,
-                $"{endpoint.Name} ({endpoint.Method} {path}) broke off after {Bytes(read)} bytes of its file: {exception.Message}", exception)
-            { Method = endpoint.Method, RequestPath = path });
-        }
-        return exception;
+        return exception is IOException or HttpRequestException ? pipeline.Failed(endpoint, path, BrokeOff(exception, read)) : exception;
     }
+
+    /// <summary>
+    /// A connection that broke off after <paramref name="read"/> bytes of the file, not logged yet: a read logs it
+    /// through <see cref="Failure"/>, and reading ahead to tell the kind leaves it to the pipeline.
+    /// </summary>
+    public TableauException BrokeOff(Exception exception, long read) =>
+        new(TableauErrorKind.Http,
+            $"{endpoint.Name} ({endpoint.Method} {path}) broke off after {Bytes(read)} bytes of its file: {exception.Message}", exception)
+        { Method = endpoint.Method, RequestPath = path };
 
     // A count as every culture reads it.
     private static string Bytes(long read) => read.ToString(CultureInfo.InvariantCulture);

@@ -1,8 +1,12 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using System.Net.Security;
+using System.Reflection;
 using System.Security.Authentication;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,7 +15,6 @@ using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Polly;
 using Tableau.Api.Tests.Fakes;
 
 namespace Tableau.Api.Tests;
@@ -142,26 +145,34 @@ public sealed class ClientBuilderTests
         var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.Http,
             () => scope.ServiceProvider.GetRequiredKeyedService<TableauClient>("prod").Server.GetInfoAsync());
 
-        Assert.IsInstanceOfType<InvalidOperationException>(thrown.InnerException?.InnerException);
-        Assert.Contains("A handler failed the request: Invented: the handler refuses.", thrown.Message);
+        Assert.IsInstanceOfType<InvalidOperationException>(thrown.InnerException);
+        Assert.Contains("got no answer: a handler failed it: Invented: the handler refuses.", thrown.Message);
         Assert.IsEmpty(server.Requests);
     }
 
+    // A handler's own timeout or cancellation is no timeout of the client's: the call fails as Http, with it as the cause.
     [TestMethod]
-    public async Task AHandlersOwnTimeoutIsATimeout()
+    [DataRow(true)]
+    [DataRow(false)]
+    public async Task AHandlersOwnTimeoutOrCancellationIsHttpWithItsCause(bool timeout)
     {
         using var server = FakeTableauServer.Start();
-        var timeout = new Polly.Timeout.TimeoutRejectedException("Invented: the caller's own timeout.");
+        Exception own = timeout
+            ? new Polly.Timeout.TimeoutRejectedException("Invented: the caller's own timeout.")
+            : new OperationCanceledException("Invented: the caller's own cancellation.");
         var services = Services();
-        services.AddTableauClient("prod", options => Copy(ClientFixtures.Options(server), options))
-            .AddHttpMessageHandler(_ => new Throwing(timeout));
+        services.AddTableauClient("prod", options => Copy(ClientFixtures.Options(server, maxRetries: 3), options))
+            .AddHttpMessageHandler(_ => new Throwing(own));
         await using var provider = services.BuildServiceProvider();
         await using var scope = provider.CreateAsyncScope();
 
-        var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.Timeout,
+        var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.Http,
             () => scope.ServiceProvider.GetRequiredKeyedService<TableauClient>("prod").Server.GetInfoAsync());
 
-        Assert.AreSame(timeout, thrown.InnerException);
+        Assert.AreSame(own, thrown.InnerException);
+        Assert.Contains($"Server Info (GET {ClientFixtures.ServerInfoPath}) got no answer: a handler", thrown.Message);
+        Assert.Contains(own.Message, thrown.Message);
+        Assert.IsEmpty(server.Requests);
     }
 
     [TestMethod]
@@ -176,8 +187,11 @@ public sealed class ClientBuilderTests
 
         using var response = await http.GetAsync(new Uri(server.BaseUrl, ItemsPath), HttpCompletionOption.ResponseHeadersRead);
 
+        // Read whole by the library's handler, though the HttpClient was asked for the headers alone: a buffered answer
+        // reads as a stream that can seek, one from the wire as one that can't.
+        await using var content = await response.Content.ReadAsStreamAsync();
         Assert.IsTrue(response.IsSuccessStatusCode);
-        Assert.Contains("2025.1.0", await response.Content.ReadAsStringAsync());
+        Assert.IsTrue(content.CanSeek, "the answer was read whole within its attempt");
     }
 
     [TestMethod]
@@ -240,28 +254,32 @@ public sealed class ClientBuilderTests
     public void ASettingThatThrowsFailsTheHandlerAndLeavesNoneOpen()
     {
         var options = new TableauClientOptions { ServerUrl = new Uri("https://tableau.example.com/") };
+        SocketsHttpHandler? made = null;
 
         var thrown = Assert.ThrowsExactly<InvalidOperationException>(() => Pipeline.TableauHandler.Create(options,
-            [_ => throw new InvalidOperationException("Invented: a setting that fails.")]));
+        [
+            handler =>
+            {
+                made = handler;
+                throw new InvalidOperationException("Invented: a setting that fails.");
+            },
+        ]));
 
         Assert.AreEqual("Invented: a setting that fails.", thrown.Message);
+        Assert.ThrowsExactly<ObjectDisposedException>(() => made!.ConnectTimeout = TimeSpan.FromSeconds(1), "the handler was disposed");
     }
 
-    // Each attempt sends a copy of the request through the caller's HttpClient; a copy that carried the client's own
-    // resilience context would hand it to the caller's resilience handler, which would point it at that copy, and the
-    // client's next attempt would send the copy, disposed.
+    // Each attempt sends a copy of the request through the caller's HttpClient, whose own handler may send it again: the
+    // body is the original's, shared by every copy, and must reach the server each time.
     [TestMethod]
-    public async Task ACallersHttpClientWithItsOwnResilienceHandlerIsRetriedAroundIt()
+    public async Task ACallersHttpClientThatRetriesItselfIsRetriedAroundIt()
     {
         using var server = FakeTableauServer.Start();
         var unavailable = FakeResponse.Empty(503).WithHeader("Retry-After", "0");
         server.Map("PUT", ItemsPath, ResilienceTests.InTurn(unavailable, unavailable, unavailable, ClientFixtures.ServerInfo()));
-        var theirs = new ResiliencePipelineBuilder<HttpResponseMessage>()
-            .AddRetry(new Microsoft.Extensions.Http.Resilience.HttpRetryStrategyOptions { MaxRetryAttempts = 1, Delay = TimeSpan.Zero })
-            .Build();
         using var primary = new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false };
-        using var resilience = new Microsoft.Extensions.Http.Resilience.ResilienceHandler(theirs) { InnerHandler = primary };
-        using var http = new HttpClient(resilience, disposeHandler: false);
+        using var retrying = new RetryingOnce { InnerHandler = primary };
+        using var http = new HttpClient(retrying, disposeHandler: false);
         await using var client = new TableauClient(http, ClientFixtures.Options(server, maxRetries: 3), Fixtures.Log.Factory);
 
         // An update of a resource, safe to send twice, with a body every attempt must carry.
@@ -277,6 +295,112 @@ public sealed class ClientBuilderTests
             "every attempt sent the body");
     }
 
+    // TLS options one action gives two clients' handlers: setting the rules on them in place made the client resolved
+    // last decide both, so a client without DangerousAcceptAnyServerCertificate could accept any certificate.
+    [TestMethod]
+    [DataRow(true)]
+    [DataRow(false)]
+    public async Task TlsOptionsTwoClientsShareKeepEachClientsCheck(bool testFirst)
+    {
+        using var server = FakeTableauServer.StartTls();
+        server.Map("GET", ClientFixtures.ServerInfoPath, ClientFixtures.ServerInfo());
+        var shared = new SslClientAuthenticationOptions();
+        var services = Services();
+        services.AddTableauClient("test", options => Copy(ClientFixtures.Options(server), options))
+            .ConfigurePrimaryHandler(handler => handler.SslOptions = shared);
+        services.AddTableauClient("prod", options =>
+            {
+                Copy(ClientFixtures.Options(server), options);
+                options.DangerousAcceptAnyServerCertificate = true;
+            })
+            .ConfigurePrimaryHandler(handler => handler.SslOptions = shared);
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var first = scope.ServiceProvider.GetRequiredKeyedService<TableauClient>(testFirst ? "test" : "prod");
+        var second = scope.ServiceProvider.GetRequiredKeyedService<TableauClient>(testFirst ? "prod" : "test");
+        var (test, prod) = testFirst ? (first, second) : (second, first);
+
+        var refused = await ClientFixtures.FailsAsync(TableauErrorKind.Http, () => test.Server.GetInfoAsync());
+        await prod.Server.GetInfoAsync();
+
+        Assert.IsInstanceOfType<AuthenticationException>(refused.InnerException?.InnerException);
+        Assert.HasCount(1, server.Requests);
+        Assert.IsNull(shared.RemoteCertificateValidationCallback, "the shared options stay as the caller set them");
+        Assert.IsNull(shared.CertificateChainPolicy, "the shared options stay as the caller set them");
+    }
+
+    // The copy names each member; a .NET release that adds one fails the count, and the copy is given it.
+    [TestMethod]
+    public void TheHandlersCopyOfTheTlsOptionsCarriesEveryMember()
+    {
+        using var key = RSA.Create(2048);
+        var request = new CertificateRequest("CN=Tableau.Api tests client", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        using var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddHours(1));
+        var source = new SslClientAuthenticationOptions();
+        var members = typeof(SslClientAuthenticationOptions).GetProperties(BindingFlags.Instance | BindingFlags.Public)
+            .Where(property => property.SetMethod is { IsPublic: true })
+            .ToList();
+        var set = new List<string>();
+        foreach (var member in members)
+        {
+            if (Changed(member.PropertyType, member.GetValue(source), certificate) is not { } value) continue;
+            try
+            {
+                member.SetValue(source, value);
+                set.Add(member.Name);
+            }
+            catch (TargetInvocationException e) when (e.InnerException is PlatformNotSupportedException)
+            {
+                // A member this platform can't take, such as an RSA padding of another system's.
+            }
+        }
+
+        var copy = Pipeline.TableauHandler.Copy(source);
+
+        Assert.HasCount(15, members, string.Join(", ", members.Select(member => member.Name)));
+        Assert.IsGreaterThanOrEqualTo(12, set.Count, string.Join(", ", set));
+        foreach (var member in members)
+        {
+            var expected = member.GetValue(source);
+            var actual = member.GetValue(copy);
+            if (member.Name == nameof(SslClientAuthenticationOptions.ApplicationProtocols) && expected is System.Collections.IEnumerable list)
+            {
+                Assert.AreNotSame(list, actual, member.Name);
+                CollectionAssert.AreEqual(list.Cast<object>().ToList(), ((System.Collections.IEnumerable)actual!).Cast<object>().ToList(), member.Name);
+            }
+            else
+            {
+                Assert.AreEqual(expected, actual, member.Name);
+            }
+        }
+        Assert.AreSame(source.ClientCertificates, copy.ClientCertificates);
+    }
+
+    // A value of the member's type other than the one it holds, or null for a type this platform can't make.
+    private static object? Changed(Type type, object? current, X509Certificate2 certificate)
+    {
+        if (type == typeof(bool)) return !(bool)current!;
+        if (type.IsEnum) return Enum.GetValues(type).Cast<object>().First(value => !value.Equals(current));
+        if (type == typeof(string)) return "invented.example";
+        if (type == typeof(List<SslApplicationProtocol>)) return new List<SslApplicationProtocol> { SslApplicationProtocol.Http2 };
+        if (type == typeof(X509ChainPolicy)) return new X509ChainPolicy();
+        if (type == typeof(X509CertificateCollection)) return new X509CertificateCollection { certificate };
+        if (type == typeof(SslStreamCertificateContext)) return SslStreamCertificateContext.Create(certificate, null, offline: true);
+        if (type == typeof(LocalCertificateSelectionCallback)) return new LocalCertificateSelectionCallback((_, _, _, _, _) => certificate);
+        if (type == typeof(RemoteCertificateValidationCallback)) return new RemoteCertificateValidationCallback((_, _, _, errors) => errors == SslPolicyErrors.None);
+        if (type == typeof(CipherSuitesPolicy))
+        {
+            try
+            {
+                return Activator.CreateInstance(type, [new[] { TlsCipherSuite.TLS_AES_128_GCM_SHA256 }]);
+            }
+            catch (TargetInvocationException e) when (e.InnerException is PlatformNotSupportedException)
+            {
+                return null;
+            }
+        }
+        throw new AssertFailedException($"The test makes no value of {type}: a member .NET added, which the copy and this test must take.");
+    }
     [TestMethod]
     public void TheBuildersMethodsRefuseNull()
     {

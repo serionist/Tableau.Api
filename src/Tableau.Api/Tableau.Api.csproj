@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <!-- The target, the strictness and the version are in the Directory.Build.props files, the package versions in
        Directory.Packages.props. -->
@@ -15,16 +15,16 @@
   </PropertyGroup>
 
   <!-- The abstractions a caller's host provides the rest of: logging, options with their validation, DI, and the
-       HttpClient factory that AddTableauClient registers its named client with. Http.Resilience gives the retries their
-       handler and Polly underneath; the client builds its pipeline itself, so none of it registers services or logs.
+       HttpClient factory that AddTableauClient registers its named client with. Polly.Core runs the retries, from a
+       handler of the library's own: no package of it registers services, logs or changes how an app builds.
        Newtonsoft.Json is the old Vizportal client's, and goes with it. -->
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Http" />
-    <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options" />
     <PackageReference Include="Newtonsoft.Json" />
+    <PackageReference Include="Polly.Core" />
   </ItemGroup>
 
   <!-- The envelopes of a request and a response, the JSON context, the converters and the client's pipeline are

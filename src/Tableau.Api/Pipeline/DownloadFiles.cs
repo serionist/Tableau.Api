@@ -14,8 +14,11 @@ namespace Tableau.Api.Pipeline;
 /// </summary>
 internal static class DownloadFiles
 {
-    /// <summary>The longest name kept, as most file systems allow.</summary>
+    /// <summary>The longest name kept, in bytes of UTF-8, as Linux's and macOS's file systems allow; Windows allows 255 characters, never fewer.</summary>
     public const int LongestName = 255;
+
+    /// <summary>The longest extension a cut keeps.</summary>
+    public const int LongestExtension = 16;
 
     // Characters no file name may hold on Windows, refused on every system so a name means the same everywhere.
     private const string Refused = "\"*/:<>?\\|";
@@ -54,7 +57,10 @@ internal static class DownloadFiles
     /// <summary>The bytes <see cref="KindOf(ReadOnlySpan{byte})"/> looks at.</summary>
     public const int SignatureLength = 8;
 
-    /// <summary>The file name the headers give, cleaned, or null: <c>filename*</c> first, then <c>filename</c>.</summary>
+    /// <summary>
+    /// The file name the headers give, cleaned, or null: <c>filename*</c> first, then <c>filename</c>, so an empty or a
+    /// foreign-charset <c>filename*</c>, or one that cleans to nothing, leaves the plain one.
+    /// </summary>
     public static string? FileNameOf(HttpContentHeaders headers)
     {
         if (!headers.NonValidated.TryGetValues("Content-Disposition", out var values)) return null;
@@ -68,14 +74,15 @@ internal static class DownloadFiles
                 else if (name.Equals("filename", StringComparison.OrdinalIgnoreCase)) plain ??= parameter;
             }
         }
-        return Clean(extended ?? plain);
+        return Clean(extended) ?? Clean(plain);
     }
 
     /// <summary>
     /// A name the caller can put in a path safely, or null when nothing is left: the part after the last <c>/</c> or
-    /// <c>\</c>, so no folder comes with it; without control and format characters, or what Windows refuses; without
-    /// the trailing dots and spaces Windows drops; a device name such as <c>CON</c> prefixed with <c>_</c>; and at most
-    /// 255 characters, its extension kept.
+    /// <c>\</c>, so no folder comes with it; without control, format, private-use and separator characters, or what
+    /// Windows refuses; cut to 255 bytes of UTF-8 on a character's boundary, its extension kept when it is 16 characters
+    /// or fewer; without leading whitespace, or the trailing whitespace, dots and spaces Windows drops; and a device
+    /// name such as <c>CON</c> prefixed with <c>_</c>. The cut comes first, so what it leaves is trimmed and checked too.
     /// </summary>
     public static string? Clean(string? name)
     {
@@ -91,21 +98,41 @@ internal static class DownloadFiles
                 continue;
             kept.Append(rune.ToString());
         }
-        var cleaned = kept.ToString().Trim().TrimEnd('.', ' ');
+        var cleaned = Trimmed(Cut(kept.ToString()));
         if (cleaned.Length == 0) return null;
-        var stem = cleaned.Split('.')[0].TrimEnd(' ');
-        if (_devices.Contains(stem)) cleaned = "_" + cleaned;
-        if (cleaned.Length > LongestName)
-        {
-            var extension = Path.GetExtension(cleaned);
-            if (extension.Length > 16) extension = "";
-            var cut = LongestName - extension.Length;
-            if (char.IsHighSurrogate(cleaned[cut - 1])) cut--;
-            cleaned = cleaned[..cut] + extension;
-        }
-        return cleaned;
+        // A prefixed name may be a byte over: cut again, which keeps the prefix and may leave a trailing space to trim.
+        return IsDevice(cleaned) ? Trimmed(Cut("_" + cleaned)) : cleaned;
     }
 
+    // Leading whitespace, and the trailing whitespace, dots and spaces Windows drops.
+    private static string Trimmed(string name)
+    {
+        var trimmed = name.Trim();
+        while (trimmed.Length > 0 && (trimmed[^1] is '.' || char.IsWhiteSpace(trimmed[^1])))
+            trimmed = trimmed[..^1];
+        return trimmed;
+    }
+
+    // A device name, such as CON or com1.txt, which Windows opens as the device whatever its extension.
+    private static bool IsDevice(string name) => _devices.Contains(name.Split('.')[0].TrimEnd(' '));
+
+    // At most LongestName bytes of UTF-8, cut on a character's boundary, the extension kept when it is short enough.
+    private static string Cut(string name)
+    {
+        if (Encoding.UTF8.GetByteCount(name) <= LongestName) return name;
+        var extension = Path.GetExtension(name);
+        if (extension.Length > LongestExtension || extension.Length == name.Length) extension = "";
+        var budget = LongestName - Encoding.UTF8.GetByteCount(extension);
+        var stem = new StringBuilder();
+        var bytes = 0;
+        foreach (var rune in name[..^extension.Length].EnumerateRunes())
+        {
+            if (bytes + rune.Utf8SequenceLength > budget) break;
+            stem.Append(rune.ToString());
+            bytes += rune.Utf8SequenceLength;
+        }
+        return stem.Append(extension).ToString();
+    }
     /// <summary>The kind a name's extension or a media type says, or <see cref="TableauFileKind.Unknown"/>.</summary>
     public static TableauFileKind KindOf(string? fileName, string? mediaType)
     {

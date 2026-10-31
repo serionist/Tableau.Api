@@ -93,7 +93,9 @@ public sealed class TableauClientOptions : IValidatableObject
     /// Whether to accept any certificate the server shows, which turns off the check that the server is who it says:
     /// anyone between the client and the server can then read its passwords and tokens. For a test server only. The
     /// client logs a warning when it is built with it. Without it, a certificate that doesn't validate, or that its
-    /// issuer has revoked, fails the call.
+    /// issuer has revoked, fails the call. No certificate callback of yours turns the check off; a chain policy you give
+    /// the handler (<c>ConfigurePrimaryHandler</c>) is used as you set it, and its flags can loosen the check, with no
+    /// warning.
     /// </summary>
     public bool DangerousAcceptAnyServerCertificate
     {
