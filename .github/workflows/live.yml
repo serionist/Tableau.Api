@@ -1,0 +1,68 @@
+# The live suite: the tests in the Live category (tests/Tableau.Api.Tests/TableauSite.cs and LiveSite.cs), run against
+# the maintainers' Tableau Server, signed in through its direct-trust connected app, every night and by hand, from main
+# alone.
+#
+# - Its job runs in the tableau-live environment, which holds the site's settings as secrets and deploys from main
+#   alone, and the workflow has no pull_request trigger: no pull request, and no fork, reaches them.
+# - The nightly run waits for the repository variable TABLEAU_LIVE_NIGHTLY to be true, so it stays off until the
+#   environment is set up; a run by hand needs no variable. Once it runs, each setting the suite's sign-in needs fails
+#   the run, named, when it is missing: the suite never passes as skipped. A night with the variable unset shows its job
+#   as skipped.
+# - TABLEAU_LIVE_SITE is optional: GitHub keeps no empty secret, and an unset one reaches the tests as the empty string,
+#   which is the default site.
+# - One run at a time: the suite makes a project named after the run and deletes it at the end, and deletes what an
+#   earlier run left behind more than a day ago.
+# - The suite's log check fails on any log line holding a setting's secret or a token any of its clients carried, and
+#   on one holding an invented secret or a query value; in a run that reached a site it counts such lines and shows
+#   none, since a line may hold a live value no list names, such as a JWT the client minted, and this log is public.
+name: Live
+
+on:
+  schedule:
+    - cron: "37 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tableau-live
+  cancel-in-progress: false
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  live:
+    name: Live suite
+    # main alone; the nightly run once the maintainers have turned it on.
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || vars.TABLEAU_LIVE_NIGHTLY == 'true')
+    runs-on: ubuntu-latest
+    environment: tableau-live
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # MinVer reads the history when the library builds.
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Restore (locked)
+        run: dotnet restore tests/Tableau.Api.Tests/Tableau.Api.Tests.csproj --locked-mode
+      - name: Build
+        run: dotnet build tests/Tableau.Api.Tests/Tableau.Api.Tests.csproj --no-restore -c Release
+      - name: The Live tests
+        env:
+          TABLEAU_LIVE: "1"
+          TABLEAU_LIVE_SERVER_URL: ${{ secrets.TABLEAU_LIVE_SERVER_URL }}
+          TABLEAU_LIVE_SITE: ${{ secrets.TABLEAU_LIVE_SITE }}
+          TABLEAU_LIVE_CLIENT_ID: ${{ secrets.TABLEAU_LIVE_CLIENT_ID }}
+          TABLEAU_LIVE_SECRET_ID: ${{ secrets.TABLEAU_LIVE_SECRET_ID }}
+          TABLEAU_LIVE_SECRET_VALUE: ${{ secrets.TABLEAU_LIVE_SECRET_VALUE }}
+          TABLEAU_LIVE_USER: ${{ secrets.TABLEAU_LIVE_USER }}
+        run: >-
+          dotnet test --project tests/Tableau.Api.Tests/Tableau.Api.Tests.csproj --no-build -c Release
+          --filter "TestCategory=Live"

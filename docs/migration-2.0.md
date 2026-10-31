@@ -12,9 +12,10 @@ on a break the ledger doesn't list. Each section below groups the ledger's entri
 |---|---|---|
 | [Target](#target-net100-only) | net10.0 only, where 1.2.x is netstandard2.0 | none: package validation's one suppression, PKV006 |
 | [Version](#version) | 2.0.0, from git tags | none |
-| [Signatures](#six-methods-whose-signature-changed) | six methods whose parameters or return type changed | 6, `CP0002` |
+| [Signatures](#five-methods-whose-signature-changed) | five methods whose parameters or return type changed | 5, `CP0002` |
 | [Permission capabilities](#permission-capabilities-renumbered) | `capabilityTypeName` members renumbered | 12, `CP0011` |
 | [The 2.0 client](#the-20-client) | `TableauClient` takes over `TableauApiClient`'s calls area by area; so far Server Info | 1, `CP0002` |
+| [Sessions](#sessions) | `TableauApiClient`'s sign-in methods gone: the 2.0 client signs itself in, or you sign in through `client.Sessions` | 4, `CP0002` |
 | [Dependencies](#dependencies) | Microsoft.Extensions' abstractions in place of Microsoft.Extensions.Logging, and Newtonsoft.Json added | none |
 
 ## Target: net10.0 only
@@ -31,7 +32,7 @@ net10.0 alone.
 2.0 follows Semantic Versioning: 2.0.0, with release candidates `2.0.0-rc.N` before it. Builds of `main` are
 `2.0.0-alpha.0.<n>`, made by CI and never published.
 
-## Six methods whose signature changed
+## Five methods whose signature changed
 
 `main` changed these 1.2.5 methods of `TableauApiClient` before the rebuild started. Code compiled against 1.2.5 that
 calls one fails with `MissingMethodException`; recompiled, a call that passes its arguments by position may not
@@ -42,7 +43,6 @@ compile, or may bind a value to the new parameter.
 | `CreateMonthlySchedule(session, name, priority, type, executionOrder, startTime, dayToRun, cancelToken)` | `dayToRun` is gone | Drop the argument |
 | `UpdateToMonthlySchedule(session, newName, newPriority, type, executionOrder, startTime, dayToRun, cancelToken)` | `dayToRun` is gone | Drop the argument |
 | `DownloadDataSource(session, datasourceId, includeExtract, cancelToken)` returns `Task<Stream>` | It returns `Task<(Stream stream, DatasourceFileType type)>` | Take `.stream` from the result; `.type` is the file's kind |
-| `SignInWithPAT(tokenName, token, siteContentUrl, cancelToken)` | `userIdToImpersonate` comes before `cancelToken` | Pass the cancellation token by name, `cancelToken: cancellationToken` |
 | `UpdateDataSource(session, datasourceId, newProjectId, newOwnerId, newCertificationStatus, newCertificationNote, cancelToken)` | `newName` comes before `cancelToken` | Pass the token by name |
 | `UpdateWorkbook(session, workbookId, newShowTabs, newProjectId, newOwnerId, cancelToken)` | `newName` comes before `cancelToken` | Pass the token by name |
 
@@ -101,13 +101,47 @@ What changes for a caller who moves a call over:
   to a file. Its `FileName` is cleaned to a name alone, and `Kind` says what it is, as the `WorkbookFileType` beside
   the stream of 1.2.x's `DownloadWorkbook` did: `twb` is `TableauFileKind.Workbook`, `twbx` is `PackagedWorkbook`.
   1.2.x's `DownloadDataSource` returned the stream alone;
-  [`main`'s returned a `DatasourceFileType`](#six-methods-whose-signature-changed) beside it, whose `hyper`, `tds` and
+  [`main`'s returned a `DatasourceFileType`](#five-methods-whose-signature-changed) beside it, whose `hyper`, `tds` and
   `tdsx` are `Hyper`, `DataSource` and `PackagedDataSource`, and whose `tde`, an extract Tableau no longer makes, is
   `Unknown`.
 
 | 1.2.5 | 2.0 | How to move over |
 |---|---|---|
 | `TableauApiClient.ServerInfo(cancelToken)` returns `serverInfo` | `TableauClient.Server.GetInfoAsync(cancellationToken)` returns `Tableau.Api.Rest.Models.ServerInfo` | `info.restApiVersion` is `info.RestApiVersion`, `info.productVersion.Value` is `info.ProductVersion?.Value`. It needs no sign-in |
+
+## Sessions
+
+`TableauApiClient`'s `SignIn`, `SignInWithPAT`, `SignOut` and `SwitchSite` are gone (`SignInWithPAT` had already
+changed on `main`, by its `userIdToImpersonate`). The 2.0 client holds the session itself: give it credentials, and
+it signs in on the first call that needs a session, one sign-in at a time, signs in again shortly before the session is
+due to end and once after a 401, and signs out when you dispose it.
+
+```csharp
+// Without DI.
+await using var tableau = TableauClient.Create(options, TableauCredentials.PersonalAccessToken("nightly-export", secret));
+
+// With DI: a secret can come from a vault at each sign-in.
+services.AddTableauClient("prod", options => configuration.GetSection("Tableau:Prod").Bind(options))
+    .UseCredentials(provider => TableauCredentials.ConnectedAppDirectTrust(clientId, secretId,
+        provider.GetRequiredService<Vault>().TableauSecretAsync, "svc-reports", ["tableau:content:read"]));
+```
+
+| 1.2.5 | 2.0 | How to move over |
+|---|---|---|
+| `SignIn(userName, password, siteContentUrl, userIdToImpersonate, cancelToken)` | `TableauCredentials.Password(name, password, impersonateUserId)` on the client, or `client.Sessions.SignInAsync(credentials, site, cancellationToken)` | Give the client the credentials; sign in by hand only to hold a session yourself. Impersonation is refused on Tableau Cloud before sending |
+| `SignInWithPAT(tokenName, token, siteContentUrl, cancelToken)` | `TableauCredentials.PersonalAccessToken(name, secret, impersonateUserId)` | The same; a PAT still allows one session at a time |
+| `SignOut(session, cancelToken)` | Dispose the client, or `client.Sessions.SignOutAsync(session, cancellationToken)` for a session you signed in | A client from DI never signs out: its session is the name's, and ends on its own |
+| `SwitchSite(session, newSiteContentUrl, cancelToken)` | `client.Sessions.SwitchSiteAsync(session, site, cancellationToken)` | Tableau Server only; the session you switch from ends |
+| `Tableau.Api.Models.TableauSession`, mutable, its `Token` public, its `UserName` always null | `Tableau.Api.TableauSession`, a record whose token is internal and never printed; `UserName` is the user's, or the token's name for a PAT | Call through `client.WithSession(session)`. The 1.x type stays until the old client goes, and the old client's methods still take it |
+
+On `main` until 2.0.0, an area not yet moved to `TableauClient` can't get a session from the library: its old
+`TableauApiClient` methods, and Vizportal's, take a `Models.TableauSession` that no sign-in makes now, and the new
+session's token is internal. Each area moves in its own step, and 2.0.0 ships with every one moved.
+
+Also new: `TableauCredentials.ConnectedAppDirectTrust`, which mints a connected app's JWT at each sign-in;
+`TableauCredentials.Jwt`, for a JWT minted elsewhere; and `TableauCredentials.UnifiedAccessToken`, Tableau Cloud's,
+from REST API 3.27. A sign-in's `TableauException` keeps none of Tableau's answer. A namespace that imports both
+`Tableau.Api` and `Tableau.Api.Models` must name which `TableauSession` it means.
 
 ## Dependencies
 

@@ -16,7 +16,7 @@ public partial class VizPortalClient
     /// <returns></returns>
     /// <exception cref="TableauRequestException"></exception>
     public IAsyncEnumerable<(Workbook[], ContentUser[], ContentProjectWb[])> QueryWorkbooks(
-        TableauSession session) => queryWorkbooks(session);
+        Tableau.Api.Models.TableauSession session) => queryWorkbooks(session);
 
     /// <summary>
     /// Move a workbook to the selected destination project
@@ -25,7 +25,7 @@ public partial class VizPortalClient
     /// <param name="containerId">Target Project Id</param>
     /// <param name="contentId">Workbook Id that will be moved</param>
     /// <returns></returns>
-    public async Task MoveWorkbook(TableauSession session, int containerId, int contentId)
+    public async Task MoveWorkbook(Tableau.Api.Models.TableauSession session, int containerId, int contentId)
     {
         var req = await Request<MoveContent, Empty>(session, "moveContentToContainer",
         new MoveContent()
@@ -51,7 +51,7 @@ public partial class VizPortalClient
     /// <param name="workbookId">The Id of the workbook</param>
     /// <param name="newName">New name for this workbook</param>
     /// <returns></returns>
-    public async Task ChangeWorkbookName(TableauSession session, int workbookId, string newName)
+    public async Task ChangeWorkbookName(Tableau.Api.Models.TableauSession session, int workbookId, string newName)
     {
         var req = await Request<RenameContent, Empty>(session, "renameWorkbook",
             new RenameContent()
@@ -68,7 +68,7 @@ public partial class VizPortalClient
     /// <param name="workbookId">The workbook Id</param>
     /// <param name="newOwnerId">The site user id of the new owner</param>
     /// <returns></returns>
-    public async Task ChangeWorkbookOwner(TableauSession session, int workbookId, int newOwnerId)
+    public async Task ChangeWorkbookOwner(Tableau.Api.Models.TableauSession session, int workbookId, int newOwnerId)
     {
         var req = await Request<ChangeContentOwner, Empty>(session, "setWorkbooksOwner",
             new ChangeContentOwner()
@@ -84,7 +84,7 @@ public partial class VizPortalClient
     /// <param name="session">The session obtained from the top level client</param>
     /// <param name="workbookId">The workbook Id</param>
     /// <returns></returns>
-    public async Task DeleteWorkbook(TableauSession session, int workbookId)
+    public async Task DeleteWorkbook(Tableau.Api.Models.TableauSession session, int workbookId)
     {
         var req = await Request<DeleteContent, Empty>(session, "deleteWorkbooks",
             new DeleteContent()
@@ -93,7 +93,7 @@ public partial class VizPortalClient
             });
     }
 
-    private IAsyncEnumerable<(Workbook[], ContentUser[], ContentProjectWb[])> queryWorkbooks(TableauSession session)
+    private IAsyncEnumerable<(Workbook[], ContentUser[], ContentProjectWb[])> queryWorkbooks(Tableau.Api.Models.TableauSession session)
     {
         var q = new QueryModel()
         {

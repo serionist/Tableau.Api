@@ -47,7 +47,7 @@
       "file": "sign-in.json",
       "body": "response",
       "call": "POST /api/{version}/auth/signin",
-      "source": "synthetic, from the reference's Sign In response; the live server sent the same shape"
+      "source": "synthetic, from the reference's Sign In response; the live server sent the same shape, estimatedTimeToExpiration, a personal access token's own, as DAYS:HH:MM"
     },
     {
       "file": "site.json",

@@ -29,7 +29,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 3)]
     public async Task<(paginationType pagination, revisionType[] revisions)> GetDataSourceRevisions(
-        TableauSession session, string datasourceId, int pageSize = 100, int pageNumber = 1,
+        Models.TableauSession session, string datasourceId, int pageSize = 100, int pageNumber = 1,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -55,7 +55,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 3)]
     public async Task<(paginationType pagination, revisionType[] revisions)> GetWorkbookRevisions(
-        TableauSession session, string workbookId, int pageSize = 100, int pageNumber = 1,
+        Models.TableauSession session, string workbookId, int pageSize = 100, int pageNumber = 1,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -79,7 +79,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 3)]
-    public async Task<Stream> DownloadDataSourceRevision(TableauSession session, string datasourceId,
+    public async Task<Stream> DownloadDataSourceRevision(Models.TableauSession session, string datasourceId,
         int revisionNumber, bool includeExtract = true, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -103,7 +103,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 3)]
-    public async Task<Stream> DownloadWorkbookRevision(TableauSession session, string workbookId,
+    public async Task<Stream> DownloadWorkbookRevision(Models.TableauSession session, string workbookId,
         int revisionNumber, bool includeExtract = true, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -125,7 +125,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 3)]
-    public async Task RemoveDataSourceRevision(TableauSession session, string datasourceId, int revisionNumber,
+    public async Task RemoveDataSourceRevision(Models.TableauSession session, string datasourceId, int revisionNumber,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -146,7 +146,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 3)]
-    public async Task RemoveWorkbookRevision(TableauSession session, string workbookId, int revisionNumber,
+    public async Task RemoveWorkbookRevision(Models.TableauSession session, string workbookId, int revisionNumber,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();

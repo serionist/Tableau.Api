@@ -45,13 +45,21 @@ public static class TableauServiceCollectionExtensions
     /// <c>ConfigureHttpClientDefaults</c>, such as a standard resilience handler: the client keeps its own rules for
     /// redirects, retries, timeouts and errors, and throws <see cref="TableauException"/> alone. Add a handler of your own
     /// to this client with <see cref="TableauClientBuilder.AddHttpMessageHandler"/>. A <see cref="TimeProvider"/> the
-    /// container holds is the clock the retries wait on.
+    /// container holds is the clock the retries wait on, and the clock sessions end by.
+    /// </para>
+    /// <para>
+    /// Given credentials with <see cref="TableauClientBuilder.UseCredentials(TableauCredentials)"/>, the name's clients
+    /// share one session, signed in by the first call that needs one and held in the name's singleton. No client of the
+    /// name signs it out when it is disposed, and neither does the container: by the time it disposes the singleton, the
+    /// HttpClient factory's handlers a sign-out would go through may be gone, and a host's shutdown shouldn't wait on
+    /// Tableau. The session ends on its own (<see cref="TableauSession.ExpiresAt"/>), or at once when a personal access
+    /// token signs in again.
     /// </para>
     /// </remarks>
     /// <param name="services">The service collection.</param>
     /// <param name="name">The client's name, its key; <c>""</c> is the default client.</param>
     /// <param name="configure">Sets the client's options.</param>
-    /// <returns>A builder for what later configures the client: its primary handler and handlers of your own.</returns>
+    /// <returns>A builder for what later configures the client: its credentials, its primary handler and handlers of your own.</returns>
     public static TableauClientBuilder AddTableauClient(this IServiceCollection services, string name,
         Action<TableauClientOptions> configure)
     {
@@ -94,7 +102,7 @@ public static class TableauServiceCollectionExtensions
             .RemoveAllLoggers();
 
         services.TryAddKeyedSingleton(name, (provider, _) => new TableauClientState(name, OptionsFor(provider, name),
-            provider.GetService<ILoggerFactory>(), provider.GetService<TimeProvider>()));
+            provider.GetService<ILoggerFactory>(), provider.GetService<TimeProvider>(), CredentialsFor(provider, name)));
         services.TryAddKeyedTransient(name, (provider, _) => NewClient(provider, name));
         if (name.Length == 0)
             services.TryAddTransient(provider => NewClient(provider, name));
@@ -108,6 +116,13 @@ public static class TableauServiceCollectionExtensions
 
     private static TableauClientOptions OptionsFor(IServiceProvider provider, string name) =>
         provider.GetRequiredService<IOptionsMonitor<TableauClientOptions>>().Get(name);
+
+    // Read once, with the name's state: the session they sign in lasts as long as the state does.
+    private static TableauCredentials? CredentialsFor(IServiceProvider provider, string name) =>
+        HandlerOptions(provider, name).Credentials is { } credentials
+            ? credentials(provider) ?? throw new InvalidOperationException(
+                $"The credentials UseCredentials gives the Tableau client '{(name.Length == 0 ? "(default)" : name)}' are null.")
+            : null;
 
     private static TableauClient NewClient(IServiceProvider provider, string name)
     {
@@ -156,6 +171,38 @@ public sealed class TableauClientBuilder
 
     /// <summary>The service collection the client is registered with.</summary>
     public IServiceCollection Services { get; }
+
+    /// <summary>
+    /// Gives the client's name credentials to sign in with: its clients then sign in on the first call that needs a
+    /// session, and share that session. Called again, the last credentials given win.
+    /// </summary>
+    /// <remarks>
+    /// The session lives as long as the name's singleton, and nothing signs it out when the container is disposed
+    /// (<see cref="TableauServiceCollectionExtensions.AddTableauClient(IServiceCollection, string, Action{TableauClientOptions})"/>).
+    /// A personal access token allows one session at a time, so give each process, and each name, a token of its own.
+    /// </remarks>
+    /// <param name="credentials">The credentials.</param>
+    /// <returns>This builder.</returns>
+    public TableauClientBuilder UseCredentials(TableauCredentials credentials)
+    {
+        ArgumentNullException.ThrowIfNull(credentials);
+        return UseCredentials(_ => credentials);
+    }
+
+    /// <summary>
+    /// Gives the client's name credentials made from the container, such as from a vault's client:
+    /// <c>UseCredentials(provider => TableauCredentials.PersonalAccessToken("export", provider.GetRequiredService&lt;Vault&gt;().SecretAsync))</c>.
+    /// The delegate runs once, when the name's first client is made.
+    /// </summary>
+    /// <inheritdoc cref="UseCredentials(TableauCredentials)" path="/remarks"/>
+    /// <param name="credentials">Makes the credentials from the root provider; it must not return null.</param>
+    /// <returns>This builder.</returns>
+    public TableauClientBuilder UseCredentials(Func<IServiceProvider, TableauCredentials> credentials)
+    {
+        ArgumentNullException.ThrowIfNull(credentials);
+        Services.Configure<TableauHandlerOptions>(Name, options => options.Credentials = credentials);
+        return this;
+    }
 
     /// <summary>
     /// Sets the client's connection: a proxy (<see cref="SocketsHttpHandler.Proxy"/>), a client certificate
@@ -222,9 +269,15 @@ public sealed class TableauClientBuilder
     }
 }
 
-/// <summary>What the builders of one name added to its HttpClient, read once each time the factory builds its handlers.</summary>
+/// <summary>
+/// What the builders of one name added: to its HttpClient, read once each time the factory builds its handlers; and its
+/// credentials, read once with the name's state.
+/// </summary>
 internal sealed class TableauHandlerOptions
 {
+    /// <summary>The last <see cref="TableauClientBuilder.UseCredentials(Func{IServiceProvider, TableauCredentials})"/> given, or null.</summary>
+    public Func<IServiceProvider, TableauCredentials>? Credentials { get; set; }
+
     /// <summary>The <see cref="TableauClientBuilder.ConfigurePrimaryHandler"/> actions, in order.</summary>
     public List<Action<SocketsHttpHandler>> PrimaryHandler { get; } = [];
 

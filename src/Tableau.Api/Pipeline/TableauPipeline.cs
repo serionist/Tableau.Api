@@ -19,24 +19,46 @@ namespace Tableau.Api.Pipeline;
 /// <param name="PathValues">A value for each <c>{name}</c> of the endpoint's template, in order.</param>
 /// <param name="Query">The query's keys and values; a null value is left out.</param>
 /// <param name="Body">The request's body.</param>
-/// <param name="Token">The session token, sent in <c>X-Tableau-Auth</c> on this request alone.</param>
+/// <param name="Token">
+/// A session token of the call's own, sent in <c>X-Tableau-Auth</c> on this request alone, such as the one Sign Out ends;
+/// null for a call made in the client's session, or in none.
+/// </param>
+/// <param name="SiteId">The site that fills <c>{siteId}</c> with <paramref name="Token"/>; the session's otherwise.</param>
 internal readonly record struct TableauRequest(
     IReadOnlyList<string>? PathValues = null,
     IReadOnlyList<KeyValuePair<string, string?>>? Query = null,
     TsRequest? Body = null,
-    string? Token = null);
+    string? Token = null,
+    string? SiteId = null)
+{
+    // The members a record prints, but the token, as ***: a request in a debugger or an assertion's message shows none.
+    private bool PrintMembers(StringBuilder builder)
+    {
+        builder.Append("PathValues = ").Append(PathValues)
+            .Append(", Query = ").Append(Query)
+            .Append(", Body = ").Append(Body)
+            .Append(", Token = ").Append(Token is null ? null : "***")
+            .Append(", SiteId = ").Append(SiteId);
+        return true;
+    }
+}
 
 /// <summary>
-/// The one path every REST call of the 2.0 client takes: the gates, the request URI, the headers, redirects, the
-/// transfer timeout, errors and the answer's JSON or file. It sends through the client's chain, whose handlers retry
-/// and time each attempt (<see cref="TableauResilience"/>), and reads the named client's state.
+/// The one path every REST call of the 2.0 client takes: the gates, the session, the request URI, the headers,
+/// redirects, the transfer timeout, errors and the answer's JSON or file. It sends through the client's chain, whose
+/// handlers retry and time each attempt (<see cref="TableauResilience"/>), and reads the named client's state.
 /// </summary>
 /// <param name="http">
 /// What sends: the client's HttpClient, from DI or <c>TableauClient.Create</c>, whose chain holds the library's handlers;
 /// or an invoker over those handlers and a caller's HttpClient.
 /// </param>
-/// <param name="state">The named client's state.</param>
-internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientState state)
+/// <param name="state">The named client's state, its session among it.</param>
+/// <param name="bound">
+/// The session a client from <c>WithSession</c> calls in, which it never replaces; null for the client's own session.
+/// </param>
+/// <param name="parent">The pipeline a bound one came from, whose disposal ends it too.</param>
+internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientState state, TableauSession? bound = null,
+    TableauPipeline? parent = null)
 {
     /// <summary>The most redirects one call follows.</summary>
     public const int MostRedirects = 5;
@@ -44,14 +66,22 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
     /// <summary>How much of a body an error keeps.</summary>
     public const int BodyKept = 4096;
 
+    // A LUID that fills {siteId} while a call's arguments are checked, before it signs in for the real one.
+    private const string NoSiteYet = "00000000-0000-0000-0000-000000000000";
+
     private static readonly MediaTypeWithQualityHeaderValue _acceptJson = new("application/json");
     private int _disposed;
 
     /// <summary>The named client's state, for the tests of its negotiation.</summary>
     internal TableauClientState State => state;
 
+    /// <summary>A pipeline over the same connection and state, that calls in <paramref name="session"/> and never signs in.</summary>
+    public TableauPipeline Bind(TableauSession session) => new(http, state, session, parent ?? this);
+
     /// <summary>Marks the pipeline's client disposed, so a later call throws <see cref="ObjectDisposedException"/>.</summary>
     public void Dispose() => Volatile.Write(ref _disposed, 1);
+
+    private bool IsDisposed => Volatile.Read(ref _disposed) != 0 || parent?.IsDisposed == true;
 
     /// <summary>
     /// Sends a call and returns what <paramref name="select"/> takes from its answer. Before anything is sent, a call on a
@@ -70,30 +100,89 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
         return await SendAtAsync(endpoint, version, request, select, element, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>The same at the version given, without the gates: what version negotiation asks Server Info with.</summary>
-    public async Task<T> SendAtAsync<T>(Endpoint endpoint, Version version, TableauRequest request, Func<TsResponse, T?> select,
+    /// <summary>
+    /// The same at the version given, without the gates: what version negotiation asks Server Info with, and what a
+    /// sign-in sends once its own gates passed.
+    /// </summary>
+    public Task<T> SendAtAsync<T>(Endpoint endpoint, Version version, TableauRequest request, Func<TsResponse, T?> select,
         string element, CancellationToken cancellationToken)
-        where T : class
+        where T : class =>
+        CallAsync(endpoint, version, request, (response, path, token) => ReadAsync(endpoint, response, path, select, element, token),
+            cancellationToken);
+
+    /// <summary>Sends a call whose answer holds nothing the caller needs, such as Sign Out's 204, after the gates.</summary>
+    public async Task SendAsync(Endpoint endpoint, TableauRequest request, CancellationToken cancellationToken)
     {
-        var (uri, path, body) = Prepare(endpoint, version, request);
-        using var transfer = TransferTimer(endpoint, cancellationToken);
-        var token = transfer?.Token ?? cancellationToken;
-        var started = Stopwatch.GetTimestamp();
-        try
+        var version = await GatesAsync(endpoint, cancellationToken).ConfigureAwait(false);
+        await CallAsync(endpoint, version, request, static (_, _, _) => Task.FromResult(true), cancellationToken).ConfigureAwait(false);
+    }
+
+    // One call: its session, then its request, sent once more in a new session when the server refused the first with a
+    // 401, for a call whose body can be sent again. A sign-in's failure is the call's, logged where it happened.
+    private async Task<T> CallAsync<T>(Endpoint endpoint, Version version, TableauRequest request,
+        Func<HttpResponseMessage, string, CancellationToken, Task<T>> read, CancellationToken cancellationToken,
+        bool signOutWhereSent = true)
+    {
+        var session = await SessionAsync(endpoint, version, request, cancellationToken).ConfigureAwait(false);
+        for (var renewed = false; ; renewed = true)
         {
-            using var response = await SendFollowingRedirectsAsync(endpoint, uri, path, body, request.Token, token)
-                .ConfigureAwait(false);
-            if (!response.IsSuccessStatusCode)
-                throw await ErrorAsync(endpoint, response, path, token).ConfigureAwait(false);
-            var result = await ReadAsync(endpoint, response, path, select, element, token).ConfigureAwait(false);
-            var elapsed = Stopwatch.GetElapsedTime(started);
-            TableauLog.Answered(state.Logger, state.DisplayName, endpoint.Method, path, (int)response.StatusCode, elapsed.TotalMilliseconds);
-            return result;
+            var (uri, path, body) = Prepare(endpoint, version, request, request.SiteId ?? session?.SiteId);
+            using var transfer = TransferTimer(endpoint, cancellationToken);
+            var token = transfer?.Token ?? cancellationToken;
+            var started = Stopwatch.GetTimestamp();
+            HttpResponseMessage? response = null;
+            try
+            {
+                response = await SendFollowingRedirectsAsync(endpoint, version, uri, path, body, request.Token ?? session?.Token,
+                    signOutWhereSent, token).ConfigureAwait(false);
+                // Otherwise it is sent again below, in a new session, and this answer has nothing to keep.
+                if (renewed || !Renewable(endpoint, request, session, response))
+                {
+                    if (!response.IsSuccessStatusCode)
+                        throw await ErrorAsync(endpoint, response, path, Hint(request, session, renewed, response), token).ConfigureAwait(false);
+                    var result = await read(response, path, token).ConfigureAwait(false);
+                    var elapsed = Stopwatch.GetElapsedTime(started);
+                    TableauLog.Answered(state.Logger, state.DisplayName, endpoint.Method, path, (int)response.StatusCode, elapsed.TotalMilliseconds);
+                    return result;
+                }
+            }
+            catch (Exception e)
+            {
+                throw Failure(endpoint, path, e, transfer, cancellationToken);
+            }
+            finally
+            {
+                response?.Dispose();
+            }
+            session = await state.Sessions.RenewAsync(this, session!, cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception e)
-        {
-            throw Failure(endpoint, path, e, transfer, cancellationToken);
-        }
+    }
+
+    // The session a call is made in: none for a call that needs none or brings a token of its own; the bound one; or the
+    // client's, signed in now if it has none, after the call's arguments were checked, so a call refused for them is
+    // refused before anything is sent.
+    private async ValueTask<TableauSession?> SessionAsync(Endpoint endpoint, Version version, TableauRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.Token is not null || !endpoint.NeedsSession) return null;
+        if (bound is not null) return bound;
+        _ = Prepare(endpoint, version, request, request.SiteId ?? NoSiteYet);
+        return await state.Sessions.SessionAsync(this, endpoint, cancellationToken).ConfigureAwait(false);
+    }
+
+    // A 401 to a call made in the client's own session, which it can replace: the session ended, or the server ended it
+    // early. A bound session is the caller's to replace, and an upload's body may not be readable twice.
+    private bool Renewable(Endpoint endpoint, TableauRequest request, TableauSession? session, HttpResponseMessage response) =>
+        response.StatusCode == HttpStatusCode.Unauthorized && request.Token is null && session is not null && bound is null
+        && state.Sessions.Credentials is not null && endpoint.Transfer != TransferKind.Upload;
+
+    // What a 401's message adds, for a call made in a session.
+    private string? Hint(TableauRequest request, TableauSession? session, bool renewed, HttpResponseMessage response)
+    {
+        if (response.StatusCode != HttpStatusCode.Unauthorized || request.Token is not null || session is null) return null;
+        if (bound is not null)
+            return "The session given to WithSession has ended or was signed out; a client bound to one never signs in, so sign in again and bind the new session.";
+        return renewed ? "The client signed in again and the server refused the new session too." : null;
     }
 
     /// <summary>
@@ -113,30 +202,46 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
         if (endpoint.Transfer != TransferKind.Download)
             throw new InvalidOperationException($"{endpoint.Name} is no download: its descriptor's transfer is {endpoint.Transfer}.");
         var version = await GatesAsync(endpoint, cancellationToken).ConfigureAwait(false);
-        var (uri, path, body) = Prepare(endpoint, version, request);
+        var session = await SessionAsync(endpoint, version, request, cancellationToken).ConfigureAwait(false);
+        // One transfer timeout for the whole download, a request sent again in a new session included.
         var transfer = TransferTimer(endpoint, cancellationToken);
-        HttpResponseMessage? response = null;
-        var started = Stopwatch.GetTimestamp();
         try
         {
-            response = await SendFollowingRedirectsAsync(endpoint, uri, path, body, request.Token, transfer!.Token).ConfigureAwait(false);
-            if (!response.IsSuccessStatusCode)
-                throw await ErrorAsync(endpoint, response, path, transfer.Token).ConfigureAwait(false);
-            var call = new DownloadCall(this, endpoint, path, cancellationToken, transfer!.Token);
-            var download = await TableauDownload.OpenAsync(response, transfer!, call).ConfigureAwait(false);
-            var elapsed = Stopwatch.GetElapsedTime(started);
-            TableauLog.Answered(state.Logger, state.DisplayName, endpoint.Method, path, (int)response.StatusCode, elapsed.TotalMilliseconds);
-            response = null;
-            transfer = null;
-            return download;
-        }
-        catch (Exception e)
-        {
-            throw Failure(endpoint, path, e, transfer, cancellationToken);
+            for (var renewed = false; ; renewed = true)
+            {
+                var (uri, path, body) = Prepare(endpoint, version, request, request.SiteId ?? session?.SiteId);
+                HttpResponseMessage? response = null;
+                var started = Stopwatch.GetTimestamp();
+                try
+                {
+                    response = await SendFollowingRedirectsAsync(endpoint, version, uri, path, body, request.Token ?? session?.Token,
+                        signOutWhereSent: true, transfer!.Token).ConfigureAwait(false);
+                    if (renewed || !Renewable(endpoint, request, session, response))
+                    {
+                        if (!response.IsSuccessStatusCode)
+                            throw await ErrorAsync(endpoint, response, path, Hint(request, session, renewed, response), transfer.Token).ConfigureAwait(false);
+                        var call = new DownloadCall(this, endpoint, path, cancellationToken, transfer.Token);
+                        var download = await TableauDownload.OpenAsync(response, transfer, call).ConfigureAwait(false);
+                        var elapsed = Stopwatch.GetElapsedTime(started);
+                        TableauLog.Answered(state.Logger, state.DisplayName, endpoint.Method, path, (int)response.StatusCode, elapsed.TotalMilliseconds);
+                        response = null;
+                        transfer = null;
+                        return download;
+                    }
+                }
+                catch (Exception e)
+                {
+                    throw Failure(endpoint, path, e, transfer, cancellationToken);
+                }
+                finally
+                {
+                    response?.Dispose();
+                }
+                session = await state.Sessions.RenewAsync(this, session!, cancellationToken).ConfigureAwait(false);
+            }
         }
         finally
         {
-            response?.Dispose();
             transfer?.Dispose();
         }
     }
@@ -155,10 +260,13 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
         return new OperationCanceledException(cause.Message, cause, cancellationToken);
     }
 
-    // The deployment gate before anything is sent, then the version gates once the version is known.
-    private async ValueTask<Version> GatesAsync(Endpoint endpoint, CancellationToken cancellationToken)
+    /// <summary>
+    /// The deployment gate before anything is sent, then the version gates once the version is known: the version a call
+    /// is made at, or <see cref="TableauException"/> with nothing sent but Server Info.
+    /// </summary>
+    internal async ValueTask<Version> GatesAsync(Endpoint endpoint, CancellationToken cancellationToken)
     {
-        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, typeof(TableauClient));
+        ObjectDisposedException.ThrowIf(IsDisposed, typeof(TableauClient));
         cancellationToken.ThrowIfCancellationRequested();
         var deployment = state.Deployment == TableauDeployment.Cloud ? TableauDeployments.Cloud : TableauDeployments.Server;
         if ((endpoint.Deployments & deployment) == 0)
@@ -179,9 +287,9 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
         return version;
     }
 
-    private (Uri Uri, string Path, byte[]? Body) Prepare(Endpoint endpoint, Version version, TableauRequest request)
+    private (Uri Uri, string Path, byte[]? Body) Prepare(Endpoint endpoint, Version version, TableauRequest request, string? siteId)
     {
-        var uri = RequestUri.Build(state.ServerUrl, endpoint, version, request.PathValues, request.Query);
+        var uri = RequestUri.Build(state.ServerUrl, endpoint, version, request.PathValues, request.Query, siteId);
         var body = request.Body is null ? null : JsonSerializer.SerializeToUtf8Bytes(request.Body, TableauJsonContext.Default.TsRequest);
         return (uri, RequestUri.Redacted(uri), body);
     }
@@ -237,8 +345,8 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
         }
     }
 
-    private async Task<HttpResponseMessage> SendFollowingRedirectsAsync(Endpoint endpoint, Uri uri, string path, byte[]? body,
-        string? token, CancellationToken cancellationToken)
+    private async Task<HttpResponseMessage> SendFollowingRedirectsAsync(Endpoint endpoint, Version version, Uri uri, string path,
+        byte[]? body, string? token, bool signOutWhereSent, CancellationToken cancellationToken)
     {
         var method = endpoint.Method;
         for (var redirects = 0; ; redirects++)
@@ -247,13 +355,26 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
             try
             {
                 // A caller's HttpClient may follow redirects itself; then the answer came from wherever it went, and the
-                // request, its headers and its body went there too, which this can only report.
+                // request, its headers and its body went there too, which this can only report. A session token among
+                // them can be used there, so its session is signed out, and the client's own signs in again.
                 if (response.RequestMessage?.RequestUri is { } answered && !RequestUri.SameOrigin(answered, uri))
                 {
+                    var origin = RequestUri.Origin(answered);
+                    var signedOut = Endpoints.IsSignIn(endpoint)
+                        ? " The credentials it carried went there too: rotate them, a password or a personal access token's secret."
+                        : "";
+                    if (token is not null && signOutWhereSent)
+                    {
+                        TableauLog.TokenSentElsewhere(state.Logger, state.DisplayName, origin);
+                        state.Sessions.Discard(token);
+                        signedOut = await SignOutSentAsync(version, token, cancellationToken).ConfigureAwait(false)
+                            ? " The session whose token it carried is signed out."
+                            : " The session whose token it carried couldn't be signed out, and ends on its own.";
+                    }
                     throw new TableauException(TableauErrorKind.Redirect,
                         $"{endpoint.Name} ({endpoint.Method} {path}) was redirected by the HttpClient's own handler, which sent "
-                        + $"the request, its headers and its body on to {RequestUri.Origin(answered)}. Give the client an "
-                        + "HttpClient whose handler follows no redirect (AllowAutoRedirect = false).")
+                        + $"the request, its headers and its body on to {origin}. Give the client an "
+                        + $"HttpClient whose handler follows no redirect (AllowAutoRedirect = false).{signedOut}")
                     {
                         StatusCode = response.StatusCode,
                         Method = endpoint.Method,
@@ -316,6 +437,28 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
         }
     }
 
+    // Signs out the session of a token a caller's handler sent to another host, so it stops working there: through the
+    // same HttpClient, which may send this elsewhere too, so a redirect here signs nothing more out. Never throws, and
+    // waits no longer than a dispose's sign-out would, nor than the call's own time, so a dispose that sent the token
+    // keeps its bound.
+    private async Task<bool> SignOutSentAsync(Version version, string token, CancellationToken cancellationToken)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TableauSessions.SignOutTimeout);
+        try
+        {
+            await CallAsync(Endpoints.SignOut, version, new TableauRequest(Token: token), static (_, _, _) => Task.FromResult(true),
+                timeout.Token, signOutWhereSent: false).ConfigureAwait(false);
+            TableauLog.SignedOut(state.Logger, state.DisplayName);
+            return true;
+        }
+        catch (Exception e)
+        {
+            TableauLog.SignOutFailed(state.Logger, state.DisplayName, e);
+            return false;
+        }
+    }
+
     private static TableauException RedirectRefused(Endpoint endpoint, string path, HttpResponseMessage response, string what) =>
         new(TableauErrorKind.Redirect, $"{endpoint.Name} ({endpoint.Method} {path}) answered {what}, which the client doesn't "
             + "follow, so nothing was sent there.")
@@ -352,10 +495,11 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
             StatusCode = response.StatusCode,
             Method = endpoint.Method,
             RequestPath = path,
-            ResponseBody = kept,
+            // A sign-in's answer holds its token, which an exception would carry into a log.
+            ResponseBody = endpoint.KeepsBody ? kept : null,
         };
 
-    private async Task<TableauException> ErrorAsync(Endpoint endpoint, HttpResponseMessage response, string path,
+    private async Task<TableauException> ErrorAsync(Endpoint endpoint, HttpResponseMessage response, string path, string? hint,
         CancellationToken cancellationToken)
     {
         // The chain kept at most the body's first 64 KB; this reads no more, whatever sent it.
@@ -377,7 +521,12 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
             message.Append(". Tableau's error").Append(code is null ? "" : " " + code).Append(": ").Append(summary);
         if (detail is not null)
             message.Append(": ").Append(detail);
-        return new TableauException(kind, message.Append('.').ToString())
+        // Tableau's detail is often a sentence of its own, with its full stop.
+        if (message[^1] != '.')
+            message.Append('.');
+        if (hint is not null)
+            message.Append(' ').Append(hint);
+        return new TableauException(kind, message.ToString())
         {
             StatusCode = status,
             ErrorCode = code,
@@ -387,7 +536,7 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
             RequestPath = path,
             RequestId = response.Headers.TryGetValues("X-Request-Id", out var ids) ? ids.FirstOrDefault() : null,
             RetryAfter = retryAfter,
-            ResponseBody = length == 0 ? null : Kept(bytes, length),
+            ResponseBody = length == 0 || !endpoint.KeepsBody ? null : Kept(bytes, length),
         };
     }
 

@@ -17,7 +17,7 @@ public sealed class ProjectsTests
     {
         using var server = FakeTableauServer.Start();
         var client = Fixtures.Client(server);
-        var session = await Fixtures.SignInAsync(server, client);
+        var session = Fixtures.Session();
         server.Map("GET", ProjectsPath, FakeResponse.Xml(200,
             "<pagination pageNumber=\"1\" pageSize=\"100\" totalAvailable=\"2\"/><projects>"
             + "<project id=\"1d0e8a7b-0001-4c2d-9e3f-5a6b7c8d9e0f\" name=\"Sales\" description=\"Quarterly reports\"/>"
@@ -39,7 +39,7 @@ public sealed class ProjectsTests
     {
         using var server = FakeTableauServer.Start();
         var client = Fixtures.Client(server);
-        var session = await Fixtures.SignInAsync(server, client);
+        var session = Fixtures.Session();
         server.Map("GET", ProjectsPath, FakeResponse.Error(401, "401002", "Unauthorized Access",
             "Invalid authentication credentials were provided."));
 

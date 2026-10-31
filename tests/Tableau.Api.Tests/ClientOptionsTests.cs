@@ -106,7 +106,7 @@ public sealed class ClientOptionsTests
     [DataRow("https://online.tableau.com.example.com/", TableauDeployment.Server)]
     public void AutoTakesCloudForTableauCloudsHosts(string url, TableauDeployment expected)
     {
-        var state = new TableauClientState("", new TableauClientOptions { ServerUrl = new Uri(url) }, null);
+        using var state = new TableauClientState("", new TableauClientOptions { ServerUrl = new Uri(url) }, null);
 
         Assert.AreEqual(expected, state.Deployment);
     }
@@ -116,7 +116,7 @@ public sealed class ClientOptionsTests
     [DataRow(TableauDeployment.Cloud)]
     public void ADeploymentSetIsKept(TableauDeployment deployment)
     {
-        var state = new TableauClientState("", new TableauClientOptions
+        using var state = new TableauClientState("", new TableauClientOptions
         {
             ServerUrl = new Uri("https://10ax.online.tableau.com/"),
             Deployment = deployment,
@@ -133,7 +133,7 @@ public sealed class ClientOptionsTests
         using var handler = new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false };
         using var http = new HttpClient(handler, disposeHandler: false);
         var created = ClientFixtures.Client(server);
-        var overCallers = new TableauClient(http, ClientFixtures.Options(server), Fixtures.Log.Factory);
+        var overCallers = new TableauClient(http, ClientFixtures.Options(server), loggerFactory: Fixtures.Log.Factory);
 
         var disposedSync = ClientFixtures.Client(server);
 

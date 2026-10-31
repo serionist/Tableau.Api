@@ -16,7 +16,7 @@ public partial class VizPortalClient
     /// <param name="session">The session obtained from the top level client</param>
     /// <returns></returns>
     public IAsyncEnumerable<(Datasource[], ContentUser[], ContentProjectDs[])> QueryDatasources(
-        TableauSession session) => queryDatasources(session, ("isPublished", true));
+        Tableau.Api.Models.TableauSession session) => queryDatasources(session, ("isPublished", true));
 
     /// <summary>
     /// Move a datasource to the selected destination project
@@ -25,7 +25,7 @@ public partial class VizPortalClient
     /// <param name="containerId">Target Project Id</param>
     /// <param name="contentId">Datasource content ID (Id) that will be moved</param>
     /// <returns></returns>
-    public async Task MoveDatasource(TableauSession session, int containerId, int contentId)
+    public async Task MoveDatasource(Tableau.Api.Models.TableauSession session, int containerId, int contentId)
     {
         var req = await Request<MoveContent, Empty>(session, "moveContentToContainer",
         new MoveContent()
@@ -51,7 +51,7 @@ public partial class VizPortalClient
     /// <param name="datasourceId">The content ID (Id) of the datasource</param>
     /// <param name="newName">New name for this datasource</param>
     /// <returns></returns>
-    public async Task ChangeDatasourceName(TableauSession session, int datasourceId, string newName)
+    public async Task ChangeDatasourceName(Tableau.Api.Models.TableauSession session, int datasourceId, string newName)
     {
         var req = await Request<RenameContent, Empty>(session, "renameDatasource",
             new RenameContent()
@@ -68,7 +68,7 @@ public partial class VizPortalClient
     /// <param name="datasourceId">The datasource content ID (Id)</param>
     /// <param name="newOwnerId">The site user id of the new owner</param>
     /// <returns></returns>
-    public async Task ChangeDatasourceOwner(TableauSession session, int datasourceId, int newOwnerId)
+    public async Task ChangeDatasourceOwner(Tableau.Api.Models.TableauSession session, int datasourceId, int newOwnerId)
     {
         var req = await Request<ChangeContentOwner, Empty>(session, "setDatasourcesOwner",
             new ChangeContentOwner()
@@ -84,7 +84,7 @@ public partial class VizPortalClient
     /// <param name="session">The session obtained from the top level client</param>
     /// <param name="datasourceId">The datasource content ID (Id)</param>
     /// <returns></returns>
-    public async Task DeleteDatasource(TableauSession session, int datasourceId)
+    public async Task DeleteDatasource(Tableau.Api.Models.TableauSession session, int datasourceId)
     {
         var req = await Request<DeleteContent, Empty>(session, "deleteDatasources",
             new DeleteContent()
@@ -93,7 +93,7 @@ public partial class VizPortalClient
             });
     }
 
-    private IAsyncEnumerable<(Datasource[], ContentUser[], ContentProjectDs[])> queryDatasources(TableauSession session, params (string field, bool value)[] search)
+    private IAsyncEnumerable<(Datasource[], ContentUser[], ContentProjectDs[])> queryDatasources(Tableau.Api.Models.TableauSession session, params (string field, bool value)[] search)
     {
         var q = new QueryModel()
         {

@@ -23,6 +23,7 @@
 #
 # Nothing here runs on a Tableau site: the tests in the Live and ServerOnly categories are inconclusive without their
 # switches (tests/Tableau.Api.Tests/TableauSite.cs), so a PR says what ran against a site (AGENTS.md, Build and test).
+# live.yml runs the Live tests from main, never on a PR.
 #
 # The daily run is for Dependabot's merges: dependabot-auto-merge.yml turns on auto-merge with the workflow's token,
 # and a push made with that token starts no run, so main is checked within a day of one instead.

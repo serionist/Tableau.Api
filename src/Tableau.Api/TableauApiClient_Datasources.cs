@@ -29,7 +29,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(1, 0)]
-    public async Task<tagType[]> AddTagsToDataSource(TableauSession session, string datasourceId,
+    public async Task<tagType[]> AddTagsToDataSource(Models.TableauSession session, string datasourceId,
         string[] tagsToAdd, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -55,7 +55,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(1, 0)]
-    public async Task DeleteTagFromDataSource(TableauSession session, string datasourceId, string tag,
+    public async Task DeleteTagFromDataSource(Models.TableauSession session, string datasourceId, string tag,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -75,7 +75,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(1, 0)]
-    public async Task<dataSourceType> QueryDataSource(TableauSession session, string datasourceId,
+    public async Task<dataSourceType> QueryDataSource(Models.TableauSession session, string datasourceId,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -102,7 +102,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(1, 0)]
-    public async Task<(paginationType pagination, dataSourceType[] datasources)> QueryDataSources(TableauSession session,
+    public async Task<(paginationType pagination, dataSourceType[] datasources)> QueryDataSources(Models.TableauSession session,
         int pageSize = 100, int pageNumber = 1, string fieldsExpression = null, string filterExpression = null,
         string sortExpression = null,
         CancellationToken? cancelToken = null)
@@ -137,7 +137,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 3)]
-    public async Task<connectionType[]> QueryDataSourceConnections(TableauSession session, string datasourceId,
+    public async Task<connectionType[]> QueryDataSourceConnections(Models.TableauSession session, string datasourceId,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -159,7 +159,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 0)]
-    public async Task<(Stream stream, DatasourceFileType type)> DownloadDataSource(TableauSession session, string datasourceId,
+    public async Task<(Stream stream, DatasourceFileType type)> DownloadDataSource(Models.TableauSession session, string datasourceId,
         bool includeExtract = true, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -189,7 +189,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 0)]
-    public async Task<dataSourceType> UpdateDataSource(TableauSession session, string datasourceId,
+    public async Task<dataSourceType> UpdateDataSource(Models.TableauSession session, string datasourceId,
         string newProjectId = null, string newOwnerId = null, bool? newCertificationStatus = null,
         string newCertificationNote = null, string newName = null, CancellationToken? cancelToken = null)
     {
@@ -224,7 +224,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 3)]
-    public async Task<connectionType> UpdateDataSourceConnection(TableauSession session, string datasourceId,
+    public async Task<connectionType> UpdateDataSourceConnection(Models.TableauSession session, string datasourceId,
         string connectionId, string serverAddress, string serverPort, string userName, string password, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -253,7 +253,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 8)]
-    public async Task<jobType> UpdateDataSourceNow(TableauSession session, string datasourceId,
+    public async Task<jobType> UpdateDataSourceNow(Models.TableauSession session, string datasourceId,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
@@ -275,7 +275,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 0)]
-    public async Task DeleteDataSource(TableauSession session, string datasourceId,
+    public async Task DeleteDataSource(Models.TableauSession session, string datasourceId,
         CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();

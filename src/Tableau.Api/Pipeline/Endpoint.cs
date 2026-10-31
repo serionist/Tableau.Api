@@ -41,8 +41,8 @@ internal enum TransferKind
 /// <param name="Template">
 /// The path under the base URL's <c>api/</c>, by segments: <c>{version}</c> is the version in use, so
 /// <c>{version}/serverinfo</c>, <c>-/...</c> for the resource-versioned endpoints and <c>metadata/graphql</c> are
-/// the three shapes; every other <c>{name}</c> takes the caller's value of that parameter, escaped as one segment, and
-/// <c>{name:luid}</c> one that must be a LUID.
+/// the three shapes; <c>{siteId}</c> is the session's site; every other <c>{name}</c> takes the caller's value of that
+/// parameter, escaped as one segment, and <c>{name:luid}</c> one that must be a LUID.
 /// </param>
 /// <param name="MinVersion">The version the reference says it appeared in.</param>
 /// <param name="Deployments">Where it runs.</param>
@@ -59,6 +59,18 @@ internal sealed record Endpoint(
 {
     /// <summary>The template's segments, read once; a template that can't be read fails here, in a test of the registry.</summary>
     public IReadOnlyList<PathSegment> Segments { get; } = PathSegment.Parse(Template);
+
+    /// <summary>
+    /// Whether the call is made in a session: the client's own, signed in on demand, or the one a bound client holds. A
+    /// call given a token of its own, such as Sign Out, sends that one instead.
+    /// </summary>
+    public bool NeedsSession { get; init; } = true;
+
+    /// <summary>
+    /// Whether an exception keeps the start of the answer's body. Not for a call whose answer holds a session token,
+    /// such as Sign In, whose body could carry it into a log.
+    /// </summary>
+    public bool KeepsBody { get; init; } = true;
 }
 
 /// <summary>One segment of an endpoint's template: literal text, the version, or a caller's value.</summary>
@@ -78,6 +90,7 @@ internal sealed record PathSegment(string Text, PathSegmentKind Kind)
                 segments.Add(name switch
                 {
                     "version" => new PathSegment(name, PathSegmentKind.Version),
+                    "siteId" => new PathSegment(name, PathSegmentKind.SiteId),
                     _ when name.EndsWith(":luid", StringComparison.Ordinal) && IsName(name[..^5]) =>
                         new PathSegment(name[..^5], PathSegmentKind.Luid),
                     _ when IsName(name) => new PathSegment(name, PathSegmentKind.Value),
@@ -117,15 +130,81 @@ internal enum PathSegmentKind
 
     /// <summary>A caller's value that must be a LUID.</summary>
     Luid,
+
+    /// <summary>The session's site, a LUID, which the pipeline fills from the session the call is made in.</summary>
+    SiteId,
 }
 
 /// <summary>Every REST call the 2.0 client makes, one descriptor each. Each port step adds its area's.</summary>
 internal static class Endpoints
 {
+    private const string SignInTemplate = "{version}/auth/signin";
+
     /// <summary>Server Info: the product version and the REST API version; it needs no sign-in.</summary>
     public static readonly Endpoint ServerInfo = new("Server Info", HttpMethod.Get, "{version}/serverinfo", new Version(2, 4),
-        TableauDeployments.Both, Idempotent: true, TransferKind.None);
+        TableauDeployments.Both, Idempotent: true, TransferKind.None)
+    { NeedsSession = false };
+
+    // Sign In is one call with a body per kind of credentials, each from its own version, so each kind has its own
+    // descriptor, and its gates refuse a kind the server lacks before the credentials are read. A password's or a
+    // personal access token's sent twice leaves at most a session nobody uses, which ends on its own, or, with a token,
+    // ends the first: a retry is safe. A JWT's is never sent twice: Tableau refuses a JWT whose jti it has seen, and a
+    // late attempt may pass the JWT's exp; the next call mints or asks for a new one. Its answer holds the session's
+    // token, so no exception keeps it.
+
+    /// <summary>Sign In with a user's name and password (REST API 1.0).</summary>
+    public static readonly Endpoint SignIn = SignInAs("Sign In", new Version(1, 0), TableauDeployments.Both, idempotent: true);
+
+    /// <summary>Sign In with a name and password, impersonating another user: Tableau Server only.</summary>
+    public static readonly Endpoint SignInImpersonating = SignInAs("Sign In, impersonating a user", new Version(1, 0),
+        TableauDeployments.Server, idempotent: true);
+
+    /// <summary>Sign In with a personal access token (REST API 3.6, Tableau Server 2019.4).</summary>
+    public static readonly Endpoint SignInWithPersonalAccessToken = SignInAs("Sign In with a personal access token",
+        new Version(3, 6), TableauDeployments.Both, idempotent: true);
+
+    /// <summary>
+    /// Sign In with a personal access token, impersonating another user: Tableau Server only, from REST API 3.11 (Tableau
+    /// Server 2021.1), with <c>tsm authentication pat-impersonation enable</c> on the server.
+    /// </summary>
+    public static readonly Endpoint SignInWithPersonalAccessTokenImpersonating = SignInAs(
+        "Sign In with a personal access token, impersonating a user", new Version(3, 11), TableauDeployments.Server, idempotent: true);
+
+    /// <summary>
+    /// Sign In with a JWT: a connected app's, by direct trust or OAuth 2.0 trust (REST API 3.17, Tableau Server 2022.3;
+    /// Tableau Cloud from 3.16). Never sent twice.
+    /// </summary>
+    public static readonly Endpoint SignInWithJwt = SignInAs("Sign In with a JWT", new Version(3, 17), TableauDeployments.Both,
+        idempotent: false);
+
+    /// <summary>Sign In with a unified access token's JWT, <c>isUat</c>: Tableau Cloud only, REST API 3.27. Never sent twice.</summary>
+    public static readonly Endpoint SignInWithUnifiedAccessToken = SignInAs("Sign In with a unified access token",
+        new Version(3, 27), TableauDeployments.Cloud, idempotent: false);
+
+    /// <summary>Sign Out: ends the session whose token it sends, answering 204. Ending it twice ends it once.</summary>
+    public static readonly Endpoint SignOut = new("Sign Out", HttpMethod.Post, "{version}/auth/signout", new Version(1, 0),
+        TableauDeployments.Both, Idempotent: true, TransferKind.None)
+    { NeedsSession = false };
+
+    /// <summary>
+    /// Switch Site: a new session on another site, the token sent ending; Tableau Server only. Not sent twice: the second
+    /// would send a token the first ended. Its answer holds the new token.
+    /// </summary>
+    public static readonly Endpoint SwitchSite = new("Switch Site", HttpMethod.Post, "{version}/auth/switchSite", new Version(2, 6),
+        TableauDeployments.Server, Idempotent: false, TransferKind.None)
+    { NeedsSession = false, KeepsBody = false };
 
     /// <summary>Every descriptor, for the tests that hold each to the rules.</summary>
-    public static IReadOnlyList<Endpoint> All { get; } = [ServerInfo];
+    public static IReadOnlyList<Endpoint> All { get; } =
+    [
+        ServerInfo, SignIn, SignInImpersonating, SignInWithPersonalAccessToken, SignInWithPersonalAccessTokenImpersonating,
+        SignInWithJwt, SignInWithUnifiedAccessToken, SignOut, SwitchSite,
+    ];
+
+    /// <summary>Whether a descriptor is a Sign In's, whose body holds credentials.</summary>
+    public static bool IsSignIn(Endpoint endpoint) => endpoint.Template == SignInTemplate;
+
+    private static Endpoint SignInAs(string name, Version minVersion, TableauDeployments deployments, bool idempotent) =>
+        new(name, HttpMethod.Post, SignInTemplate, minVersion, deployments, idempotent, TransferKind.None)
+        { NeedsSession = false, KeepsBody = false };
 }

@@ -7,7 +7,8 @@ namespace Tableau.Api.Pipeline;
 /// <summary>
 /// Every line the 2.0 client logs. Requests at Debug, a path's query values as <c>***</c>; a failure the caller
 /// receives at Debug, since the caller decides what it is worth; warnings only for a setting that weakens the client.
-/// No line holds a token, a password, a cookie, an <c>X-Tableau-Auth</c> header or a body.
+/// No line holds a token, a password, a secret, a JWT, a cookie, an <c>X-Tableau-Auth</c> header or a body; a sign-in
+/// names the kind of credentials, never the user.
 /// </summary>
 internal static partial class TableauLog
 {
@@ -48,6 +49,28 @@ internal static partial class TableauLog
         Message = "Tableau client {Client}: {Method} {RequestPath} failed ({Reason}); retry {Retry} of {MaxRetries} in {DelayMilliseconds:F0} ms")]
     public static partial void Retrying(ILogger logger, string client, HttpMethod method, string requestPath, string reason, int retry,
         int maxRetries, double delayMilliseconds);
+
+    [LoggerMessage(EventId = 11, Level = LogLevel.Debug,
+        Message = "Tableau client {Client}: signed in with {Kind}; the session is expected to end at {ExpiresAt:O}")]
+    public static partial void SignedIn(ILogger logger, string client, string kind, DateTimeOffset expiresAt);
+
+    [LoggerMessage(EventId = 12, Level = LogLevel.Debug, Message = "Tableau client {Client}: signing in again: {Reason}")]
+    public static partial void SigningInAgain(ILogger logger, string client, string reason);
+
+    [LoggerMessage(EventId = 13, Level = LogLevel.Debug, Message = "Tableau client {Client}: signed out")]
+    public static partial void SignedOut(ILogger logger, string client);
+
+    [LoggerMessage(EventId = 14, Level = LogLevel.Debug,
+        Message = "Tableau client {Client}: signing out failed; the session ends on its own")]
+    public static partial void SignOutFailed(ILogger logger, string client, Exception exception);
+
+    [LoggerMessage(EventId = 16, Level = LogLevel.Debug,
+        Message = "Tableau client {Client}: signing in again failed; the session it has serves until {ExpiresAt:O}, and a minute from now it tries again")]
+    public static partial void RenewalFailed(ILogger logger, string client, DateTimeOffset expiresAt, Exception exception);
+
+    [LoggerMessage(EventId = 15, Level = LogLevel.Debug,
+        Message = "Tableau client {Client}: the HttpClient's own handler sent a session's token to {Origin}; signing that session out")]
+    public static partial void TokenSentElsewhere(ILogger logger, string client, string origin);
 
     [LoggerMessage(EventId = 9, Level = LogLevel.Warning,
         Message = "Tableau client {Client}: REST API {Version} is below {Floor}, the oldest this client supports; "

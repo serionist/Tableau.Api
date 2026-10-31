@@ -9,12 +9,15 @@
 // - the client calls through its pipeline, over a handler that answers from the fixtures: the version negotiated
 //   through Server Info, Server Info itself, Tableau's error body read into a TableauException, a call retried after a
 //   503 by the resilience handler, and a download whose name is cleaned, whose kind is known and which saves to a file;
+// - sessions: a call that needs one signs in with a personal access token, carries its token and its site, and the
+//   client signs it out when disposed; a connected app's JWT is minted and signed with HMAC-SHA256; a session signed in
+//   by hand prints no token and serves a bound client, which signs it out when told;
 // - the client from DI, its options bound from configuration by the binder's source generator, its primary handler
 //   configured and a handler of the caller's in its chain, and bad options refused at start-up by the options
 //   validation source generator's code.
 //
 // In the native binary reflection-based JSON is off, so a converter that reached for it would fail here. Later steps
-// add their paths: a sign-in, a page, a publish, a Vizportal call. It prints a line per check and exits with 1 on the
+// add their paths: a page, a publish, a Vizportal call. It prints a line per check and exits with 1 on the
 // first failure.
 using System;
 using System.Collections.Generic;
@@ -97,13 +100,15 @@ try
             ApiVersion = new Version(3, 25),
         });
         var flaky = new Endpoint("Flaky call", HttpMethod.Get, "{version}/flaky", new Version(2, 0), TableauDeployments.Both,
-            Idempotent: true, TransferKind.None);
+            Idempotent: true, TransferKind.None)
+        { NeedsSession = false };
         var retried = await retrying.Pipeline.SendAsync(flaky, default, static body => body.ServerInfo, "serverInfo", CancellationToken.None);
         Check("a call that answered 503 is retried and succeeds", retried.ProductVersion?.Value == "2025.1.0"
             && FixtureHandler.Paths.Count(path => path == "/api/3.25/flaky") == 2);
 
         var content = new Endpoint("Download Workbook", HttpMethod.Get, "{version}/workbooks/w1/content", new Version(2, 0),
-            TableauDeployments.Both, Idempotent: true, TransferKind.Download);
+            TableauDeployments.Both, Idempotent: true, TransferKind.Download)
+        { NeedsSession = false };
         await using var download = await retrying.Pipeline.DownloadAsync(content, default, CancellationToken.None);
         Check("a download's name is cleaned and its kind known", download is
         {
@@ -120,6 +125,37 @@ try
         {
             File.Delete(saved);
         }
+
+        var items = new Endpoint("Items", HttpMethod.Get, "{version}/sites/{siteId}/items", new Version(2, 0), TableauDeployments.Both,
+            Idempotent: true, TransferKind.None);
+        var options = new TableauClientOptions { ServerUrl = new Uri("https://tableau.example.com/"), ApiVersion = new Version(3, 25), Site = "finance" };
+        await using (var signing = new TableauClient(http, options, TableauCredentials.PersonalAccessToken("nightly-export", _ => ValueTask.FromResult("invented-pat-secret"))))
+        {
+            await signing.Pipeline.SendAsync(items, default, static body => body.ServerInfo, "serverInfo", CancellationToken.None);
+            Check("a call that needs a session signs in first and carries its token and site",
+                FixtureHandler.Sent[^2] == "POST /api/3.25/auth/signin -"
+                && FixtureHandler.Sent[^1] == "GET /api/3.25/sites/0f4b9e1c-3a52-4d6e-9c8b-1a2b3c4d5e6f/items invented-session-token");
+        }
+        Check("disposing the client signs its session out", FixtureHandler.Sent[^1] == "POST /api/3.25/auth/signout invented-session-token");
+
+        await using var explicitly = new TableauClient(http, new TableauClientOptions
+        {
+            ServerUrl = new Uri("https://tableau.example.com/"),
+            ApiVersion = new Version(3, 25),
+        });
+        var session = await explicitly.Sessions.SignInAsync(TableauCredentials.ConnectedAppDirectTrust("1c9a5c7e-0a1b-4c2d-8e3f-4a5b6c7d8e9f",
+            "invented-secret-id", "invented-connected-app-secret-value", "grace", ["tableau:content:read"]));
+        Check("a connected app's JWT is minted, HS256 over its header and claims", FixtureHandler.SignedJwt);
+        Check("the session names its site and user, and prints no token", session is { SiteContentUrl: "finance", UserName: "grace" }
+            && !session.ToString().Contains("invented-session-token", StringComparison.Ordinal));
+        await using (var bound = explicitly.WithSession(session))
+        {
+            await bound.Pipeline.SendAsync(items, default, static body => body.ServerInfo, "serverInfo", CancellationToken.None);
+            await bound.Sessions.SignOutAsync(session);
+        }
+        Check("a bound client calls in its session and signs it out when told",
+            FixtureHandler.Sent[^2].EndsWith("/items invented-session-token", StringComparison.Ordinal)
+            && FixtureHandler.Sent[^1] == "POST /api/3.25/auth/signout invented-session-token");
     }
 
     var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
@@ -200,6 +236,12 @@ internal sealed class FixtureHandler : HttpMessageHandler
 
     public static List<string> Paths { get; } = [];
 
+    /// <summary>Each request as its method, its path and its session token, or "-" for none.</summary>
+    public static List<string> Sent { get; } = [];
+
+    /// <summary>Whether the last sign-in with a JWT sent one signed with the invented connected app's secret.</summary>
+    public static bool SignedJwt { get; private set; }
+
     /// <summary>The workbook's bytes: a zip's signature, then a pattern.</summary>
     public static byte[] Workbook { get; } = [(byte)'P', (byte)'K', 3, 4, .. Enumerable.Range(0, 1020).Select(i => (byte)(i % 251))];
 
@@ -207,6 +249,23 @@ internal sealed class FixtureHandler : HttpMessageHandler
     {
         var path = request.RequestUri!.AbsolutePath;
         Paths.Add(path);
+        Sent.Add($"{request.Method} {path} {(request.Headers.TryGetValues("X-Tableau-Auth", out var tokens) ? tokens.Single() : "-")}");
+        if (path == "/api/3.25/auth/signin")
+        {
+            using var credentials = JsonDocument.Parse(request.Content!.ReadAsStringAsync().GetAwaiter().GetResult());
+            if (credentials.RootElement.GetProperty("credentials").TryGetProperty("jwt", out var jwt))
+            {
+                var parts = jwt.GetString()!.Split('.');
+                var signature = System.Security.Cryptography.HMACSHA256.HashData(Encoding.UTF8.GetBytes("invented-connected-app-secret-value"),
+                    Encoding.ASCII.GetBytes(parts[0] + "." + parts[1]));
+                SignedJwt = System.Buffers.Text.Base64Url.DecodeFromChars(parts[2]).SequenceEqual(signature);
+            }
+            return Json(request, HttpStatusCode.OK, Fixture("sign-in.json"));
+        }
+        if (path == "/api/3.25/auth/signout")
+            return new HttpResponseMessage(HttpStatusCode.NoContent) { RequestMessage = request };
+        if (path == "/api/3.25/sites/0f4b9e1c-3a52-4d6e-9c8b-1a2b3c4d5e6f/items")
+            return Json(request, HttpStatusCode.OK, Fixture("server-info.json"));
         if (path == "/api/3.25/workbooks/w1/content")
         {
             var file = new ByteArrayContent(Workbook);
@@ -226,6 +285,9 @@ internal sealed class FixtureHandler : HttpMessageHandler
 
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
         Task.FromResult(Answer(request));
+
+    private static HttpResponseMessage Json(HttpRequestMessage request, HttpStatusCode status, string body) =>
+        new(status) { RequestMessage = request, Content = new StringContent(body, Encoding.UTF8, "application/json") };
 
     private static string Fixture(string name)
     {

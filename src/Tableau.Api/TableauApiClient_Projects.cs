@@ -29,7 +29,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(1, 0)]
-    public async Task<projectType> CreateProject(TableauSession session, string projectName, string description,
+    public async Task<projectType> CreateProject(Models.TableauSession session, string projectName, string description,
         projectTypeContentPermissions contentPermissions = projectTypeContentPermissions.ManagedByOwner,
         string parentProjectId = null, bool publishSamples = false, CancellationToken? cancelToken = null)
     {
@@ -62,7 +62,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(2, 0)]
-    public async Task<(paginationType pagination, projectType[] projects)> QueryProjects(TableauSession session,
+    public async Task<(paginationType pagination, projectType[] projects)> QueryProjects(Models.TableauSession session,
         int pageSize = 100, int pageNumber = 1, string filterExpression = null, string sortExpression = null,
         CancellationToken? cancelToken = null)
     {
@@ -102,7 +102,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(1, 0)]
-    public async Task<projectType> UpdateProject(TableauSession session, string projectId, string newProjectName, string newDescription,
+    public async Task<projectType> UpdateProject(Models.TableauSession session, string projectId, string newProjectName, string newDescription,
         projectTypeContentPermissions? newContentPermissions = null,
         string newParentProjectId = null, bool publishSamples = false, CancellationToken? cancelToken = null)
     {
@@ -133,7 +133,7 @@ public partial class TableauApiClient
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
     [ApiVersion(1, 0)]
-    public async Task DeleteProject(TableauSession session, string projectId, CancellationToken? cancelToken = null)
+    public async Task DeleteProject(Models.TableauSession session, string projectId, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
         checkNullParameters((nameof(session), session), (nameof(projectId), projectId));

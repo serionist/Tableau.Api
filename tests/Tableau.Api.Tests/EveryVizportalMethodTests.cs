@@ -201,7 +201,7 @@ public sealed class EveryVizportalMethodTests
     private static object? Invented(ParameterInfo parameter)
     {
         var type = parameter.ParameterType;
-        if (type == typeof(TableauSession)) return Fixtures.Session();
+        if (type == typeof(Models.TableauSession)) return Fixtures.Session();
         if (type == typeof(int)) return 4100 + parameter.Position;
         if (type == typeof(string)) return $"Inv{parameter.Position}{parameter.Name}";
         if (type == typeof(bool)) return true;

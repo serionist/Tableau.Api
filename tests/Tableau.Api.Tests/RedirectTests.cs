@@ -20,16 +20,16 @@ public sealed class RedirectTests
     [DataRow(302)]
     [DataRow(307)]
     [DataRow(308)]
-    public async Task ASignInIsNotRedirected(int status)
+    public async Task APostIsNotRedirected(int status)
     {
         using var server = FakeTableauServer.Start();
         using var other = FakeTableauServer.Start();
         var client = Fixtures.Client(server);
-        server.Map("POST", SignInPath, FakeResponse.Redirect(status, new Uri(other.BaseUrl, SignInPath).ToString()));
-        other.Map("POST", SignInPath, Fixtures.SignedIn());
+        server.Map("POST", ProjectsPath, FakeResponse.Redirect(status, new Uri(other.BaseUrl, ProjectsPath).ToString()));
+        other.Map("POST", ProjectsPath, FakeResponse.Xml(201, "<project id=\"1d0e8a7b-0001-4c2d-9e3f-5a6b7c8d9e0f\" name=\"Sales\"/>"));
 
         var thrown = await Assert.ThrowsExactlyAsync<TableauRequestException>(
-            () => client.SignIn(Fixtures.UserName, Fixtures.Password, Fixtures.SiteContentUrl));
+            () => client.CreateProject(Fixtures.Session(), "Sales", "Invented"));
 
         Assert.AreEqual(status, (int)thrown.StatusCode);
         Assert.Contains($"a redirect to http://127.0.0.1:{other.BaseUrl.Port}, which is not followed", thrown.Message);
@@ -114,15 +114,14 @@ public sealed class RedirectTests
         using var server = FakeTableauServer.Start();
         var client = Fixtures.Client(server);
         server.Map("GET", ProjectsPath, FakeResponse.Xml(200, NoProjects));
-        server.Map("POST", SignInPath, Fixtures.SignedIn());
         var other = Fixtures.Session();
         other.Token = Fixtures.OtherSessionToken;
 
         await client.QueryProjects(Fixtures.Session());
         await client.QueryProjects(other);
-        await client.SignIn(Fixtures.UserName, Fixtures.Password, Fixtures.SiteContentUrl);
+        await client.QueryProjects(Fixtures.Session());
 
-        CollectionAssert.AreEqual(new[] { Fixtures.SessionToken, Fixtures.OtherSessionToken, null },
+        CollectionAssert.AreEqual(new[] { Fixtures.SessionToken, Fixtures.OtherSessionToken, Fixtures.SessionToken },
             server.Requests.Select(request => request.Header("X-Tableau-Auth")).ToArray());
     }
 }

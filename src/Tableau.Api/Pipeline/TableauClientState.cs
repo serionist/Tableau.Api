@@ -11,10 +11,10 @@ namespace Tableau.Api.Pipeline;
 
 /// <summary>
 /// What a named client keeps for as long as it lives, however many <see cref="TableauClient"/> objects a container
-/// makes over it: its options, read-only from here; its deployment; the REST API version it negotiated. Under DI it is
-/// a singleton keyed by the client's name; a client built without DI owns its own.
+/// makes over it: its options, read-only from here; its deployment; the REST API version it negotiated; its session.
+/// Under DI it is a singleton keyed by the client's name; a client built without DI owns its own.
 /// </summary>
-internal sealed class TableauClientState
+internal sealed class TableauClientState : IDisposable
 {
     private readonly Lock _negotiationLock = new();
     private Task<Version>? _negotiation;
@@ -26,8 +26,9 @@ internal sealed class TableauClientState
     /// <param name="options">The client's options, made read-only here.</param>
     /// <param name="loggerFactory">Where the client logs, or null for nowhere.</param>
     /// <param name="timeProvider">The clock the retries wait on, the system's when null; a container's own, under DI.</param>
+    /// <param name="credentials">What the client signs in with, or null.</param>
     public TableauClientState(string name, TableauClientOptions options, ILoggerFactory? loggerFactory,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null, TableauCredentials? credentials = null)
     {
         options.MakeReadOnly();
         Name = name;
@@ -46,7 +47,17 @@ internal sealed class TableauClientState
             TableauLog.AcceptsAnyCertificate(Logger, DisplayName, ServerUrl);
         if (ServerUrl.Scheme == Uri.UriSchemeHttp)
             TableauLog.InsecureHttp(Logger, DisplayName, ServerUrl);
+        Sessions = new TableauSessions(this, credentials);
     }
+
+    /// <summary>The client's own session, signed in on demand with its credentials.</summary>
+    public TableauSessions Sessions { get; }
+
+    /// <summary>
+    /// Ends the state with its owner: the container, for a name's singleton, or the client built without DI. Nothing
+    /// here signs out or sends anything.
+    /// </summary>
+    public void Dispose() => Sessions.Dispose();
 
     /// <summary>The client's name: the key it is registered under, <c>""</c> for the default client.</summary>
     public string Name { get; }

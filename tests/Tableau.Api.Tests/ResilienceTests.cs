@@ -31,7 +31,7 @@ public sealed class ResilienceTests
         server.Map("GET", ItemsPath, InTurn(FakeResponse.Empty(503), ClientFixtures.ServerInfo()));
         var time = new FakeTimeProvider();
         var log = new RecordingLogger();
-        await using var client = TableauClient.CreateWithClock(ClientFixtures.Options(server, maxRetries: 3), log.Factory, time);
+        await using var client = TableauClient.CreateWithClock(ClientFixtures.Options(server, maxRetries: 3), null, log.Factory, time);
 
         var call = ClientFixtures.SendAsync(client, Items(), new TableauRequest(Query: ClientFixtures.Query(("filter", "name:eq:ada"))));
         await ClientFixtures.WaitUntilAsync(() => server.Requests.Count == 1);
@@ -121,7 +121,7 @@ public sealed class ResilienceTests
         using var primary = new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false };
         using var failing = new FailingFirst(new HttpRequestException(HttpRequestError.ConnectionError, "Invented: the connection was reset."), primary);
         using var http = new HttpClient(failing, disposeHandler: false);
-        await using var client = new TableauClient(http, ClientFixtures.Options(server, maxRetries: 3), Fixtures.Log.Factory, time);
+        await using var client = new TableauClient(http, ClientFixtures.Options(server, maxRetries: 3), null, Fixtures.Log.Factory, time);
 
         var call = ClientFixtures.SendAsync(client, Items());
         await ClientFixtures.WaitUntilAsync(() => failing.Attempts == 1);
@@ -164,7 +164,7 @@ public sealed class ResilienceTests
         });
         using var primary = new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false };
         using var http = new HttpClient(primary, disposeHandler: false) { Timeout = TimeSpan.FromMilliseconds(300) };
-        await using var client = new TableauClient(http, ClientFixtures.Options(server, maxRetries: 3), Fixtures.Log.Factory);
+        await using var client = new TableauClient(http, ClientFixtures.Options(server, maxRetries: 3), loggerFactory: Fixtures.Log.Factory);
 
         var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.Timeout, () => ClientFixtures.SendAsync(client, Items()));
 
@@ -184,7 +184,7 @@ public sealed class ResilienceTests
         using var failing = new AlwaysFailing(new HttpRequestException(HttpRequestError.ProxyTunnelError, "Invented: the proxy refused.", null,
             refused ? HttpStatusCode.ProxyAuthenticationRequired : HttpStatusCode.BadGateway));
         using var http = new HttpClient(failing, disposeHandler: false);
-        await using var client = new TableauClient(http, ClientFixtures.Options(server, maxRetries: 1), Fixtures.Log.Factory, time);
+        await using var client = new TableauClient(http, ClientFixtures.Options(server, maxRetries: 1), null, Fixtures.Log.Factory, time);
 
         var call = ClientFixtures.SendAsync(client, Items());
         await ClientFixtures.WaitUntilAsync(() => failing.Attempts == 1);
@@ -207,7 +207,7 @@ public sealed class ResilienceTests
             : new OperationCanceledException("Invented: the caller's own cancellation.");
         using var failing = new AlwaysFailing(own);
         using var http = new HttpClient(failing, disposeHandler: false);
-        await using var client = new TableauClient(http, ClientFixtures.Options(server, maxRetries: 3), Fixtures.Log.Factory);
+        await using var client = new TableauClient(http, ClientFixtures.Options(server, maxRetries: 3), loggerFactory: Fixtures.Log.Factory);
 
         var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.Http, () => ClientFixtures.SendAsync(client, Items()));
 
@@ -223,7 +223,7 @@ public sealed class ResilienceTests
         var broken = new System.IO.IOException("Invented: the connection broke.");
         using var failing = new AlwaysFailing(broken);
         using var http = new HttpClient(failing, disposeHandler: false);
-        await using var client = new TableauClient(http, ClientFixtures.Options(server), Fixtures.Log.Factory);
+        await using var client = new TableauClient(http, ClientFixtures.Options(server), loggerFactory: Fixtures.Log.Factory);
 
         var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.Http, () => ClientFixtures.SendAsync(client, Items()));
 
@@ -256,7 +256,7 @@ public sealed class ResilienceTests
         using var primary = TableauHandler.Create(ClientFixtures.Options(server));
         using var counting = new CountingHandler(primary);
         using var http = new HttpClient(counting, disposeHandler: false);
-        await using var client = new TableauClient(http, ClientFixtures.Options(server, maxRetries: 3), Fixtures.Log.Factory);
+        await using var client = new TableauClient(http, ClientFixtures.Options(server, maxRetries: 3), loggerFactory: Fixtures.Log.Factory);
 
         var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.Http, () => client.Server.GetInfoAsync());
 
@@ -559,7 +559,7 @@ public sealed class ResilienceTests
         var time = new FakeTimeProvider();
         server.Map("GET", ItemsPath, InTurn(first(time), ClientFixtures.ServerInfo()));
         var log = new RecordingLogger();
-        await using var client = TableauClient.CreateWithClock(ClientFixtures.Options(server, maxRetries: 3), log.Factory, time);
+        await using var client = TableauClient.CreateWithClock(ClientFixtures.Options(server, maxRetries: 3), null, log.Factory, time);
 
         var call = ClientFixtures.SendAsync(client, Items());
         await ClientFixtures.WaitUntilAsync(() => log.Lines.Any(line => line.Contains("retry 1 of 3", StringComparison.Ordinal)));

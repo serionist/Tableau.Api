@@ -186,7 +186,7 @@ public partial class TableauApiClient
     }
 
     private async Task<HttpContent> apiRequest(Uri fullUri, HttpMethod method, int expectedStatusCode,
-        CancellationToken? cancelToken, TableauSession session = null, HttpContent body = null)
+        CancellationToken? cancelToken, Models.TableauSession session = null, HttpContent body = null)
     {
 
         var state = new object();

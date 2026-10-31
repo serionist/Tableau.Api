@@ -18,8 +18,7 @@ public sealed class ServerInfoSiteTests
     [SiteTest(TableauSite.Live, [ServerUrl]), TestCategory(TableauSite.Live)]
     public async Task ServerInfoAnswersWithoutASignInAtTheNegotiatedVersion()
     {
-        await using var client = TableauClient.Create(new TableauClientOptions { ServerUrl = new Uri(TableauSite.Setting(ServerUrl)) },
-            Fixtures.Log.Factory);
+        await using var client = TableauClient.Create(new TableauClientOptions { ServerUrl = new Uri(TableauSite.Setting(ServerUrl)) }, loggerFactory: Fixtures.Log.Factory);
 
         var info = await client.Server.GetInfoAsync();
 
@@ -36,7 +35,7 @@ public sealed class ServerInfoSiteTests
         {
             ServerUrl = new Uri(TableauSite.Setting(ServerUrl)),
             ApiVersion = new Version(9, 0),
-        }, Fixtures.Log.Factory);
+        }, loggerFactory: Fixtures.Log.Factory);
 
         var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.NotFound, () => client.Server.GetInfoAsync());
 

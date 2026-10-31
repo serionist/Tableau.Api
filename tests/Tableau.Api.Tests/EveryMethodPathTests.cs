@@ -90,7 +90,7 @@ public sealed class EveryMethodPathTests
         $"{method.Name}({string.Join(", ", method.GetParameters().Select(parameter => parameter.ParameterType.Name))})";
 
     /// <summary>Calls the method with a plain value for every parameter, or value for the one named; returns what it threw.</summary>
-    private static async Task<Exception?> InvokeAsync(TableauApiClient client, TableauSession session, MethodInfo method,
+    private static async Task<Exception?> InvokeAsync(TableauApiClient client, Models.TableauSession session, MethodInfo method,
         ParameterInfo? set, string? value)
     {
         var arguments = method.GetParameters()
@@ -111,10 +111,10 @@ public sealed class EveryMethodPathTests
         }
     }
 
-    private static object? Plain(ParameterInfo parameter, TableauSession session)
+    private static object? Plain(ParameterInfo parameter, Models.TableauSession session)
     {
         var type = parameter.ParameterType;
-        if (type == typeof(TableauSession)) return session;
+        if (type == typeof(Models.TableauSession)) return session;
         if (type == typeof(string)) return "v" + parameter.Position;
         if (type == typeof(int)) return 1;
         if (type == typeof(bool)) return false;

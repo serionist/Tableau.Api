@@ -20,7 +20,7 @@ public partial class VizPortalClient
     /// <returns></returns>
     /// <exception cref="TableauRequestException"></exception>
     public IAsyncEnumerable<ExtractRefreshTask> QueryExtractRefreshesForWorkbook(
-        TableauSession session, string workbookId) => queryExtractRefreshes(session, ("workbookId", workbookId));
+        Tableau.Api.Models.TableauSession session, string workbookId) => queryExtractRefreshes(session, ("workbookId", workbookId));
 
     /// <summary>
     /// Returns Extract Refreshes for a single published Datasource. Returns an enumerable that will paginate results in the background
@@ -30,7 +30,7 @@ public partial class VizPortalClient
     /// <returns></returns>
     /// <exception cref="TableauRequestException"></exception>
     public async IAsyncEnumerable<ExtractRefreshTask> QueryExtractRefreshesForDatasource(
-        TableauSession session, string datasourceId)
+        Tableau.Api.Models.TableauSession session, string datasourceId)
     {
         // get datasource info
         var dsInfo = await Request(session, "getDatasource", new JObject(new JProperty("id", datasourceId)));
@@ -50,7 +50,7 @@ public partial class VizPortalClient
     /// <param name="scheduleId">The schedule ID</param>
     /// <returns></returns>
     public async IAsyncEnumerable<ExtractRefreshTask> QueryExtractRefreshesForSchedule(
-      TableauSession session, string siteId, string scheduleId)
+      Tableau.Api.Models.TableauSession session, string siteId, string scheduleId)
     {
         var scheduleInfo = await Request(session, "getSchedules", JObject.FromObject(new QueryModel()
         {
@@ -95,7 +95,7 @@ public partial class VizPortalClient
 
     }
 
-    private IAsyncEnumerable<ExtractRefreshTask> queryExtractRefreshes(TableauSession session, params (string field, string value)[] search)
+    private IAsyncEnumerable<ExtractRefreshTask> queryExtractRefreshes(Tableau.Api.Models.TableauSession session, params (string field, string value)[] search)
     {
         //This query can only be sent like that (1 clause and 'and' operator)
         var q = new QueryModel()
@@ -131,7 +131,7 @@ public partial class VizPortalClient
     /// <param name="scheduleId">The schedule ID</param>
     /// <returns></returns>
     /// <exception cref="TableauRequestException"></exception>
-    public async Task ChangeExtractRefreshScheduleFrequency(TableauSession session, int extractRefreshId, int scheduleId)
+    public async Task ChangeExtractRefreshScheduleFrequency(Tableau.Api.Models.TableauSession session, int extractRefreshId, int scheduleId)
     {
         var req = await Request<ChangeExtractRefreshTaskSchedule, Empty>(session, "setExtractTasksSchedule",
             new ChangeExtractRefreshTaskSchedule()
@@ -149,7 +149,7 @@ public partial class VizPortalClient
     /// <param name="extractRefreshId">The extract refresh ID</param>
     /// <returns></returns>
     /// <exception cref="TableauRequestException"></exception>
-    public async Task TriggerExtractRefresh(TableauSession session, int extractRefreshId)
+    public async Task TriggerExtractRefresh(Tableau.Api.Models.TableauSession session, int extractRefreshId)
     {
         var req = await Request<TriggerExtractRefreshTask, Empty>(session, "runExtractTasks",
             new TriggerExtractRefreshTask()
@@ -164,7 +164,7 @@ public partial class VizPortalClient
     /// <param name="session">The session obtained from the top level client</param>
     /// <param name="extractRefreshId">The extract refresh ID</param>
     /// <returns></returns>
-    public async Task DeleteExtractRefresh(TableauSession session, int extractRefreshId)
+    public async Task DeleteExtractRefresh(Tableau.Api.Models.TableauSession session, int extractRefreshId)
     {
         var req = await Request<DeleteExtractRefreshTask, Empty>(session, "deleteExtractTasks",
             new DeleteExtractRefreshTask()

@@ -54,7 +54,10 @@ public sealed class TableauClientOptions : IValidatableObject
         set => Set(ref _serverUrl, value);
     }
 
-    /// <summary>The site's content URL, as its address shows it after <c>/site/</c>; <c>""</c>, the default, is the default site.</summary>
+    /// <summary>
+    /// The site's content URL, as its address shows it after <c>/site/</c>; <c>""</c>, the default, is the default site.
+    /// The client signs in to it, and so do <c>Sessions.SignInAsync</c> calls that name no site.
+    /// </summary>
     public string Site
     {
         get => _site;
