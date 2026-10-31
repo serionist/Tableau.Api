@@ -371,6 +371,7 @@ public sealed class ResilienceTests
         Assert.DoesNotContain("in 1740000 ms", retry);
         Assert.IsLessThan(TimeSpan.FromSeconds(30), waited, "the first back-off is about two seconds");
     }
+
     // Retry-After is honoured on a 429 and a 503 only: another status, such as a proxy's 502, is retried on the back-off,
     // whatever wait it names, and never refused for one over the cap.
     [TestMethod]

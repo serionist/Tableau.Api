@@ -387,6 +387,7 @@ public sealed class DownloadTests : IDisposable
 
         CollectionAssert.AreEqual(Pattern(64), await File.ReadAllBytesAsync(path, TestContext.CancellationToken));
     }
+
     [TestMethod]
     public async Task ACallThatIsNoDownloadIsRefusedBeforeSending()
     {

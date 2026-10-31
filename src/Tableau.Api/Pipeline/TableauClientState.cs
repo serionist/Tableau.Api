@@ -166,6 +166,7 @@ internal sealed class TableauClientState
         TableauLog.Failed(Logger, DisplayName, endpoint.Method, endpoint.Template, exception.Kind, exception);
         return exception;
     }
+
     private Version Supported(Version version, string? productVersion, Endpoint endpoint)
     {
         if (version >= ApiVersions.Floor) return version;
