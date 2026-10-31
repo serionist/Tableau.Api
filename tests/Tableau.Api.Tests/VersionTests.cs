@@ -204,6 +204,38 @@ public sealed class VersionTests
     }
 
     [TestMethod]
+    public async Task AFailedNegotiationNoCallerWaitsForIsNotKept()
+    {
+        using var server = FakeTableauServer.Start();
+        using var arrived = new System.Threading.ManualResetEventSlim();
+        using var release = new System.Threading.ManualResetEventSlim();
+        var answers = 0;
+        server.Map("GET", ClientFixtures.NegotiationPath, _ =>
+        {
+            if (System.Threading.Interlocked.Increment(ref answers) > 1) return ClientFixtures.ServerInfo("3.25");
+            arrived.Set();
+            release.Wait(TimeSpan.FromSeconds(30));
+            return FakeResponse.Text(503, "invented outage");
+        });
+        server.Map("GET", ClientFixtures.ServerInfoPath, ClientFixtures.ServerInfo());
+        await using var client = ClientFixtures.Client(server, version: null);
+        using var cancel = new System.Threading.CancellationTokenSource();
+
+        var abandoned = client.Server.GetInfoAsync(cancel.Token);
+        Assert.IsTrue(arrived.Wait(TimeSpan.FromSeconds(30)), "Server Info was never asked");
+        var negotiation = client.Pipeline.State.Negotiation;
+        await cancel.CancelAsync();
+        await Assert.ThrowsAsync<OperationCanceledException>(() => abandoned);
+        release.Set();
+        // Waited for here only to know it has ended, failed, with no caller waiting on it.
+        await ClientFixtures.FailsAsync(TableauErrorKind.Http, () => negotiation!);
+
+        Assert.IsNull(client.Pipeline.State.Negotiation, "the failed negotiation was kept");
+        Assert.AreEqual("3.25", (await client.Server.GetInfoAsync()).RestApiVersion);
+        Assert.AreEqual(2, server.Requests.Count(request => request.Path == ClientFixtures.NegotiationPath));
+    }
+
+    [TestMethod]
     public async Task OneCallersCancellationFailsNoOtherCallWaitingOnTheNegotiation()
     {
         using var server = FakeTableauServer.Start();

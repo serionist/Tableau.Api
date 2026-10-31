@@ -43,6 +43,9 @@ internal sealed class TableauPipeline(HttpClient http, TableauClientState state)
     private static readonly MediaTypeWithQualityHeaderValue _acceptJson = new("application/json");
     private int _disposed;
 
+    /// <summary>The named client's state, for the tests of its negotiation.</summary>
+    internal TableauClientState State => state;
+
     /// <summary>Marks the pipeline's client disposed, so a later call throws <see cref="ObjectDisposedException"/>.</summary>
     public void Dispose() => Volatile.Write(ref _disposed, 1);
 

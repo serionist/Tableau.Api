@@ -148,14 +148,21 @@ public sealed class DependencyInjectionTests
         Assert.IsNull(handler.SslOptions.RemoteCertificateValidationCallback, "a handler made after the reload took the reloaded options");
     }
 
+    // Learn's order of precedence: every default runs before every setting of a name, wherever it was registered, so the
+    // Tableau client's clearing wins either way round.
     [TestMethod]
-    public async Task HandlersAnAppGivesEveryHttpClientDontReachTheTableauClient()
+    [DataRow(true)]
+    [DataRow(false)]
+    public async Task HandlersAnAppGivesEveryHttpClientDontReachTheTableauClient(bool defaultsFirst)
     {
         using var server = FakeTableauServer.Start();
         server.Map("GET", ClientFixtures.ServerInfoPath, ClientFixtures.ServerInfo());
         var services = Services();
-        services.ConfigureHttpClientDefaults(builder => builder.AddHttpMessageHandler(() => new RefusingHandler()));
+        if (defaultsFirst)
+            services.ConfigureHttpClientDefaults(builder => builder.AddHttpMessageHandler(() => new RefusingHandler()));
         services.AddTableauClient("prod", options => Copy(ClientFixtures.Options(server), options));
+        if (!defaultsFirst)
+            services.ConfigureHttpClientDefaults(builder => builder.AddHttpMessageHandler(() => new RefusingHandler()));
         services.AddHttpClient("other");
         await using var provider = services.BuildServiceProvider();
         await using var scope = provider.CreateAsyncScope();

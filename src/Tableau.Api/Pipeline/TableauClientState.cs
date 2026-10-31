@@ -69,8 +69,9 @@ internal sealed class TableauClientState
     /// </summary>
     /// <remarks>
     /// Concurrent first calls share one negotiation and its outcome, so a server that fails it is asked once, not once
-    /// per waiting call. A failure is not kept: the next call asks again. The negotiation runs on no caller's token, so
-    /// one caller's cancellation fails no other; each caller stops waiting on its own token.
+    /// per waiting call. A failure is not kept, even when every caller stopped waiting before it came: the negotiation
+    /// lets go of itself before it fails, so the next call asks again. The negotiation runs on no caller's token, so one
+    /// caller's cancellation fails no other; each caller stops waiting on its own token.
     /// </remarks>
     /// <param name="pipeline">What sends Server Info.</param>
     /// <param name="endpoint">The call that needs the version, which an exception names.</param>
@@ -82,47 +83,63 @@ internal sealed class TableauClientState
 
         Task<Version> negotiation;
         lock (_negotiationLock)
-            negotiation = _negotiation ??= Task.Run(() => NegotiateAsync(pipeline), CancellationToken.None);
-        Version used;
-        try
         {
-            used = await negotiation.WaitAsync(cancellationToken).ConfigureAwait(false);
-        }
-        catch when (negotiation.IsFaulted || negotiation.IsCanceled)
-        {
-            lock (_negotiationLock)
+            if (_negotiation is null)
             {
-                if (ReferenceEquals(_negotiation, negotiation)) _negotiation = null;
+                _negotiation = Task.Run(() => NegotiateAsync(pipeline), CancellationToken.None);
+                // A failure every caller stopped waiting for is still observed, so it raises no unobserved-task event.
+                _ = _negotiation.ContinueWith(static task => _ = task.Exception, CancellationToken.None,
+                    TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
             }
-            throw;
+            negotiation = _negotiation;
         }
+        var used = await negotiation.WaitAsync(cancellationToken).ConfigureAwait(false);
         return Supported(used, _productVersion, endpoint);
+    }
+
+    /// <summary>The negotiation in flight, or the one that succeeded; null before the first and after a failure.</summary>
+    internal Task<Version>? Negotiation
+    {
+        get
+        {
+            lock (_negotiationLock) return _negotiation;
+        }
     }
 
     // Asked at the floor, which every supported server answers; a server too old for it answers 404, and is asked
     // again at the version Server Info came in, so the error can name its version.
     private async Task<Version> NegotiateAsync(TableauPipeline pipeline)
     {
-        ServerInfo info;
         try
         {
-            info = await pipeline.SendAtAsync(Endpoints.ServerInfo, ApiVersions.Floor, default, static body => body.ServerInfo,
-                "serverInfo", CancellationToken.None).ConfigureAwait(false);
+            ServerInfo info;
+            try
+            {
+                info = await pipeline.SendAtAsync(Endpoints.ServerInfo, ApiVersions.Floor, default, static body => body.ServerInfo,
+                    "serverInfo", CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (TableauException e) when (e.Kind == TableauErrorKind.NotFound)
+            {
+                info = await pipeline.SendAtAsync(Endpoints.ServerInfo, ApiVersions.ServerInfoOldest, default,
+                    static body => body.ServerInfo, "serverInfo", CancellationToken.None).ConfigureAwait(false);
+            }
+            var offered = ApiVersions.Parse(info.RestApiVersion) ?? throw Failed(Endpoints.ServerInfo,
+                new TableauException(TableauErrorKind.InvalidResponse,
+                    $"Server Info gave no REST API version the client can read: '{info.RestApiVersion}'.")
+                { Method = Endpoints.ServerInfo.Method });
+            var used = offered > ApiVersions.Newest ? ApiVersions.Newest : offered;
+            TableauLog.Negotiated(Logger, DisplayName, offered, used);
+            _productVersion = info.ProductVersion?.Value;
+            Volatile.Write(ref _negotiated, used);
+            return used;
         }
-        catch (TableauException e) when (e.Kind == TableauErrorKind.NotFound)
+        catch
         {
-            info = await pipeline.SendAtAsync(Endpoints.ServerInfo, ApiVersions.ServerInfoOldest, default,
-                static body => body.ServerInfo, "serverInfo", CancellationToken.None).ConfigureAwait(false);
+            // Let go before the task fails, so whoever sees the failure, or comes after it, finds no failure kept. One
+            // negotiation runs at a time and it is assigned under this lock before this can run, so this one is cleared.
+            lock (_negotiationLock) _negotiation = null;
+            throw;
         }
-        var offered = ApiVersions.Parse(info.RestApiVersion) ?? throw Failed(Endpoints.ServerInfo,
-            new TableauException(TableauErrorKind.InvalidResponse,
-                $"Server Info gave no REST API version the client can read: '{info.RestApiVersion}'.")
-            { Method = Endpoints.ServerInfo.Method });
-        var used = offered > ApiVersions.Newest ? ApiVersions.Newest : offered;
-        TableauLog.Negotiated(Logger, DisplayName, offered, used);
-        _productVersion = info.ProductVersion?.Value;
-        Volatile.Write(ref _negotiated, used);
-        return used;
     }
 
     // An exception this state makes, rather than the pipeline, logged as the pipeline logs its own.

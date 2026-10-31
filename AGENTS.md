@@ -6,8 +6,8 @@ Codex reads it directly; the gate caps it at 150 lines.
 ## What this is
 
 A .NET client for Tableau's REST API and its internal Vizportal API, published on nuget.org as `Tableau.Api` (last
-release 1.2.6, 2026-10-30, built for netstandard2.0, from `release/1.x`). `main` builds 2.0 by #2's plan in
-`docs/plans/`, for net10.0 alone, on Newtonsoft.Json and Microsoft.Extensions: Logging, Options, DI, Http.
+release 1.2.6, 2026-10-30, netstandard2.0, from `release/1.x`). `main` builds 2.0 (#2, `docs/plans/`), net10.0 only,
+on Newtonsoft.Json, Microsoft.Extensions.Logging.Abstractions, .Options, .DependencyInjection.Abstractions and .Http.
 
 - **`TableauClient`:** 2.0's client, with options, DI, one pipeline (`Pipeline/`: an `Endpoints` descriptor per call,
   the gates, redirects, errors) and a sub-client per area, `Server` first. JSON through the models in `Rest/Models/`.
