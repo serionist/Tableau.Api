@@ -57,9 +57,10 @@ signature stays beside the new one. A silent break is a one-way door broken: a b
 ## compatibility
 
 Does it work for the library's users: the target framework they build for (`main` targets net10.0 only; .NET
-Framework users stay on 1.2.x, on netstandard2.0), Windows and Linux, Tableau
-Server and Tableau Cloud, every REST API version the client claims? A behaviour checked on one Tableau version only is
-the usual way this breaks.
+Framework users stay on 1.2.x, on netstandard2.0), Windows and Linux, Tableau Server and Tableau Cloud, every REST API
+version a client claims (`TableauClient` 3.23, Tableau Server 2024.2, to 3.29 and Tableau Cloud, older only with
+`AllowUnsupportedServerVersion`; `TableauApiClient` 2.0 and up)? A behaviour checked on one Tableau version only is the
+usual way this breaks.
 
 ## sequencing-and-checks
 

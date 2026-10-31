@@ -38,7 +38,28 @@ and [the migration guide](docs/migration-2.0.md) lists every change from 1.2.5 a
     failing the response; the values the schema knows are its static properties, such as `SiteRole.Creator`.
   - A number Tableau sends as a string reads as a number.
   - A record's `ToString` prints a password, a token or a secret as `***`, such as `Credentials.Password`.
-- **The library builds with the trim and native AOT analyzers on** (`IsAotCompatible`), and the models pass them: they
+- **`TableauClient`, 2.0's client,** beside the old `TableauApiClient`, which it takes over area by area; so far it
+  has Server Info, as `client.Server.GetInfoAsync()`, which needs no sign-in.
+  - **Build it** from DI with `services.AddTableauClient(name, options => ...)`, a keyed client over a named
+    `HttpClient` from `IHttpClientFactory`, or the default one without a name; or with `TableauClient.Create(options)`;
+    or over an `HttpClient` of your own, which it never disposes.
+  - **`TableauClientOptions`:** the server's address, its path kept; the site; the REST API version, asked of the server
+    on the first call unless pinned; Tableau Server or Tableau Cloud, `Auto` taking Cloud for `online.tableau.com`'s
+    hosts; `AllowUnsupportedServerVersion`, `DangerousAcceptAnyServerCertificate`, `AllowInsecureHttp`; a request and a
+    transfer timeout. They bind from configuration under native AOT, are checked at start-up, and can't change once a
+    client is built from them.
+  - **Supported:** REST API 3.23 (Tableau Server 2024.2, the oldest release Tableau supports) to 3.29, and Tableau
+    Cloud. Below 3.23 every call throws unless `AllowUnsupportedServerVersion` is set; above 3.29 the client calls 3.29.
+    A call the version or the deployment lacks throws before it is sent.
+  - **One exception, `TableauException`,** with a `Kind` (`Http`, `Authentication`, `NotFound`, `RateLimited`,
+    `Timeout`, `Redirect`, `UnsupportedApiVersion`, `UnsupportedDeployment`, `InvalidResponse`, `VizPortal`), the
+    status, Tableau's code, summary and detail, the request's method and path with query values hidden, `Retry-After`,
+    and the body's first 4 KB. Its constructors are public, for your tests.
+  - **The connection:** certificates validated, one its issuer revoked refused; redirects followed only to the same
+    scheme, host and port, at most five; no cookies kept; any 2xx a success.
+  - **Logging** at Debug, through `ILogger`, with no token, password, body or query value; warnings only for an option
+    that weakens the client.
+  - The client and its sub-clients are classes with virtual members and protected constructors, for mocks.- **The library builds with the trim and native AOT analyzers on** (`IsAotCompatible`), and the models pass them: they
   read and write JSON through System.Text.Json's source generator, with no reflection, and CI runs them in a native
   AOT app. The 1.x client is exempt: its `XmlSerializer` and Newtonsoft.Json code doesn't work trimmed or under native
   AOT, and goes before 2.0.0.
@@ -56,7 +77,10 @@ and [the migration guide](docs/migration-2.0.md) lists every change from 1.2.5 a
   such as `https://example.com/tableau/`, is reachable. A base URL must be the server's address, not a site's or a
   view's link.
 - **A redirect fails,** where it was followed: use the address the exception names as the base URL.
-- **The licence is MIT.**
+- **`TableauApiClient.ServerInfo` is gone:** use `TableauClient.Server.GetInfoAsync`, which returns the 2.0 model
+  `ServerInfo` (the migration guide).
+- **The package depends on Microsoft.Extensions' abstractions,** 10.0.14: Logging.Abstractions, Options,
+  DependencyInjection.Abstractions and Http, in place of Microsoft.Extensions.Logging 2.2.0.- **The licence is MIT.**
 - **The package's metadata:** a description that says what it is and ends "Not affiliated with or endorsed by
   Tableau or Salesforce."; the README packed into it; the project and repository links on GitHub; symbols as a
   `.snupkg`, which nuget.org's symbol server takes, with Source Link to the code on GitHub.
@@ -105,7 +129,10 @@ and [the migration guide](docs/migration-2.0.md) lists every change from 1.2.5 a
 - **The `UpdateTo*Schedule` methods throw `NotSupportedException`** before anything is sent. Tableau updates a
   schedule by its id, which they don't take, and 1.2.5 created a second schedule instead. Delete the schedule, create
   it again, then add its tasks to it again; updating one comes in 2.0.
-- **The licence is MIT.**
+- **`TableauApiClient.ServerInfo` is gone:** use `TableauClient.Server.GetInfoAsync`, which returns the 2.0 model
+  `ServerInfo` (the migration guide).
+- **The package depends on Microsoft.Extensions' abstractions,** 10.0.14: Logging.Abstractions, Options,
+  DependencyInjection.Abstractions and Http, in place of Microsoft.Extensions.Logging 2.2.0.- **The licence is MIT.**
 - **The package's metadata:** a description that says what it is and ends "Not affiliated with or endorsed by
   Tableau or Salesforce."; the README packed into it; the project and repository links on GitHub; symbols as a
   `.snupkg`, which nuget.org's symbol server takes, with Source Link to the code on GitHub.

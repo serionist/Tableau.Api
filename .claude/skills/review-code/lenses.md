@@ -35,19 +35,22 @@ Real bugs a user would hit. The lenses below are where this repo breaks most; th
 
 ## rest-contract
 
-Applies when: the scope touches `TableauApiClient*.cs`, `buildUri`, `apiRequest`, or a type in `Models/`.
+Applies when: the scope touches `TableauApiClient*.cs`, `buildUri`, `apiRequest`, a sub-client of `TableauClient`,
+`Pipeline/` (an `Endpoints` descriptor, `TableauPipeline`, `RequestUri`), or a type in `Models/` or `Rest/Models/`.
 
 - Does each request match the REST API reference: method, path (`sites/{site-id}/...`), query names, body, expected
   status? `AGENTS.md`, Traps, lists the endpoints that got this wrong before.
-- Does its `[ApiVersion]` name the version the reference gives, and `[OnPremiseOnly]` mark what Tableau Cloud lacks?
+- Does its descriptor in `Endpoints` (the 2.0 client) name the version the reference gives, `Server` alone for what
+  Tableau Cloud lacks, and whether it is idempotent and moves a file? On the old client, does its `[ApiVersion]` name
+  the version, and `[OnPremiseOnly]` mark what Tableau Cloud lacks?
 - Does it still deserialise what older versions send (the `tableausoftware.com` namespace) and what Tableau Cloud
   sends (`TableauIDWithMFA`)?
 - Pagination: page size and number checked, every page reachable.
 
 ## credentials
 
-Applies when: the scope touches sign-in, `TableauSession`, tokens, impersonation, logging, Vizportal's cookies, or
-`IgnoreSSLErrors`.
+Applies when: the scope touches sign-in, `TableauSession`, tokens, impersonation, logging, Vizportal's cookies,
+`IgnoreSSLErrors` or `DangerousAcceptAnyServerCertificate`.
 
 Name the concrete leak and what it gains.
 
@@ -117,7 +120,9 @@ Applies when: the scope touches the target framework, packages, paths, files, en
 
 - The target framework: `main` targets net10.0 only; .NET Framework users stay on 1.2.x, on netstandard2.0. A change
   to the target, a second one included, is a one-way door (`AGENTS.md`).
-- Tableau Server and Tableau Cloud, and every REST API version the client claims.
+- Tableau Server and Tableau Cloud, and every REST API version a client claims: `TableauClient` 3.23 (Tableau Server
+  2024.2) to 3.29 and Tableau Cloud, older only with `AllowUnsupportedServerVersion`; `TableauApiClient` 2.0 and up. A
+  change to that claim is a one-way door (`AGENTS.md`).
 - Windows and Linux: path separators, `\r\n`, text read and written as UTF-8 explicitly, a tool assumed on PATH.
 
 ## harness-integrity

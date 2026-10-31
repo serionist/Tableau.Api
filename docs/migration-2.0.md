@@ -14,7 +14,8 @@ on a break the ledger doesn't list. Each section below groups the ledger's entri
 | [Version](#version) | 2.0.0, from git tags | none |
 | [Signatures](#six-methods-whose-signature-changed) | six methods whose parameters or return type changed | 6, `CP0002` |
 | [Permission capabilities](#permission-capabilities-renumbered) | `capabilityTypeName` members renumbered | 12, `CP0011` |
-| [Dependencies](#dependencies) | Microsoft.Extensions.Logging 2.2.0, and Newtonsoft.Json added | none |
+| [The 2.0 client](#the-20-client) | `TableauClient` takes over `TableauApiClient`'s calls area by area; so far Server Info | 1, `CP0002` |
+| [Dependencies](#dependencies) | Microsoft.Extensions' abstractions in place of Microsoft.Extensions.Logging, and Newtonsoft.Json added | none |
 
 ## Target: net10.0 only
 
@@ -55,9 +56,44 @@ every member from `Delete` on has another number: `Delete`, `ExportData`, `Expor
 - **Code compiled against 1.2.5** holds the old numbers, so it sends another capability than it names: recompile it.
 - **A capability stored as a number,** in a database or a file, reads as another one: store and read it by name.
 
+## The 2.0 client
+
+`TableauClient` is 2.0's client. It takes `TableauApiClient`'s calls over one area at a time, and each old method goes
+when its new one lands. Build it from DI or on its own:
+
+```csharp
+// With DI: one named client per Tableau server; a service takes [FromKeyedServices("prod")] TableauClient.
+services.AddTableauClient("prod", options => configuration.GetSection("Tableau:Prod").Bind(options));
+
+// Without DI: dispose it when done.
+await using var tableau = TableauClient.Create(new TableauClientOptions { ServerUrl = new Uri("https://tableau.example.com/") });
+var info = await tableau.Server.GetInfoAsync(cancellationToken);
+```
+
+What changes for a caller who moves a call over:
+
+- **Versions:** the client asks the server's REST API version on its first call and uses it, up to 3.29; set
+  `ApiVersion` to pin one, major.minor only. A server below REST API 3.23 (Tableau Server 2024.2) is refused unless
+  `AllowUnsupportedServerVersion` is set. 1.2.5 used the version it was given, and 3.14 above that.
+- **Gates:** a call the server's version or deployment, Tableau Server or Tableau Cloud, lacks throws before it is sent.
+- **Errors:** every failure is a `TableauException`, its `Kind` saying which: switch on it where 1.2.5 had
+  `TableauRequestException`, `TableauApiVersionException` and `TableauOnlineNotSupportedException`. A refused argument is
+  still an `ArgumentException`, and your own cancellation an `OperationCanceledException`; a timeout is
+  `TableauErrorKind.Timeout`.
+- **Tokens:** `CancellationToken cancellationToken = default`, last, where 1.2.5 took `CancellationToken? cancelToken`.
+- **Connections:** plain http is refused unless `AllowInsecureHttp` is set; `DangerousAcceptAnyServerCertificate` is
+  `IgnoreSSLErrors`' successor, and logs a warning; a certificate its issuer revoked is refused; a redirect is
+  followed only to the same scheme, host and port; no cookie is kept between requests.
+- **Options** can't change once a client is built from them.
+
+| 1.2.5 | 2.0 | How to move over |
+|---|---|---|
+| `TableauApiClient.ServerInfo(cancelToken)` returns `serverInfo` | `TableauClient.Server.GetInfoAsync(cancellationToken)` returns `Tableau.Api.Rest.Models.ServerInfo` | `info.restApiVersion` is `info.RestApiVersion`, `info.productVersion.Value` is `info.ProductVersion?.Value`. It needs no sign-in |
+
 ## Dependencies
 
 | Package | 1.2.5 | Now |
 |---|---|---|
-| Microsoft.Extensions.Logging | 2.1.1 | 2.2.0 |
+| Microsoft.Extensions.Logging | 2.1.1 | 10.0.14, through Microsoft.Extensions.Http; the library itself references Microsoft.Extensions.Logging.Abstractions alone |
+| Microsoft.Extensions.Http, .Options, .DependencyInjection.Abstractions | none | 10.0.14, for `AddTableauClient` and the client's options |
 | Newtonsoft.Json | none | 13.0.4, for the Vizportal client |
