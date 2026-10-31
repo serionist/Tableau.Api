@@ -910,8 +910,27 @@ internal static class Lanes
     {
         var dotnet = Proc.Which("dotnet");
         if (dotnet is null) return new Result("models", "FAIL", "dotnet not found: https://dotnet.microsoft.com/download");
-        return ModelsResult(Proc.Run(dotnet, ["run", Path.Combine(Repo.Root, Repo.ModelGenerator), "--", "--check"],
+        var result = ModelsResult(Proc.Run(dotnet, ["run", Path.Combine(Repo.Root, Repo.ModelGenerator), "--", "--check"],
             env: new Dictionary<string, string?> { ["DOTNET_CLI_UI_LANGUAGE"] = "en" }));
+        if (result.Status != "pass") return result;
+        // On Windows and macOS a model renamed only by case looks current here, while git's index keeps the old name,
+        // and a Linux checkout misses the file.
+        var folder = Path.Combine(Repo.Root, Repo.ModelOutput);
+        var onDisk = Directory.Exists(folder) ? Directory.GetFiles(folder).Select(file => $"{Repo.ModelOutput}/{Path.GetFileName(file)}") : [];
+        var renames = CaseOnlyRenames(IndexEntries(Repo.ModelOutput).Select(entry => entry.Path), onDisk);
+        return renames.Count > 0 ? new Result("models", "FAIL", renames[0], string.Join("\n", renames)) : result;
+    }
+
+    /// <summary>Each path git's index holds that differs only in case from a file on disk, with the command that fixes it.</summary>
+    public static List<string> CaseOnlyRenames(IEnumerable<string> indexed, IEnumerable<string> onDisk)
+    {
+        var files = onDisk.ToList();
+        return
+        [
+            .. indexed.SelectMany(path => files
+                .Where(file => !string.Equals(file, path, StringComparison.Ordinal) && string.Equals(file, path, StringComparison.OrdinalIgnoreCase))
+                .Select(file => $"git's index names {path}, the generator writes {file}: git mv -f {path} {file}")),
+        ];
     }
 
     /// <summary>
@@ -2172,6 +2191,11 @@ internal static class SelfTest
         t.Equal("gate quick fails when the models check fails", 1,
             Lanes.RunChecks("quick", [("models", _ => drifted, true)], new Scope([], null, [], null), stdout));
         t.Contains("it names the models check", stdout.ToString(), "gate quick FAILED: models");
+        t.Same("models: a file renamed only by case, which git's index still names the old way, fails",
+            ["git's index names g/LinkUserIDP.g.cs, the generator writes g/LinkUserIdp.g.cs: git mv -f g/LinkUserIDP.g.cs g/LinkUserIdp.g.cs"],
+            Lanes.CaseOnlyRenames(["g/LinkUserIDP.g.cs", "g/Tag.g.cs"], ["g/LinkUserIdp.g.cs", "g/Tag.g.cs", "g/New.g.cs"]));
+        t.Same("models: names the index holds as written pass, a file not yet added among them", [],
+            Lanes.CaseOnlyRenames(["g/Tag.g.cs"], ["g/Tag.g.cs", "g/New.g.cs"]));
 
         var dotnet = Proc.Which("dotnet");
         if (dotnet is null)
