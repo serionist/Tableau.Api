@@ -203,7 +203,11 @@ public sealed class TableauClientBuilder
     /// </para>
     /// <para>
     /// A handler of yours that retries sees the request but not whether the call is safe to send twice, which the client's
-    /// own retries know: retry only GET, HEAD, PUT and DELETE, and never a POST, which publishes, creates or runs.
+    /// own retries know: retry GET and HEAD, or a call you know is safe to send twice; never a POST, which publishes,
+    /// creates or runs, nor Append to File Upload's PUT, which adds its chunk again. The attempt timeout stays the
+    /// client's, and runs inside your handler, so a timeout of yours decides only when it is shorter than
+    /// <see cref="TableauClientOptions.RequestTimeout"/>: make it shorter, or set that to
+    /// <see cref="Timeout.InfiniteTimeSpan"/>.
     /// </para>
     /// </remarks>
     /// <param name="configureHandler">

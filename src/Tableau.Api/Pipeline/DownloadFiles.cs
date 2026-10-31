@@ -14,7 +14,10 @@ namespace Tableau.Api.Pipeline;
 /// </summary>
 internal static class DownloadFiles
 {
-    /// <summary>The longest name kept, in bytes of UTF-8, as Linux's and macOS's file systems allow; Windows allows 255 characters, never fewer.</summary>
+    /// <summary>
+    /// The longest name kept, in bytes of UTF-8, as Linux's and macOS's file systems allow; Windows allows 255 characters,
+    /// never fewer.
+    /// </summary>
     public const int LongestName = 255;
 
     /// <summary>The longest extension a cut keeps.</summary>
@@ -121,7 +124,8 @@ internal static class DownloadFiles
     {
         if (Encoding.UTF8.GetByteCount(name) <= LongestName) return name;
         var extension = Path.GetExtension(name);
-        if (extension.Length > LongestExtension || extension.Length == name.Length) extension = "";
+        // An extension short enough to keep is never the whole of a name this long.
+        if (extension.Length > LongestExtension) extension = "";
         var budget = LongestName - Encoding.UTF8.GetByteCount(extension);
         var stem = new StringBuilder();
         var bytes = 0;
@@ -133,6 +137,7 @@ internal static class DownloadFiles
         }
         return stem.Append(extension).ToString();
     }
+
     /// <summary>The kind a name's extension or a media type says, or <see cref="TableauFileKind.Unknown"/>.</summary>
     public static TableauFileKind KindOf(string? fileName, string? mediaType)
     {

@@ -96,6 +96,7 @@ internal static class TableauHandler
         }
         return copy;
     }
+
     /// <summary>
     /// How long a new connection waits for a revocation list or a responder's answer. One that is reachable answers in
     /// well under a second; one a firewall drops silently would hold every new connection for the platform's own

@@ -150,16 +150,21 @@ public sealed class ClientBuilderTests
         Assert.IsEmpty(server.Requests);
     }
 
-    // A handler's own timeout or cancellation is no timeout of the client's: the call fails as Http, with it as the cause.
+    // A handler's own timeout or cancellation is no timeout of the client's: the call fails as Http, with it as the cause,
+    // even one signalled as an HttpClient signals its Timeout, which the named HttpClient, its Timeout infinite, never does.
     [TestMethod]
-    [DataRow(true)]
-    [DataRow(false)]
-    public async Task AHandlersOwnTimeoutOrCancellationIsHttpWithItsCause(bool timeout)
+    [DataRow("Polly")]
+    [DataRow("cancellation")]
+    [DataRow("HttpClient")]
+    public async Task AHandlersOwnTimeoutOrCancellationIsHttpWithItsCause(string kind)
     {
         using var server = FakeTableauServer.Start();
-        Exception own = timeout
-            ? new Polly.Timeout.TimeoutRejectedException("Invented: the caller's own timeout.")
-            : new OperationCanceledException("Invented: the caller's own cancellation.");
+        Exception own = kind switch
+        {
+            "Polly" => new Polly.Timeout.TimeoutRejectedException("Invented: the caller's own timeout."),
+            "cancellation" => new OperationCanceledException("Invented: the caller's own cancellation."),
+            _ => new TaskCanceledException("Invented: the caller's own timeout, as HttpClient says it.", new TimeoutException()),
+        };
         var services = Services();
         services.AddTableauClient("prod", options => Copy(ClientFixtures.Options(server, maxRetries: 3), options))
             .AddHttpMessageHandler(_ => new Throwing(own));
@@ -401,6 +406,7 @@ public sealed class ClientBuilderTests
         }
         throw new AssertFailedException($"The test makes no value of {type}: a member .NET added, which the copy and this test must take.");
     }
+
     [TestMethod]
     public void TheBuildersMethodsRefuseNull()
     {

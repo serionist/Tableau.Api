@@ -91,16 +91,19 @@ What changes for a caller who moves a call over:
   `MaxRetryAfter`, two minutes by default; a longer one fails at once, a 429 as `TableauErrorKind.RateLimited` and a
   503 as `TableauErrorKind.Http`, each with `RetryAfter`. A publish, a create or a run is never sent twice. Retries of
   your own, such as a resilience handler on every `HttpClient`, don't reach the client: set `MaxRetries` to 0 and add
-  yours with `AddTableauClient(...).AddHttpMessageHandler(...)`, retrying only GET, HEAD, PUT and DELETE.
+  yours with `AddTableauClient(...).AddHttpMessageHandler(...)`, retrying GET and HEAD, or a call you know is safe to
+  send twice, never a POST nor Append to File Upload's PUT. The client's attempt timeout runs inside your handler, so
+  give a timeout of yours less than `RequestTimeout`, or set that to `Timeout.InfiniteTimeSpan`.
 - **Timeouts:** `RequestTimeout` limits each attempt, two minutes by default; a download or an upload has
   `TransferTimeout` instead, for the whole of it, with no limit by default.
 - **Downloads,** as their areas move over: a `TableauDownload`, returned once the headers have come, whose `Content`
   streams from the server, where 1.2.5 read the whole file into memory first. Dispose it; `SaveToFileAsync` writes it
   to a file. Its `FileName` is cleaned to a name alone, and `Kind` says what it is, as the `WorkbookFileType` beside
   the stream of 1.2.x's `DownloadWorkbook` did: `twb` is `TableauFileKind.Workbook`, `twbx` is `PackagedWorkbook`.
-  1.2.x's `DownloadDataSource` returned the stream alone; `main`'s returned a `DatasourceFileType` beside it, whose
-  `hyper`, `tds` and `tdsx` are `Hyper`, `DataSource` and `PackagedDataSource`, and whose `tde`, an extract Tableau no
-  longer makes, is `Unknown`.
+  1.2.x's `DownloadDataSource` returned the stream alone;
+  [`main`'s returned a `DatasourceFileType`](#six-methods-whose-signature-changed) beside it, whose `hyper`, `tds` and
+  `tdsx` are `Hyper`, `DataSource` and `PackagedDataSource`, and whose `tde`, an extract Tableau no longer makes, is
+  `Unknown`.
 
 | 1.2.5 | 2.0 | How to move over |
 |---|---|---|

@@ -7,9 +7,9 @@ namespace Tableau.Api.Pipeline;
 /// <summary>
 /// The end of the chain for a client over a caller's HttpClient: each attempt goes out through that HttpClient, which
 /// the chain never disposes. An HttpClient refuses to send one request twice, so each attempt sends a copy: the same
-/// method, address, version, headers and body. Not its options, which hold the client's resilience context: a resilience
-/// handler in the caller's HttpClient would take it for its own and point it at the copy, which the next attempt would
-/// then send.
+/// method, address, version, headers and body. Not its options, which hold only the client's own descriptor of the call:
+/// the caller's handlers have no use for it, and a copy that carries nothing of the client's leaves them nothing to
+/// change.
 /// </summary>
 internal sealed class CallerClientHandler(HttpClient httpClient) : HttpMessageHandler
 {

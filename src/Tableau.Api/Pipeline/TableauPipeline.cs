@@ -197,8 +197,8 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
     }
 
     // What the caller receives for a failure: the caller's cancellation as itself; the attempt timeout, the transfer
-    // timeout or the HttpClient's own as Timeout; a failed connection, or a handler's own exception or cancellation, as
-    // Http; the pipeline's own exceptions as they are; each logged at Debug.
+    // timeout or a caller's HttpClient's own as Timeout; a failed connection, or a handler's own exception, timeout or
+    // cancellation, as Http; the pipeline's own exceptions as they are; each logged at Debug.
     private Exception Failure(Endpoint endpoint, string path, Exception exception, CancellationTokenSource? transfer,
         CancellationToken cancellationToken)
     {
@@ -216,8 +216,9 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
                 return Failed(endpoint, path, new TableauException(TableauErrorKind.Timeout,
                     $"{endpoint.Name} ({endpoint.Method} {path}) took longer than its TransferTimeout allows.", exception)
                 { Method = endpoint.Method, RequestPath = path });
-            case OperationCanceledException { InnerException: TimeoutException }:
-                // How an HttpClient reports its own Timeout: a caller's, as the library's are infinite.
+            case OperationCanceledException { InnerException: TimeoutException } when http is not HttpClient:
+                // How an HttpClient reports its own Timeout. Only a caller's HttpClient has one, sent through by an invoker;
+                // the library's own are infinite, so under DI or Create this is a handler's own, which is Http below.
                 return Failed(endpoint, path, new TableauException(TableauErrorKind.Timeout,
                     $"{endpoint.Name} ({endpoint.Method} {path}) took longer than the HttpClient's Timeout allows.", exception)
                 { Method = endpoint.Method, RequestPath = path });
@@ -235,6 +236,7 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
                 return exception;
         }
     }
+
     private async Task<HttpResponseMessage> SendFollowingRedirectsAsync(Endpoint endpoint, Uri uri, string path, byte[]? body,
         string? token, CancellationToken cancellationToken)
     {

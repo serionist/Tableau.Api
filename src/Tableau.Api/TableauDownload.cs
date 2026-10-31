@@ -134,6 +134,8 @@ public sealed class TableauDownload : IDisposable, IAsyncDisposable
         // Refused before anything is read, so the same download can still be saved elsewhere, or with overwrite.
         if (!overwrite && File.Exists(target))
             throw new IOException($"The file {target} exists already: pass overwrite: true to replace it.");
+        // A save cancelled before it starts claims nothing, so a later one may still run.
+        cancellationToken.ThrowIfCancellationRequested();
         // A full path with a file name has a folder. The temporary file is opened before the content is claimed, so a
         // save that can't open it, its folder missing, may be tried again; and before the try whose catch deletes it, so
         // only a file this call made is ever deleted.
@@ -162,6 +164,7 @@ public sealed class TableauDownload : IDisposable, IAsyncDisposable
             throw;
         }
     }
+
     /// <summary>Closes the content and the connection under it. Disposing twice does nothing more.</summary>
     public void Dispose()
     {

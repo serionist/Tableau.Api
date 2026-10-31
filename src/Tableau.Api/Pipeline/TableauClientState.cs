@@ -63,7 +63,10 @@ internal sealed class TableauClientState
     /// <summary>The clock the retries wait on and the attempt timeout runs on.</summary>
     public TimeProvider TimeProvider { get; }
 
-    /// <summary>The retries and the attempt timeout, which every request of the client goes through.</summary>
+    /// <summary>
+    /// The retries, which <see cref="TableauResilienceHandler"/> runs around each attempt of every request; the handler
+    /// times each attempt itself.
+    /// </summary>
     public ResiliencePipeline<HttpResponseMessage> Resilience { get; }
 
     /// <summary>Tableau Server or Tableau Cloud, never <see cref="TableauDeployment.Auto"/>.</summary>

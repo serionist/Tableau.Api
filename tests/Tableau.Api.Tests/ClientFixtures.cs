@@ -96,12 +96,21 @@ internal static class ClientFixtures
     public static Task<TableauDownload> DownloadAsync(TableauClient client, Endpoint endpoint, CancellationToken cancellationToken = default) =>
         client.Pipeline.DownloadAsync(endpoint, default, cancellationToken);
 
-    /// <summary>A loopback port nothing listens on: one a listener just gave back.</summary>
-    public static int ClosedPort()
+    /// <summary>
+    /// A loopback port nothing listens on, for the whole run: a socket bound to it and never listening holds it, so no
+    /// test's server can be given it, as a port a listener gave back could be, while a connection to it is refused.
+    /// </summary>
+    public static int ClosedPort() => ((System.Net.IPEndPoint)_closed.LocalEndPoint!).Port;
+
+    // Never disposed: the port stays held until the process ends.
+    private static readonly System.Net.Sockets.Socket _closed = BoundNotListening();
+
+    private static System.Net.Sockets.Socket BoundNotListening()
     {
-        using var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
-        listener.Start();
-        return ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+        var socket = new System.Net.Sockets.Socket(System.Net.Sockets.AddressFamily.InterNetwork, System.Net.Sockets.SocketType.Stream,
+            System.Net.Sockets.ProtocolType.Tcp);
+        socket.Bind(new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, 0));
+        return socket;
     }
 
     /// <summary>The request lines the server received.</summary>

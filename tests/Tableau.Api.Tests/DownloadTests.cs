@@ -292,6 +292,8 @@ public sealed class DownloadTests : IDisposable
         Assert.AreEqual(DownloadFiles.LongestName, Encoding.UTF8.GetByteCount(device!));
         Assert.AreEqual("a", spaces);
         Assert.AreEqual("_COM1.csv", DownloadFiles.Clean(" COM1.csv "));
+        // 255 bytes, so only the prefix makes it too long: the second cut drops the b, and the trim the space it leaves.
+        Assert.AreEqual("_NUL." + new string('a', 249), DownloadFiles.Clean("NUL." + new string('a', 249) + " b"));
         Assert.AreEqual("report", DownloadFiles.Clean("report .\u00A0"));
     }
 
@@ -357,6 +359,7 @@ public sealed class DownloadTests : IDisposable
 
         Assert.Contains("took longer than its TransferTimeout allows", thrown.Message);
     }
+
     // A caller's HttpClient may hand back content whose stream fails as an HttpRequestException, not an IOException.
     [TestMethod]
     public async Task AContentStreamThatFailsAsARequestBreaksOffTheDownload()
@@ -371,6 +374,19 @@ public sealed class DownloadTests : IDisposable
         Assert.Contains("broke off after 0 bytes of its file: Invented: the content failed.", thrown.Message);
         Assert.IsInstanceOfType<System.Net.Http.HttpRequestException>(thrown.InnerException);
     }
+
+    // A save cancelled before it starts claims nothing, so a later one still runs.
+    [TestMethod]
+    public async Task ASaveCancelledBeforeItStartsLeavesTheDownloadToSave()
+    {
+        var path = Path.Combine(Folder(), "saved.twbx");
+        await using var download = new TableauDownload(new MemoryStream(Pattern(64)), "a.twbx");
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => download.SaveToFileAsync(path, cancellationToken: new CancellationToken(true)));
+        await download.SaveToFileAsync(path, cancellationToken: TestContext.CancellationToken);
+
+        CollectionAssert.AreEqual(Pattern(64), await File.ReadAllBytesAsync(path, TestContext.CancellationToken));
+    }
     [TestMethod]
     public async Task ACallThatIsNoDownloadIsRefusedBeforeSending()
     {
@@ -383,6 +399,7 @@ public sealed class DownloadTests : IDisposable
         Assert.Contains("is no download", thrown.Message);
         Assert.IsEmpty(server.Requests);
     }
+
     [TestMethod]
     public async Task ADownloadSavesToAFile()
     {
@@ -619,6 +636,7 @@ public sealed class DownloadTests : IDisposable
 
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
+
     /// <summary>A new, empty folder of this test's own.</summary>
     private string Folder()
     {

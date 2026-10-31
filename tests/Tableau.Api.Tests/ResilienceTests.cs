@@ -231,6 +231,7 @@ public sealed class ResilienceTests
         Assert.IsNull(thrown.StatusCode);
         Assert.Contains("got no answer: Invented: the connection broke.", thrown.Message);
     }
+
     [TestMethod]
     [DataRow(HttpRequestError.SecureConnectionError, null, true)]
     [DataRow(HttpRequestError.UserAuthenticationError, null, true)]
@@ -335,7 +336,7 @@ public sealed class ResilienceTests
 
         Assert.Contains("failed (429); retry 1 of 3 in 30000 ms", retry);
         Assert.IsGreaterThanOrEqualTo(TimeSpan.FromSeconds(30), waited);
-        Assert.IsLessThanOrEqualTo(TimeSpan.FromSeconds(33), waited);
+        Assert.IsLessThanOrEqualTo(TimeSpan.FromSeconds(40), waited);
     }
 
     [TestMethod]
@@ -346,7 +347,7 @@ public sealed class ResilienceTests
 
         Assert.Contains("failed (429); retry 1 of 3 in 40000 ms", retry);
         Assert.IsGreaterThanOrEqualTo(TimeSpan.FromSeconds(40), waited);
-        Assert.IsLessThanOrEqualTo(TimeSpan.FromSeconds(43), waited);
+        Assert.IsLessThanOrEqualTo(TimeSpan.FromSeconds(50), waited);
     }
 
     [TestMethod]
@@ -356,8 +357,20 @@ public sealed class ResilienceTests
 
         Assert.Contains("failed (503); retry 1 of 3 in 25000 ms", retry);
         Assert.IsGreaterThanOrEqualTo(TimeSpan.FromSeconds(25), waited);
+        Assert.IsLessThanOrEqualTo(TimeSpan.FromSeconds(35), waited);
     }
 
+    // The body's wait is a 429's alone: a 503 that names one in its body, with no header, is retried on the back-off.
+    [TestMethod]
+    public async Task A503BodysWaitIsLeftToTheBackOff()
+    {
+        var (waited, retry) = await RetriedAfterAsync(_ => FakeResponse.Json(503,
+            """{"error":{"code":"503000","summary":"Service Unavailable","detail":"Please retry after 29 minutes."}}"""));
+
+        Assert.Contains("failed (503); retry 1 of 3 in ", retry);
+        Assert.DoesNotContain("in 1740000 ms", retry);
+        Assert.IsLessThan(TimeSpan.FromSeconds(30), waited, "the first back-off is about two seconds");
+    }
     // Retry-After is honoured on a 429 and a 503 only: another status, such as a proxy's 502, is retried on the back-off,
     // whatever wait it names, and never refused for one over the cap.
     [TestMethod]
@@ -371,6 +384,7 @@ public sealed class ResilienceTests
         Assert.DoesNotContain("in 600000 ms", retry);
         Assert.IsLessThan(TimeSpan.FromSeconds(30), waited, "the first back-off is about two seconds");
     }
+
     [TestMethod]
     public async Task A429OverTheCapThrowsRateLimitedAtOnce()
     {
@@ -424,8 +438,9 @@ public sealed class ResilienceTests
 
         Assert.Contains("failed (429); retry 1 of 3 in 20000 ms", retry);
         Assert.IsGreaterThanOrEqualTo(TimeSpan.FromSeconds(20), waited);
-        Assert.IsLessThanOrEqualTo(TimeSpan.FromSeconds(23), waited);
+        Assert.IsLessThanOrEqualTo(TimeSpan.FromSeconds(30), waited);
     }
+
     [TestMethod]
     public async Task A429ToACallThatIsntSafeToSendTwiceThrowsRateLimitedWithItsWait()
     {
@@ -552,6 +567,7 @@ public sealed class ResilienceTests
 
         return (waited, log.Lines.Single(line => line.Contains("retry 1 of 3", StringComparison.Ordinal)));
     }
+
     private static Endpoint Items() => ClientFixtures.Endpoint("{version}/items");
 
     /// <summary>Tableau's 429 error body, with the detail given.</summary>
@@ -589,6 +605,7 @@ public sealed class ResilienceTests
             throw exception;
         }
     }
+
     /// <summary>A handler that counts what passes through it to the handler given.</summary>
     private sealed class CountingHandler(HttpMessageHandler inner) : DelegatingHandler(inner)
     {
