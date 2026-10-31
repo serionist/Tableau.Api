@@ -61,6 +61,24 @@ and [the migration guide](docs/migration-2.0.md) lists every change from 1.2.5 a
     `HttpClient` with `ConfigureHttpClientDefaults` don't reach the client's.
   - **Logging** at Debug, through `ILogger`, with no token, password, body or query value; warnings only for an option
     that weakens the client.
+  - **Retries:** a call that is safe to send twice, such as a read, is sent again after a 408, a 429, a 5xx, a
+    connection that failed or an attempt longer than `RequestTimeout`: `MaxRetries` times, three by default, 0 for
+    none, with jittered back-off. A publish, a create or a run is sent once. After a 429 or a 503 the client waits as
+    the server asks, by `Retry-After` or the wait a 429's body names, up to `MaxRetryAfter`, two minutes by default; a
+    longer wait fails at once, a 429 as `RateLimited` and a 503 as `Http`, each with `RetryAfter`. The same retries
+    run from DI, from `TableauClient.Create` and over an `HttpClient` of your own, on Polly.Core from a handler of the
+    library's own; no Polly type is in the API.
+  - **Timeouts:** `RequestTimeout` limits each attempt of a call, its answer read whole within it;
+    `TransferTimeout` limits a download or an upload as a whole, reading the file included.
+  - **The builder** `AddTableauClient` returns has `ConfigurePrimaryHandler`, for a proxy, a client certificate or a
+    private certificate authority, after which the client's rules are set again (no redirects, no cookies, the
+    certificate check); and `AddHttpMessageHandler`, for handlers of your own, outside the retries. A second
+    `AddTableauClient` for a name keeps what the first added.
+  - **`TableauDownload`,** for the downloads that come with their areas: the file streams from the server as it is
+    read, under the call's token and `TransferTimeout`; `FileName` is cleaned to a name alone, read from Tableau's
+    `Content-Disposition`; `ContentType`, `Length` and `Kind` (`TableauFileKind`: a workbook, a data source, an
+    extract, a flow, packaged or not, a PDF, a PNG, a CSV, a zip) say what it is; `SaveToFileAsync` writes it, leaving
+    no part of a file if it fails and replacing a file only when asked.
   - The client and its sub-clients are classes with virtual members and protected constructors, for mocks.
 - **The library builds with the trim and native AOT analyzers on** (`IsAotCompatible`), and the models pass them: they
   read and write JSON through System.Text.Json's source generator, with no reflection, and CI runs them in a native
@@ -83,7 +101,8 @@ and [the migration guide](docs/migration-2.0.md) lists every change from 1.2.5 a
 - **`TableauApiClient.ServerInfo` is gone:** use `TableauClient.Server.GetInfoAsync`, which returns the 2.0 model
   `ServerInfo` (the migration guide).
 - **The package depends on Microsoft.Extensions' abstractions,** 10.0.14: Logging.Abstractions, Options,
-  DependencyInjection.Abstractions and Http, in place of Microsoft.Extensions.Logging 2.2.0.
+  DependencyInjection.Abstractions and Http, in place of Microsoft.Extensions.Logging 2.2.0; and on Polly.Core 8.9.0,
+  for the retries, which brings no other package.
 - **The licence is MIT.**
 - **The package's metadata:** a description that says what it is and ends "Not affiliated with or endorsed by
   Tableau or Salesforce."; the README packed into it; the project and repository links on GitHub; symbols as a

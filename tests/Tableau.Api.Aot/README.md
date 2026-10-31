@@ -10,9 +10,10 @@ CI (`ci.yml`, the Native AOT job) does two things:
    compiler analyses every member of each. Any trim or AOT warning fails the publish.
 2. **Runs the binary,** which exits with 1 on the first failure (`Program.cs`): every fixture of the offline tests,
    read and written back through the generated models, and the shapes Tableau's JSON takes; the client's calls over a
-   handler that answers from the fixtures, its version negotiated and an error read; and the client from DI, its
-   options bound from configuration and bad ones refused at start-up. Reflection-based JSON is off in the binary, so
-   a converter that reached for it fails there.
+   handler that answers from the fixtures, its version negotiated, an error read, a call retried after a 503 and a
+   download saved to a file; and the client from DI, its options bound from configuration, its primary handler
+   configured, a handler of the caller's in its chain, and bad options refused at start-up. Reflection-based JSON is off
+   in the binary, so a converter that reached for it fails there.
 
 **What it keeps until the old client goes:** 2.0 shares the root namespace `Tableau.Api` with the old client, whose
 `XmlSerializer` and Newtonsoft.Json code can never pass, so `roots.xml` lists only 2.0's types: the namespace

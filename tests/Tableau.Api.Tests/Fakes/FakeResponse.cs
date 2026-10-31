@@ -1,5 +1,9 @@
+using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace Tableau.Api.Tests.Fakes;
 
@@ -7,13 +11,36 @@ namespace Tableau.Api.Tests.Fakes;
 internal sealed class FakeResponse
 {
     private FakeResponse(int status, string? contentType, byte[] body,
-        IReadOnlyList<KeyValuePair<string, string>>? headers = null)
+        IReadOnlyList<KeyValuePair<string, string>>? headers = null, Func<Stream, Task>? writer = null, long? length = null)
     {
         Status = status;
         ContentType = contentType;
         Body = body;
         Headers = headers ?? [];
+        Writer = writer;
+        StreamedLength = length;
     }
+
+    /// <summary>
+    /// What writes a streamed body, after the head, instead of <see cref="Body"/>: it may wait between writes, as a large
+    /// file on a slow line does.
+    /// </summary>
+    public Func<Stream, Task>? Writer { get; }
+
+    /// <summary>A streamed body's length, sent as Content-Length; null sends it chunked, with no length.</summary>
+    public long? StreamedLength { get; }
+
+    /// <summary>
+    /// A body <paramref name="writer"/> writes as it goes, of the length given or, with none, chunked; with the headers
+    /// given, such as a Content-Disposition.
+    /// </summary>
+    public static FakeResponse Streamed(int status, string? contentType, long? length, Func<Stream, Task> writer,
+        params (string Name, string Value)[] headers) =>
+        new(status, contentType, [], [.. headers.Select(header => new KeyValuePair<string, string>(header.Name, header.Value))], writer, length);
+
+    /// <summary>A file of bytes, with the Content-Type and the headers given; a null Content-Type sends none.</summary>
+    public static FakeResponse File(byte[] body, string? contentType, params (string Name, string Value)[] headers) =>
+        new(200, contentType, body, [.. headers.Select(header => new KeyValuePair<string, string>(header.Name, header.Value))]);
 
     public int Status { get; }
 
@@ -82,7 +109,8 @@ internal sealed class FakeResponse
     public static FakeResponse Fixture(int status, string file) => Json(status, ModelFixtures.Text(file));
 
     /// <summary>This response with one more header line.</summary>
-    public FakeResponse WithHeader(string name, string value) => new(Status, ContentType, Body, [.. Headers, new(name, value)]);
+    public FakeResponse WithHeader(string name, string value) =>
+        new(Status, ContentType, Body, [.. Headers, new(name, value)], Writer, StreamedLength);
 
     /// <summary>What a request with no route gets: a 404 that names it, so the failing test says which.</summary>
     public static FakeResponse NoRoute(RecordedRequest request) =>

@@ -264,6 +264,7 @@ public sealed class ErrorTests
             ServerUrl = new Uri($"http://127.0.0.1:{ClientFixtures.ClosedPort()}/"),
             AllowInsecureHttp = true,
             ApiVersion = new Version(3, 25),
+            MaxRetries = 0,
         });
 
         var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.Http, () => client.Server.GetInfoAsync());

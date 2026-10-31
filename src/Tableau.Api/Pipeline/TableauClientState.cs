@@ -1,8 +1,10 @@
 using System;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Polly;
 using Tableau.Api.Rest.Models;
 
 namespace Tableau.Api.Pipeline;
@@ -20,7 +22,12 @@ internal sealed class TableauClientState
     private string? _productVersion;
     private int _warnedBelowFloor;
 
-    public TableauClientState(string name, TableauClientOptions options, ILoggerFactory? loggerFactory)
+    /// <param name="name">The client's name, <c>""</c> for the default client.</param>
+    /// <param name="options">The client's options, made read-only here.</param>
+    /// <param name="loggerFactory">Where the client logs, or null for nowhere.</param>
+    /// <param name="timeProvider">The clock the retries wait on, the system's when null; a container's own, under DI.</param>
+    public TableauClientState(string name, TableauClientOptions options, ILoggerFactory? loggerFactory,
+        TimeProvider? timeProvider = null)
     {
         options.MakeReadOnly();
         Name = name;
@@ -28,6 +35,8 @@ internal sealed class TableauClientState
         Options = options;
         ServerUrl = options.ServerUrl ?? throw new ArgumentException("ServerUrl is not set.", nameof(options));
         Logger = (loggerFactory ?? NullLoggerFactory.Instance).CreateLogger<TableauClient>();
+        TimeProvider = timeProvider ?? TimeProvider.System;
+        Resilience = TableauResilience.Build(this);
         Deployment = options.Deployment switch
         {
             TableauDeployment.Auto => IsTableauCloud(ServerUrl) ? TableauDeployment.Cloud : TableauDeployment.Server,
@@ -50,6 +59,15 @@ internal sealed class TableauClientState
     public Uri ServerUrl { get; }
 
     public ILogger Logger { get; }
+
+    /// <summary>The clock the retries wait on and the attempt timeout runs on.</summary>
+    public TimeProvider TimeProvider { get; }
+
+    /// <summary>
+    /// The retries, which <see cref="TableauResilienceHandler"/> runs around each attempt of every request; the handler
+    /// times each attempt itself.
+    /// </summary>
+    public ResiliencePipeline<HttpResponseMessage> Resilience { get; }
 
     /// <summary>Tableau Server or Tableau Cloud, never <see cref="TableauDeployment.Auto"/>.</summary>
     public TableauDeployment Deployment { get; }
@@ -148,6 +166,7 @@ internal sealed class TableauClientState
         TableauLog.Failed(Logger, DisplayName, endpoint.Method, endpoint.Template, exception.Kind, exception);
         return exception;
     }
+
     private Version Supported(Version version, string? productVersion, Endpoint endpoint)
     {
         if (version >= ApiVersions.Floor) return version;

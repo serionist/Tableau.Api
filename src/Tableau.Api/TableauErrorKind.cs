@@ -4,8 +4,9 @@ namespace Tableau.Api;
 public enum TableauErrorKind
 {
     /// <summary>
-    /// Tableau answered with an error the other kinds don't name, such as 400 or 403, or the request never got an answer:
-    /// the connection failed, or the server's certificate was refused (<see cref="System.Exception.InnerException"/>).
+    /// Tableau answered with an error the other kinds don't name, such as 400 or 403, or a 5xx once the retries ran out, or
+    /// the request never got a whole answer: the connection failed or broke off, the server's certificate was refused, or
+    /// a handler of the caller's threw (<see cref="System.Exception.InnerException"/>).
     /// </summary>
     Http,
 
@@ -15,12 +16,17 @@ public enum TableauErrorKind
     /// <summary>Tableau answered 404: the item, the site, or the endpoint at this API version doesn't exist.</summary>
     NotFound,
 
-    /// <summary>Tableau answered 429: too many calls; <see cref="TableauException.RetryAfter"/> says when to try again.</summary>
+    /// <summary>
+    /// Tableau answered 429, too many calls, and the client didn't wait it out: the call isn't safe to send twice, its
+    /// retries ran out, or the wait asked for is longer than <see cref="TableauClientOptions.MaxRetryAfter"/>.
+    /// <see cref="TableauException.RetryAfter"/> says when to try again.
+    /// </summary>
     RateLimited,
 
     /// <summary>
-    /// The call took longer than <see cref="TableauClientOptions.RequestTimeout"/> or
-    /// <see cref="TableauClientOptions.TransferTimeout"/> allow. The caller's own cancellation is never this: it stays
+    /// The call's last attempt took longer than <see cref="TableauClientOptions.RequestTimeout"/> allows, or a download or
+    /// an upload longer than <see cref="TableauClientOptions.TransferTimeout"/>, or a caller's HttpClient's own
+    /// <see cref="System.Net.Http.HttpClient.Timeout"/> ran out. The caller's own cancellation is never this: it stays
     /// <see cref="System.OperationCanceledException"/>.
     /// </summary>
     Timeout,

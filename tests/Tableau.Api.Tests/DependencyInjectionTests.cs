@@ -213,6 +213,8 @@ public sealed class DependencyInjectionTests
             ["Tableau:Prod:AllowUnsupportedServerVersion"] = "true",
             ["Tableau:Prod:RequestTimeout"] = "00:00:45",
             ["Tableau:Prod:TransferTimeout"] = "01:00:00",
+            ["Tableau:Prod:MaxRetries"] = "5",
+            ["Tableau:Prod:MaxRetryAfter"] = "00:10:00",
         }).Build();
         var services = Services();
         services.AddTableauClient("prod", options => configuration.GetSection("Tableau:Prod").Bind(options));
@@ -228,6 +230,8 @@ public sealed class DependencyInjectionTests
         Assert.IsTrue(options.AllowUnsupportedServerVersion);
         Assert.AreEqual(TimeSpan.FromSeconds(45), options.RequestTimeout);
         Assert.AreEqual(TimeSpan.FromHours(1), options.TransferTimeout);
+        Assert.AreEqual(5, options.MaxRetries);
+        Assert.AreEqual(TimeSpan.FromMinutes(10), options.MaxRetryAfter);
         Assert.AreEqual("GET /tableau/api/3.27/serverinfo HTTP/1.1", server.Requests.Single().RequestLine);
         Assert.ThrowsExactly<InvalidOperationException>(() => options.Site = "other");
     }
@@ -320,5 +324,7 @@ public sealed class DependencyInjectionTests
         to.DangerousAcceptAnyServerCertificate = from.DangerousAcceptAnyServerCertificate;
         to.RequestTimeout = from.RequestTimeout;
         to.TransferTimeout = from.TransferTimeout;
+        to.MaxRetries = from.MaxRetries;
+        to.MaxRetryAfter = from.MaxRetryAfter;
     }
 }

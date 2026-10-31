@@ -69,7 +69,10 @@ public sealed class TableauException(TableauErrorKind kind, string message, Exce
     /// </summary>
     public string? RequestId { get; init; }
 
-    /// <summary>How long Tableau asked the caller to wait before trying again, from its <c>Retry-After</c> header.</summary>
+    /// <summary>
+    /// How long Tableau asked the caller to wait before trying again: its <c>Retry-After</c> header, as a delay or a date, or
+    /// else the wait a 429's body names, such as "Please retry after 29 minutes". Null when the answer named none.
+    /// </summary>
     public TimeSpan? RetryAfter { get; init; }
 
     /// <summary>The start of the answer's body, at most 4 KB of it, for an error or an answer the client couldn't read.</summary>

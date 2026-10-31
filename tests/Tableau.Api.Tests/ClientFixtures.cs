@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Time.Testing;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Tableau.Api.Pipeline;
 using Tableau.Api.Rest.Models;
@@ -23,23 +24,55 @@ internal static class ClientFixtures
     public const string NegotiationPath = "/api/3.23/serverinfo";
 
     /// <summary>
-    /// Options for the fake server: its plain http allowed, the version pinned unless a test passes null, and a short
-    /// timeout, so a request nobody answers fails fast.
+    /// Options for the fake server: its plain http allowed, the version pinned unless a test passes null, a short
+    /// timeout, so a request nobody answers fails fast, and no retries, so a test of another behaviour sends each call
+    /// once and waits for no back-off. The retries' own tests set <see cref="TableauClientOptions.MaxRetries"/>.
     /// </summary>
-    public static TableauClientOptions Options(FakeTableauServer server, string? version = Version) => new()
+    public static TableauClientOptions Options(FakeTableauServer server, string? version = Version, int maxRetries = 0) => new()
     {
         ServerUrl = server.BaseUrl,
         AllowInsecureHttp = server.BaseUrl.Scheme == Uri.UriSchemeHttp,
         ApiVersion = version is null ? null : System.Version.Parse(version),
         RequestTimeout = TimeSpan.FromSeconds(30),
+        MaxRetries = maxRetries,
     };
 
     /// <summary>A client of its own over the fake server, logging to <see cref="Fixtures.Log"/>.</summary>
     public static TableauClient Client(FakeTableauServer server, string? version = Version) =>
         TableauClient.Create(Options(server, version), Fixtures.Log.Factory);
 
-    /// <summary>A client from options, logging to <see cref="Fixtures.Log"/>.</summary>
-    public static TableauClient Client(TableauClientOptions options) => TableauClient.Create(options, Fixtures.Log.Factory);
+    /// <summary>A client from options, logging to <see cref="Fixtures.Log"/>, its retries waiting on the clock given.</summary>
+    public static TableauClient Client(TableauClientOptions options, TimeProvider? time = null) =>
+        TableauClient.CreateWithClock(options, Fixtures.Log.Factory, time);
+
+    /// <summary>
+    /// Moves a fake clock on a step at a time, giving the client a moment after each, until <paramref name="done"/> holds,
+    /// and returns how far the clock moved. A wait of the client's ends within a step of the time it asked for; a step
+    /// shorter than the attempt timeout leaves an attempt that started meanwhile alone.
+    /// </summary>
+    public static async Task<TimeSpan> AdvanceUntilAsync(FakeTimeProvider time, Func<bool> done, TimeSpan step, TimeSpan most)
+    {
+        var moved = TimeSpan.Zero;
+        while (!done())
+        {
+            if (moved >= most) throw new AssertFailedException($"Nothing happened in {most} of the fake clock.");
+            time.Advance(step);
+            moved += step;
+            await Task.Delay(20);
+        }
+        return moved;
+    }
+
+    /// <summary>Waits, in real time, until <paramref name="done"/> holds, or fails after ten seconds.</summary>
+    public static async Task WaitUntilAsync(Func<bool> done)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (!done())
+        {
+            if (DateTime.UtcNow > deadline) throw new AssertFailedException("Nothing happened in ten seconds.");
+            await Task.Delay(10);
+        }
+    }
 
     /// <summary>Server Info's answer, with the REST API version given.</summary>
     public static FakeResponse ServerInfo(string restApiVersion = Version, string productVersion = "2025.1.0") =>
@@ -56,12 +89,28 @@ internal static class ClientFixtures
         CancellationToken cancellationToken = default) =>
         client.Pipeline.SendAsync(endpoint, request, static body => body.ServerInfo, "serverInfo", cancellationToken);
 
-    /// <summary>A loopback port nothing listens on: one a listener just gave back.</summary>
-    public static int ClosedPort()
+    /// <summary>A descriptor for a download of the pipeline's tests: a GET, safe to retry, that answers with a file.</summary>
+    public static Endpoint Download(string template) => Endpoint(template, transfer: TransferKind.Download);
+
+    /// <summary>Sends a test download.</summary>
+    public static Task<TableauDownload> DownloadAsync(TableauClient client, Endpoint endpoint, CancellationToken cancellationToken = default) =>
+        client.Pipeline.DownloadAsync(endpoint, default, cancellationToken);
+
+    /// <summary>
+    /// A loopback port nothing listens on, for the whole run: a socket bound to it and never listening holds it, so no
+    /// test's server can be given it, as a port a listener gave back could be, while a connection to it is refused.
+    /// </summary>
+    public static int ClosedPort() => ((System.Net.IPEndPoint)_closed.LocalEndPoint!).Port;
+
+    // Never disposed: the port stays held until the process ends.
+    private static readonly System.Net.Sockets.Socket _closed = BoundNotListening();
+
+    private static System.Net.Sockets.Socket BoundNotListening()
     {
-        using var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
-        listener.Start();
-        return ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+        var socket = new System.Net.Sockets.Socket(System.Net.Sockets.AddressFamily.InterNetwork, System.Net.Sockets.SocketType.Stream,
+            System.Net.Sockets.ProtocolType.Tcp);
+        socket.Bind(new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, 0));
+        return socket;
     }
 
     /// <summary>The request lines the server received.</summary>

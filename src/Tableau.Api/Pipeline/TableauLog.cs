@@ -44,6 +44,11 @@ internal static partial class TableauLog
         Message = "Tableau client {Client}: AllowInsecureHttp is set, so passwords and tokens go to {Origin} unencrypted")]
     public static partial void InsecureHttp(ILogger logger, string client, Uri origin);
 
+    [LoggerMessage(EventId = 10, Level = LogLevel.Debug,
+        Message = "Tableau client {Client}: {Method} {RequestPath} failed ({Reason}); retry {Retry} of {MaxRetries} in {DelayMilliseconds:F0} ms")]
+    public static partial void Retrying(ILogger logger, string client, HttpMethod method, string requestPath, string reason, int retry,
+        int maxRetries, double delayMilliseconds);
+
     [LoggerMessage(EventId = 9, Level = LogLevel.Warning,
         Message = "Tableau client {Client}: REST API {Version} is below {Floor}, the oldest this client supports; "
             + "AllowUnsupportedServerVersion is set, so it is used, untested")]
