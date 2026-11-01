@@ -9,8 +9,9 @@ namespace Tableau.Api.Tests;
 
 /// <summary>
 /// <see cref="TagsClient"/>: each kind of content's add and delete from one table, with the path, the body and the
-/// version the reference gives, a tag escaped as one path segment; the batch calls' bodies against the reference's, Batch
-/// Delete Tags a DELETE with that body; and a kind a call doesn't take refused before sending.
+/// version the reference gives, a tag escaped as one path segment; the batch calls' bodies against the reference's, each
+/// content with its type as Tableau Server 2025.1 asked, Batch Delete Tags a DELETE with that body; and a kind a call
+/// doesn't take refused before sending.
 /// </summary>
 [TestClass]
 public sealed class TagsTests
@@ -92,7 +93,7 @@ public sealed class TagsTests
     }
 
     [TestMethod]
-    public async Task BatchAddPutsTheReferencesBody()
+    public async Task BatchAddPutsEachContentByItsTypeAndItsId()
     {
         using var server = AreaFixtures.Server();
         server.Map("PUT", $"{Site}/tags:batchCreate", FakeResponse.Json(200, "{}"));
@@ -105,7 +106,7 @@ public sealed class TagsTests
     }
 
     [TestMethod]
-    public async Task BatchDeleteIsADeleteWithTheReferencesBody()
+    public async Task BatchDeleteIsADeleteWithTheBatchAddsBody()
     {
         using var server = AreaFixtures.Server();
         server.Map("DELETE", $"{Site}/tags:BatchDelete", FakeResponse.Empty(204));
@@ -118,7 +119,7 @@ public sealed class TagsTests
         await PermissionsTests.AssertGatedAsync("3.9", "Batch Delete Tags", client => client.Tags.DeleteBatchAsync(["PII"], _batch));
     }
 
-    // The one call after the sign-in: its line, its token, and the reference's batch body, its members in any order.
+    // The one call after the sign-in: its line, its token, and the batch body, its members in any order.
     private static RecordedRequest AssertBatch(FakeTableauServer server, string line)
     {
         var call = AreaFixtures.Calls(server).Single();
@@ -181,12 +182,15 @@ public sealed class TagsTests
     {
         using var server = AreaFixtures.Server();
         server.Map("PUT", $"{Site}/workbooks/{AreaFixtures.ItemId}/tags", FakeResponse.Json(200, """{"tags":{}}"""));
+        server.Map("PUT", $"{Site}/views/{AreaFixtures.ItemId}/tags", FakeResponse.Json(200, "{}"));
         await using var client = AreaFixtures.Client(server);
 
         var tags = await client.Tags.AddAsync(TableauContent.Workbook(AreaFixtures.ItemId), ["Finance"]);
+        var none = await client.Tags.AddAsync(TableauContent.View(AreaFixtures.ItemId), ["Finance"]);
 
         Assert.IsNotNull(tags);
         Assert.IsEmpty(tags);
+        Assert.IsEmpty(none);
     }
 
     private static TableauContent Content(TableauContentKind kind) => kind switch

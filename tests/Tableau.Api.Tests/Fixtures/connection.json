@@ -1,0 +1,11 @@
+{
+  "connection": {
+    "id": "3c4d5e6f-0001-4a7b-8c9d-0e1f2a3b4c5d",
+    "type": "sqlserver",
+    "serverAddress": "sql2.invented.example",
+    "serverPort": "1434",
+    "userName": "writer",
+    "queryTaggingEnabled": false,
+    "authenticationType": "auth-user-pass"
+  }
+}

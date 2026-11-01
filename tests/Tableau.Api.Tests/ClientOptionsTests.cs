@@ -192,9 +192,12 @@ public sealed class ClientOptionsTests
         foreach (var area in new Func<object>[]
                  {
                      () => bare.Sites, () => bare.Projects, () => bare.Users, () => bare.Groups, () => bare.Favorites, () => bare.Permissions,
-                     () => bare.Tags, () => bare.Metadata,
+                     () => bare.Tags, () => bare.Metadata, () => bare.Workbooks, () => bare.Views, () => bare.DataSources,
                  })
             Assert.ThrowsExactly<InvalidOperationException>(area);
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => new BareWorkbooks().GetAsync(Fixtures.SiteId));
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => new BareViews().DownloadImageAsync(Fixtures.SiteId));
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => new BareDataSources().DeleteAsync(Fixtures.SiteId));
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => new BareSites().GetAsync(Fixtures.SiteId));
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => new BareProjects().DeleteAsync(Fixtures.SiteId));
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => new BareUsers().GetAsync(Fixtures.UserId));
@@ -226,6 +229,12 @@ public sealed class ClientOptionsTests
     private sealed class BareTags : TagsClient;
 
     private sealed class BareMetadata : MetadataClient;
+
+    private sealed class BareWorkbooks : WorkbooksClient;
+
+    private sealed class BareViews : ViewsClient;
+
+    private sealed class BareDataSources : DataSourcesClient;
 
     private sealed class MockServerClient : ServerClient
     {

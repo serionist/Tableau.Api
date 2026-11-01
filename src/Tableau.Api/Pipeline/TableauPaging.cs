@@ -37,7 +37,13 @@ internal static class TableauPaging
     /// <param name="cancellationToken">The caller's token.</param>
     public static Task<Page<T>> PageAsync<T>(TableauPipeline pipeline, Endpoint endpoint, IReadOnlyList<string>? pathValues, int pageNumber,
         int pageSize, TableauFilter? filter, TableauSort? sort, TableauSort? stableSort, string resource,
-        Func<TsResponse, IReadOnlyList<T>?> select, CancellationToken cancellationToken)
+        Func<TsResponse, IReadOnlyList<T>?> select, CancellationToken cancellationToken) =>
+        PageAsync(pipeline, endpoint, pathValues, pageNumber, pageSize, filter, sort, stableSort, resource, select, null, cancellationToken);
+
+    /// <summary>The same, with the list's own query after the paging's, such as <c>ownedBy=true</c>; a null value is left out.</summary>
+    public static Task<Page<T>> PageAsync<T>(TableauPipeline pipeline, Endpoint endpoint, IReadOnlyList<string>? pathValues, int pageNumber,
+        int pageSize, TableauFilter? filter, TableauSort? sort, TableauSort? stableSort, string resource,
+        Func<TsResponse, IReadOnlyList<T>?> select, IReadOnlyList<KeyValuePair<string, string?>>? query, CancellationToken cancellationToken)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(pageNumber, 1);
         Check(pageSize, filter, sort, resource, OptionsParameter);
@@ -47,6 +53,7 @@ internal static class TableauPaging
             new("pageNumber", pageNumber.ToString(CultureInfo.InvariantCulture)),
             new("filter", filter?.ToString()),
             new("sort", order?.ToString()),
+            .. query ?? [],
         ]), pageNumber, pageSize, select, cancellationToken);
     }
 

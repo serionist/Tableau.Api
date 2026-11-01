@@ -15,8 +15,8 @@ namespace Tableau.Api.Tests;
 [TestClass]
 public sealed class CertificateTests
 {
-    private const string DataSourcesPath = "/api/" + Fixtures.ApiVersion + "/sites/" + Fixtures.SiteId + "/datasources";
-    private const string NoDataSources = "<pagination pageNumber=\"1\" pageSize=\"100\" totalAvailable=\"0\"/><datasources/>";
+    private const string SubscriptionsPath = "/api/" + Fixtures.ApiVersion + "/sites/" + Fixtures.SiteId + "/subscriptions";
+    private const string NoSubscriptions = "<pagination pageNumber=\"1\" pageSize=\"100\" totalAvailable=\"0\"/><subscriptions/>";
 
     [TestMethod]
     public async Task VizportalRefusesAnUntrustedCertificate()
@@ -56,9 +56,9 @@ public sealed class CertificateTests
     {
         using var server = FakeTableauServer.StartTls();
         var client = Fixtures.Client(server);
-        server.Map("GET", DataSourcesPath, FakeResponse.Xml(200, NoDataSources));
+        server.Map("GET", SubscriptionsPath, FakeResponse.Xml(200, NoSubscriptions));
 
-        var thrown = await Assert.ThrowsAsync<HttpRequestException>(() => client.QueryDataSources(Fixtures.Session()));
+        var thrown = await Assert.ThrowsAsync<HttpRequestException>(() => client.QuerySubscriptions(Fixtures.Session()));
 
         Assert.IsInstanceOfType<AuthenticationException>(thrown.InnerException);
         Assert.IsEmpty(server.Requests);
@@ -70,9 +70,9 @@ public sealed class CertificateTests
         using var server = FakeTableauServer.StartTls();
         var client = Fixtures.Client(server);
         client.IgnoreSSLErrors = true;
-        server.Map("GET", DataSourcesPath, FakeResponse.Xml(200, NoDataSources));
+        server.Map("GET", SubscriptionsPath, FakeResponse.Xml(200, NoSubscriptions));
 
-        var (pagination, _) = await client.QueryDataSources(Fixtures.Session());
+        var (pagination, _) = await client.QuerySubscriptions(Fixtures.Session());
 
         Assert.AreEqual("0", pagination.totalAvailable);
         Assert.AreEqual(Uri.UriSchemeHttps, server.BaseUrl.Scheme);

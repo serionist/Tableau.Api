@@ -161,6 +161,17 @@ public sealed class PagingTests
         server.Map("GET", AreaFixtures.SitePath + "/projects", FakeResponse.Fixture(200, "projects-page.json"));
         server.Map("GET", AreaFixtures.SitePath + "/groups", FakeResponse.Fixture(200, "groups-page.json"));
         server.Map("GET", AreaFixtures.SitesPath, FakeResponse.Fixture(200, "sites-page.json"));
+        var workbook = $"{AreaFixtures.SitePath}/workbooks/{AreaFixtures.ItemId}";
+        var dataSource = $"{AreaFixtures.SitePath}/datasources/{AreaFixtures.ItemId}";
+        server.Map("GET", AreaFixtures.SitePath + "/workbooks", FakeResponse.Fixture(200, "workbooks-page.json"));
+        server.Map("GET", $"{Users}/{Fixtures.UserId}/workbooks", FakeResponse.Fixture(200, "workbooks-page.json"));
+        server.Map("GET", workbook + "/connections", FakeResponse.Fixture(200, "connections.json"));
+        server.Map("GET", workbook + "/revisions", FakeResponse.Fixture(200, "revisions-page.json"));
+        server.Map("GET", workbook + "/views", FakeResponse.Fixture(200, "views-page.json"));
+        server.Map("GET", AreaFixtures.SitePath + "/views", FakeResponse.Fixture(200, "views-page.json"));
+        server.Map("GET", AreaFixtures.SitePath + "/datasources", FakeResponse.Fixture(200, "datasources-page.json"));
+        server.Map("GET", dataSource + "/connections", FakeResponse.Fixture(200, "connections.json"));
+        server.Map("GET", dataSource + "/revisions", FakeResponse.Fixture(200, "revisions-page.json"));
         await using var client = AreaFixtures.Client(server);
 
         var first = new object?[]
@@ -172,6 +183,15 @@ public sealed class PagingTests
             await FirstAsync(client.Projects.ListAsync(new ProjectListOptions { PageSize = 3 })),
             await FirstAsync(client.Groups.ListAsync()),
             await FirstAsync(client.Sites.ListAsync()),
+            await FirstAsync(client.Workbooks.ListAsync(new WorkbookListOptions { PageSize = 2 })),
+            await FirstAsync(client.Workbooks.ListForUserAsync(Fixtures.UserId)),
+            await FirstAsync(client.Workbooks.ListConnectionsAsync(AreaFixtures.ItemId)),
+            await FirstAsync(client.Workbooks.ListRevisionsAsync(AreaFixtures.ItemId, new RevisionListOptions { PageSize = 2 })),
+            await FirstAsync(client.Views.ListForWorkbookAsync(AreaFixtures.ItemId)),
+            await FirstAsync(client.Views.ListAsync()),
+            await FirstAsync(client.DataSources.ListAsync()),
+            await FirstAsync(client.DataSources.ListConnectionsAsync(AreaFixtures.ItemId)),
+            await FirstAsync(client.DataSources.ListRevisionsAsync(AreaFixtures.ItemId, new RevisionListOptions { PageSize = 2 })),
         };
 
         Assert.IsTrue(first.All(item => item is not null));
@@ -278,6 +298,49 @@ public sealed class PagingTests
     {
         var users = string.Join(',', Enumerable.Range(0, count).Select(i => $$"""{"name":"u{{number}}-{{i}}"}"""));
         return FakeResponse.Json(200, $$$"""{"pagination":{"pageNumber":"{{{number}}}","pageSize":"{{{size}}}","totalAvailable":"{{{total}}}"},"users":{"user":[{{{users}}}]}}""");
+    }
+
+    [TestMethod]
+    public async Task AMockThatOverridesAContentPageServesItsList()
+    {
+        var revisions = await AreaFixtures.AllAsync(new PagedRevisions().ListRevisionsAsync(AreaFixtures.ItemId, new RevisionListOptions { PageSize = 2 }));
+        var views = await AreaFixtures.AllAsync(new PagedViews().ListAsync(new ViewListOptions { PageSize = 2 }));
+        var dataSources = await AreaFixtures.AllAsync(new PagedDataSources().ListAsync(new DataSourceListOptions { PageSize = 2 }));
+
+        CollectionAssert.AreEqual(new long?[] { 1, 2, 3 }, revisions.Select(revision => revision.RevisionNumber).ToArray());
+        CollectionAssert.AreEqual(new[] { "v1", "v2", "v3" }, views.Select(view => view.Name).ToArray());
+        CollectionAssert.AreEqual(new[] { "d1", "d2", "d3" }, dataSources.Select(dataSource => dataSource.Name).ToArray());
+    }
+
+    /// <summary>A mock of a workbook's revisions: three, two a page.</summary>
+    private sealed class PagedRevisions : WorkbooksClient
+    {
+        public override Task<Page<Revision>> ListRevisionsPageAsync(string id, int pageNumber, RevisionListOptions? options = null,
+            CancellationToken cancellationToken = default)
+        {
+            IReadOnlyList<Revision> items = pageNumber == 1 ? [new Revision { RevisionNumber = 1 }, new Revision { RevisionNumber = 2 }] : [new Revision { RevisionNumber = 3 }];
+            return Task.FromResult(new Page<Revision>(items, pageNumber, options!.PageSize, 3));
+        }
+    }
+
+    /// <summary>A mock of the views' sub-client: three views, two a page.</summary>
+    private sealed class PagedViews : ViewsClient
+    {
+        public override Task<Page<View>> ListPageAsync(int pageNumber, ViewListOptions? options = null, CancellationToken cancellationToken = default)
+        {
+            IReadOnlyList<View> items = pageNumber == 1 ? [new View { Name = "v1" }, new View { Name = "v2" }] : [new View { Name = "v3" }];
+            return Task.FromResult(new Page<View>(items, pageNumber, options!.PageSize, 3));
+        }
+    }
+
+    /// <summary>A mock of the data sources' sub-client: three, two a page.</summary>
+    private sealed class PagedDataSources : DataSourcesClient
+    {
+        public override Task<Page<DataSource>> ListPageAsync(int pageNumber, DataSourceListOptions? options = null, CancellationToken cancellationToken = default)
+        {
+            IReadOnlyList<DataSource> items = pageNumber == 1 ? [new DataSource { Name = "d1" }, new DataSource { Name = "d2" }] : [new DataSource { Name = "d3" }];
+            return Task.FromResult(new Page<DataSource>(items, pageNumber, options!.PageSize, 3));
+        }
     }
 
     /// <summary>A mock of the users' sub-client that serves pages from memory: three users, two a page.</summary>

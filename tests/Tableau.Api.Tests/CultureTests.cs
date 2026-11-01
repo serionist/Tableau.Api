@@ -107,30 +107,25 @@ public sealed class CultureTests
     }
 
     [TestMethod]
-    public async Task ADownloadsContentTypeIsReadOrdinallyUnderTurkish()
+    public async Task AnExportsMediaTypeIsReadOrdinallyUnderTurkish()
     {
-        using var server = FakeTableauServer.Start();
-        var client = Fixtures.Client(server);
-        var session = Fixtures.Session();
-        server.Map("GET", SitePath + "/" + Fixtures.SiteId + "/datasources/d1/content",
-            FakeResponse.Content(200, "APPLICATION/XML", "<datasource/>"));
-        server.Map("GET", SitePath + "/" + Fixtures.SiteId + "/workbooks/w1/content",
-            FakeResponse.Content(200, "APPLICATION/XML", "<workbook/>"));
+        using var server = AreaFixtures.Server();
+        var view = AreaFixtures.SitePath + "/views/" + AreaFixtures.ItemId;
+        server.Map("GET", view + "/pdf", FakeResponse.Content(200, "APPLICATION/PDF", "invented"));
+        server.Map("GET", view + "/image", FakeResponse.Content(200, "IMAGE/PNG", "invented"));
+        await using var client = AreaFixtures.Client(server);
 
         await InCulture("tr-TR", async () =>
         {
             // The precondition: in Turkish, I is not the capital of i, so a culture's comparison misses the type.
-            Assert.AreNotEqual(0, CultureInfo.CurrentCulture.CompareInfo.Compare("APPLICATION/XML", "application/xml",
+            Assert.AreNotEqual(0, CultureInfo.CurrentCulture.CompareInfo.Compare("APPLICATION/PDF", "application/pdf",
                 CompareOptions.IgnoreCase));
-            var (dataSource, dataSourceType) = await client.DownloadDataSource(session, "d1");
-            var (workbook, workbookType) = await client.DownloadWorkbook(session, "w1");
-            await using (dataSource)
-            await using (workbook)
-            {
-                Assert.AreEqual(DatasourceFileType.tds, dataSourceType);
-                Assert.AreEqual(WorkbookFileType.twb, workbookType);
-                Assert.AreEqual("<workbook/>", await new StreamReader(workbook).ReadToEndAsync());
-            }
+            await using var pdf = await client.Views.DownloadPdfAsync(AreaFixtures.ItemId);
+            await using var image = await client.Views.DownloadImageAsync(AreaFixtures.ItemId);
+
+            Assert.AreEqual(TableauFileKind.Pdf, pdf.Kind);
+            Assert.AreEqual(TableauFileKind.Png, image.Kind);
+            Assert.AreEqual("invented", await new StreamReader(pdf.Content).ReadToEndAsync());
         });
     }
 

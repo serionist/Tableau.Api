@@ -11,12 +11,12 @@ namespace Tableau.Api.Tests;
 
 /// <summary>
 /// Path segments: each value a method puts in a path is escaped and sent as one segment, and a value that is empty or
-/// only dots is refused before anything is sent. The rows go through Query Data Source, whose path ends in the value.
+/// only dots is refused before anything is sent. The rows go through Query Subscription, whose path ends in the value.
 /// </summary>
 [TestClass]
 public sealed class PathTests
 {
-    private const string DatasourcesPath = "/api/" + Fixtures.ApiVersion + "/sites/" + Fixtures.SiteId + "/datasources/";
+    private const string SubscriptionsPath = "/api/" + Fixtures.ApiVersion + "/sites/" + Fixtures.SiteId + "/subscriptions/";
 
     [TestMethod]
     public async Task EveryAsciiCharacterIsSentEscaped() => await AssertRowsAsync(PathRows.Ascii());
@@ -39,7 +39,7 @@ public sealed class PathTests
         var session = Fixtures.Session();
         session.SiteId = "..";
 
-        var thrown = await Assert.ThrowsAsync<ArgumentException>(() => client.QueryDataSource(session, "d1"));
+        var thrown = await Assert.ThrowsAsync<ArgumentException>(() => client.QuerySubscription(session, "s1"));
 
         Assert.AreEqual("session", thrown.ParamName);
         Assert.IsEmpty(server.Requests);
@@ -52,12 +52,12 @@ public sealed class PathTests
     {
         using var server = FakeTableauServer.Start();
         var client = new TableauApiClient(new Uri(server.BaseUrl, basePath), Fixtures.ApiVersion);
-        var dataSources = $"/tableau/api/{Fixtures.ApiVersion}/sites/{Fixtures.SiteId}/datasources";
-        server.Map("GET", dataSources, FakeResponse.Xml(200, "<pagination pageNumber=\"1\" pageSize=\"100\" totalAvailable=\"0\"/><datasources/>"));
+        var subscriptions = $"/tableau/api/{Fixtures.ApiVersion}/sites/{Fixtures.SiteId}/subscriptions";
+        server.Map("GET", subscriptions, FakeResponse.Xml(200, "<pagination pageNumber=\"1\" pageSize=\"100\" totalAvailable=\"0\"/><subscriptions/>"));
 
-        await client.QueryDataSources(Fixtures.Session());
+        await client.QuerySubscriptions(Fixtures.Session());
 
-        Assert.AreEqual($"GET {dataSources}?pageSize=100&pageNumber=1 HTTP/1.1", server.Requests.Single().RequestLine);
+        Assert.AreEqual($"GET {subscriptions}?pageSize=100&pageNumber=1 HTTP/1.1", server.Requests.Single().RequestLine);
     }
 
     [TestMethod]
@@ -123,7 +123,7 @@ public sealed class PathTests
         using var server = FakeTableauServer.Start();
         var client = Fixtures.Client(server);
 
-        await Assert.ThrowsAsync<ArgumentException>(() => client.QueryDataSource(Fixtures.Session(), "a\uD800b"));
+        await Assert.ThrowsAsync<ArgumentException>(() => client.QuerySubscription(Fixtures.Session(), "a\uD800b"));
 
         Assert.IsEmpty(server.Requests);
     }
@@ -150,13 +150,13 @@ public sealed class PathTests
     private static async Task<string?> CheckAsync(FakeTableauServer server, TableauApiClient client,
         Models.TableauSession session, string value)
     {
-        var path = DatasourcesPath + PathRows.Escaped(value);
-        server.Map("GET", path, FakeResponse.Xml(200, "<datasource id=\"d1\" name=\"Sales\"/>"));
+        var path = SubscriptionsPath + PathRows.Escaped(value);
+        server.Map("GET", path, FakeResponse.Xml(200, "<subscription id=\"s1\" subject=\"Sales\"/>"));
         var before = server.Requests.Count;
         Exception? thrown = null;
         try
         {
-            await client.QueryDataSource(session, value);
+            await client.QuerySubscription(session, value);
         }
         catch (Exception ex)
         {

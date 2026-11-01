@@ -337,12 +337,13 @@ public sealed class VersionTests
     [TestMethod]
     public void EveryEndpointsTemplateReadsAndItsVersionIsMajorMinor()
     {
-        // A descriptor stands alone or in the calls of a kind's permissions or tags.
+        // A descriptor stands alone or in the calls of a kind's permissions, tags or revisions.
         var fields = typeof(Endpoints).GetFields().SelectMany(field => field.GetValue(null) switch
         {
             Endpoint endpoint => [endpoint],
             PermissionCalls permissions => permissions.All,
             TagCalls tags => tags.All,
+            RevisionCalls revisions => revisions.All,
             _ => (IReadOnlyList<Endpoint>)[],
         });
 

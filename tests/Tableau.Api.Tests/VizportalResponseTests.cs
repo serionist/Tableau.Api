@@ -87,7 +87,7 @@ public sealed class VizportalResponseTests
 
         CollectionAssert.AreEqual(new[] { TargetType.Flow, TargetType.View, TargetType.Workbook },
             subscriptions.Select(subscription => subscription.TargetType).ToArray());
-        Assert.AreEqual(PageOrientation.Portrait, subscriptions[0].PageOrientation);
-        Assert.AreEqual(PageType.Letter, subscriptions[0].PageSizeOption);
+        Assert.AreEqual(Enums.PageOrientation.Portrait, subscriptions[0].PageOrientation);
+        Assert.AreEqual(Enums.PageType.Letter, subscriptions[0].PageSizeOption);
     }
 }

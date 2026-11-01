@@ -18,6 +18,7 @@ on a break the ledger doesn't list. Each section below groups the ledger's entri
 | [Sessions](#sessions) | `TableauApiClient`'s sign-in methods gone: the 2.0 client signs itself in, or you sign in through `client.Sessions` | 4, `CP0002` |
 | [Sites, projects, users, groups and favorites](#sites-projects-users-groups-and-favorites) | `TableauApiClient`'s methods for them gone, `DeleteProject2` with them: `client.Sites`, `.Projects`, `.Users`, `.Groups` and `.Favorites`, with lists that page themselves | 40, `CP0002` |
 | [Permissions, tags and metadata](#permissions-tags-and-metadata) | `TableauApiClient`'s permissions, metadata and tag methods gone, `AddWorkbookToSchedule` excepted: `client.Permissions`, `.Tags` and `.Metadata`, over every kind of content | 35, `CP0002` |
+| [Workbooks, views, data sources and revisions](#workbooks-views-data-sources-and-revisions) | `TableauApiClient`'s workbook, view, data source and revision methods gone, and two enumerations: `client.Workbooks`, `.Views` and `.DataSources`, with one `ExportOptions` for every export | 30: 28 `CP0002`, 2 `CP0001` |
 | [Dependencies](#dependencies) | Microsoft.Extensions' abstractions in place of Microsoft.Extensions.Logging, and Newtonsoft.Json added | none |
 
 ## Target: net10.0 only
@@ -38,7 +39,8 @@ net10.0 alone.
 
 `main` changed these 1.2.5 methods of `TableauApiClient` before the rebuild started. Code compiled against 1.2.5 that
 calls one fails with `MissingMethodException`; recompiled, a call that passes its arguments by position may not
-compile, or may bind a value to the new parameter.
+compile, or may bind a value to the new parameter. The last three have since gone with their areas:
+[Workbooks, views, data sources and revisions](#workbooks-views-data-sources-and-revisions) maps them.
 
 | 1.2.5 | Now | How to move over |
 |---|---|---|
@@ -147,8 +149,7 @@ from REST API 3.27. A sign-in's `TableauException` keeps none of Tableau's answe
 
 ## Sites, projects, users, groups and favorites
 
-`TableauApiClient`'s methods for these areas are gone, `QueryViewsForSite` excepted, which stays with the old views
-methods until views move; `TableauClient` has a sub-client for each. They take the session's site from the client,
+`TableauApiClient`'s methods for these areas are gone; `TableauClient` has a sub-client for each. They take the session's site from the client,
 string LUIDs, and the token last, and return the models in `Tableau.Api.Rest.Models`.
 
 ```csharp
@@ -311,6 +312,79 @@ What changes for a caller:
 | `QueryDataQualityWarningByContent(session, contentType, luid, cancelToken)` returns `dataQualityWarningType[]` | `client.Metadata.ListDataQualityWarningsAsync(content, cancellationToken)` | `MetadataContentType.database` and `luid` are `TableauContent.Database(luid)`; a flow, a column and a virtual connection too |
 | `AddDataQualityWarning(session, contentType, luid, type, message, severity, state, cancelToken)` | `client.Metadata.AddDataQualityWarningAsync(content, warning, cancellationToken)` | `new DataQualityWarning { Type = "WARNING", Message = ..., IsSevere = severity, IsActive = state }` |
 | `UpdateDataQualityWarning(session, dataQualityWarningId, type, message, severity, state, cancelToken)` | `client.Metadata.UpdateDataQualityWarningAsync(id, changes, cancellationToken)` | The same; the type is needed |
+
+## Workbooks, views, data sources and revisions
+
+`TableauApiClient`'s workbook, view, data source and revision methods are gone, `QueryViewsForSite` with them, and the
+`Orientation` and `TableauImageWidth` enumerations, which only they took. `TableauClient` has `client.Workbooks`,
+`client.Views` and `client.DataSources`, each with its revisions where it has them.
+
+```csharp
+await using var pdf = await tableau.Views.DownloadPdfAsync(viewId, new ExportOptions
+{
+    PageType = PageType.A4,
+    Orientation = PageOrientation.Landscape,
+    Filters = new Dictionary<string, string> { ["Region"] = "West" },
+}, cancellationToken);
+await pdf.SaveToFileAsync(Path.Combine(folder, "west.pdf"), cancellationToken: cancellationToken);
+```
+
+What changes for a caller:
+
+- **Files** come as a `TableauDownload`, streamed, where 1.2.5 read the whole file into memory and returned a `Stream`
+  (The 2.0 client, Downloads). A workbook's `WorkbookFileType` and a data source's `DatasourceFileType` are the
+  download's `Kind`; an export names no file, so give `SaveToFileAsync` a name of your own.
+- **Exports** take one `ExportOptions`: `Filters`, view filters by field name, sent as `vf_` and the name on every export,
+  where 1.2.5 stripped the prefix from a view's data and image and failed a PDF without filters; `MaxAge`,
+  `Resolution`, `Width` and `Height`, `PageType` and `Orientation`, each where its export takes it, refused before
+  sending where it doesn't. 1.2.5's PDF sent Legal and portrait unasked; 2.0 sends a page only when you set one, and
+  Tableau's default is the same.
+- **Updates** take `WorkbookUpdate`, `DataSourceUpdate` and `ConnectionUpdate`, records of what changes, where 1.2.5
+  took one parameter for each and sent an empty project and owner when you gave none; 2.0 sends nothing you didn't set.
+  A connection's update also takes the authentication type and whether to embed the password.
+- **Lists** page themselves (Sites, projects, users, groups and favorites, Lists) over `WorkbookField`, `ViewField` and
+  `DataSourceField`; a revision list sends its page size and number, which 1.2.5 checked and never sent.
+- **Extract refreshes** (`RunExtractRefreshAsync`) and the deletes are sent once or again as each call allows (The 2.0
+  client, Retries): a refresh never twice.
+- **New:** a workbook's PDF with view filters and a size, a view's image at a size, an export's maximum age, a
+  connection's authentication type, a workbook's description and data freshness policy, and lists that read every page.
+
+| 1.2.5 | 2.0 | How to move over |
+|---|---|---|
+| `QueryWorkbooksForSite(session, pageSize, pageNumber, fieldsExpression, filterExpression, sortExpresion, cancelToken)` returns `(paginationType, workbookType[])` | `client.Workbooks.ListAsync(options, cancellationToken)`, or `ListPageAsync(pageNumber, options, cancellationToken)` | `new WorkbookListOptions { Filter = ..., Sort = ..., PageSize = ... }`; a field expression has no place, as for projects |
+| `QueryWorkbook(session, workbookId, cancelToken)` returns `workbookType` | `client.Workbooks.GetAsync(id, cancellationToken)` returns `Workbook` | None |
+| `QueryWorkbooksForUser(session, userId, isOwner, pageSize, pageNumber, cancelToken)` | `client.Workbooks.ListForUserAsync(userId, ownedOnly, cancellationToken)` | Every page, read as you go; `isOwner` is `ownedOnly` |
+| `QueryWorkbookConnections(session, workbookId, cancelToken)` returns `connectionType[]` | `client.Workbooks.ListConnectionsAsync(id, cancellationToken)` | `Connection` in `Tableau.Api.Rest.Models` |
+| `UpdateWorkbook(session, workbookId, newShowTabs, newProjectId, newOwnerId, newName, cancelToken)` | `client.Workbooks.UpdateAsync(id, changes, cancellationToken)` | `new WorkbookUpdate { ShowTabs = ..., ProjectId = ..., OwnerId = ..., Name = ... }`, and its description, recently viewed flag, extract encryption and data freshness policy |
+| `UpdateWorkbookConnection(session, workbookId, connectionId, serverAddress, serverPort, userName, password, cancelToken)` | `client.Workbooks.UpdateConnectionAsync(id, connectionId, changes, cancellationToken)` | `new ConnectionUpdate { ServerAddress = ..., ServerPort = ..., UserName = ..., Password = ... }`, each optional |
+| `UpdateWorkbookNow(session, workbookId, cancelToken)` returns `jobType` | `client.Workbooks.RunExtractRefreshAsync(id, cancellationToken)` returns `Job` | Never sent twice |
+| `DeleteWorkbook(session, workbookId, cancelToken)` | `client.Workbooks.DeleteAsync(id, cancellationToken)` | None |
+| `DownloadWorkbook(session, workbookId, includeExtract, cancelToken)` returns `(Stream, WorkbookFileType)` | `client.Workbooks.DownloadAsync(id, includeExtract, cancellationToken)` returns `TableauDownload` | `type` is the download's `Kind` |
+| `QueryWorkbookPreviewImage(session, workbookId, cancelToken)` returns `Stream` | `client.Workbooks.DownloadPreviewImageAsync(id, cancellationToken)` | A `TableauDownload` |
+| `QueryWorkbookPDF(session, workbookId, orientation, pageType, cancelToken)` | `client.Workbooks.DownloadPdfAsync(id, options, cancellationToken)` | `new ExportOptions { Orientation = PageOrientation.Landscape, PageType = PageType.A4 }`; `Tableau.Api.PageOrientation` and `Tableau.Api.PageType`, not the `Enums` ones |
+| `QueryViewsForSite(session, pageSize, pageNumber, includeUsageStatistics, fieldsExpression, filterExpression, sortExpresion, cancelToken)` returns `(paginationType, viewType[])` | `client.Views.ListAsync(options, cancellationToken)`, or `ListPageAsync(pageNumber, options, cancellationToken)` | `new ViewListOptions { Filter = ..., Sort = ..., IncludeUsageStatistics = ... }` |
+| `QueryViewsForWorkbook(session, workbookId, includeUsageStatistics, cancelToken)` returns `viewType[]` | `client.Views.ListForWorkbookAsync(workbookId, includeUsageStatistics, cancellationToken)` | None |
+| `QueryView(session, viewId, includeUsageStatistics, cancelToken)` | `client.Views.GetAsync(id, includeUsageStatistics, cancellationToken)` | Never released: `main` added it after 1.2.5, so it is no ledger entry |
+| `QueryViewData(session, viewId, cancelToken, filters)` returns `Stream` | `client.Views.DownloadDataAsync(id, options, cancellationToken)` | `new ExportOptions { Filters = new Dictionary<string, string> { [name] = value } }`, sent with `vf_`, which 1.2.5 stripped |
+| `QueryViewImage(session, viewId, imageWidth, cancelToken, filters)` | `client.Views.DownloadImageAsync(id, options, cancellationToken)` | `TableauImageWidth.High_1568` is `Resolution = ImageResolution.High`; a size is `Width` and `Height` |
+| `QueryViewPDF(session, viewId, cancelToken, pageType, orientation, filters)` | `client.Views.DownloadPdfAsync(id, options, cancellationToken)` | `Orientation.Landscape` is `PageOrientation.Landscape` |
+| `QueryViewCrosstabExcel(session, viewId, filters, cancelToken)` | `client.Views.DownloadCrosstabAsync(id, options, cancellationToken)` | Never released, as `QueryView` |
+| `QueryViewPreviewImage(session, workbookId, viewId, cancelToken)` | `client.Views.DownloadPreviewImageAsync(workbookId, id, cancellationToken)` | None |
+| `QueryDataSources(session, pageSize, pageNumber, fieldsExpression, filterExpression, sortExpression, cancelToken)` returns `(paginationType, dataSourceType[])` | `client.DataSources.ListAsync(options, cancellationToken)`, or `ListPageAsync(pageNumber, options, cancellationToken)` | `new DataSourceListOptions { Filter = ..., Sort = ..., PageSize = ... }` |
+| `QueryDataSource(session, datasourceId, cancelToken)` returns `dataSourceType` | `client.DataSources.GetAsync(id, cancellationToken)` returns `DataSource` | None |
+| `QueryDataSourceConnections(session, datasourceId, cancelToken)` | `client.DataSources.ListConnectionsAsync(id, cancellationToken)` | None |
+| `UpdateDataSource(session, datasourceId, newProjectId, newOwnerId, newCertificationStatus, newCertificationNote, newName, cancelToken)` | `client.DataSources.UpdateAsync(id, changes, cancellationToken)` | `new DataSourceUpdate { ProjectId = ..., OwnerId = ..., IsCertified = ..., CertificationNote = ..., Name = ... }`, and its extract encryption |
+| `UpdateDataSourceConnection(session, datasourceId, connectionId, serverAddress, serverPort, userName, password, cancelToken)` | `client.DataSources.UpdateConnectionAsync(id, connectionId, changes, cancellationToken)` | A `ConnectionUpdate`, as for a workbook; the port a number |
+| `UpdateDataSourceNow(session, datasourceId, cancelToken)` | `client.DataSources.RunExtractRefreshAsync(id, cancellationToken)` | Never sent twice |
+| `DeleteDataSource(session, datasourceId, cancelToken)` | `client.DataSources.DeleteAsync(id, cancellationToken)` | None |
+| `DownloadDataSource(session, datasourceId, includeExtract, cancelToken)` | `client.DataSources.DownloadAsync(id, includeExtract, cancellationToken)` | `main`'s `DatasourceFileType` is the download's `Kind` |
+| `GetWorkbookRevisions(session, workbookId, pageSize, pageNumber, cancelToken)` returns `(paginationType, revisionType[])` | `client.Workbooks.ListRevisionsAsync(id, options, cancellationToken)`, or `ListRevisionsPageAsync(id, pageNumber, options, cancellationToken)` | `new RevisionListOptions { PageSize = ... }`, sent now |
+| `GetDataSourceRevisions(session, datasourceId, pageSize, pageNumber, cancelToken)` | `client.DataSources.ListRevisionsAsync(id, options, cancellationToken)`, or `ListRevisionsPageAsync(...)` | The same |
+| `DownloadWorkbookRevision(session, workbookId, revisionNumber, includeExtract, cancelToken)` | `client.Workbooks.DownloadRevisionAsync(id, revision, cancellationToken)` | With its extracts |
+| `DownloadDataSourceRevision(session, datasourceId, revisionNumber, includeExtract, cancelToken)` | `client.DataSources.DownloadRevisionAsync(id, revision, cancellationToken)` | The reference lists no `includeExtract` for it |
+| `RemoveWorkbookRevision(session, workbookId, revisionNumber, cancelToken)` | `client.Workbooks.RemoveRevisionAsync(id, revision, cancellationToken)` | None |
+| `RemoveDataSourceRevision(session, datasourceId, revisionNumber, cancelToken)` | `client.DataSources.RemoveRevisionAsync(id, revision, cancellationToken)` | None |
+| `Tableau.Api.Enums.Orientation` and `TableauImageWidth` | `Tableau.Api.PageOrientation` and `ImageResolution` | `Tableau.Api.Enums.PageOrientation` and `PageType` stay, for Vizportal's subscriptions, until the old client goes: a file that imports both `Tableau.Api` and `Tableau.Api.Enums` names which it means |
 
 ## Dependencies
 

@@ -21,6 +21,9 @@ internal static class Fixtures
     public const string OtherSessionToken = "another-invented-token";
     public const string PatSecret = "invented-pat-secret";
 
+    /// <summary>A database connection's password, which an update sends in its body alone.</summary>
+    public const string ConnectionPassword = "invented-connection-password";
+
     /// <summary>
     /// The start of every HS256 JWT's header, <c>{"alg":"HS256",</c> in base64url: a log line that holds it holds a JWT,
     /// such as one the client minted for a connected app.
@@ -29,7 +32,7 @@ internal static class Fixtures
 
     /// <summary>Every secret a test hands the library, which no log line may hold.</summary>
     public static readonly string[] Secrets =
-        [Password, SessionToken, OtherSessionToken, PatSecret, SessionFixtures.AppSecretValue, SessionFixtures.Jwt, JwtStart];
+        [Password, SessionToken, OtherSessionToken, PatSecret, ConnectionPassword, SessionFixtures.AppSecretValue, SessionFixtures.Jwt, JwtStart];
 
     /// <summary>Every line the clients Client makes log, across the suite.</summary>
     public static readonly RecordingLogger Log = new();

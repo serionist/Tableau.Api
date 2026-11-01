@@ -79,8 +79,9 @@ public sealed class EveryMethodPathTests
         // The client's methods put this many string parameters in request paths, fewer would mean some went unseen:
         // 1.2.5's 122 and the view id of QueryView, QueryViewCrosstabExcel and QueryViewPermissions, less those of the
         // methods that went with the 2.0 client's: the 33 of the sites, projects, users, groups and favorites methods,
-        // DeleteProject2 among them, and the 48 of the permissions, metadata and tag methods, QueryViewPermissions among them.
-        Assert.HasCount(44, pathParameters, string.Join("\n", pathParameters));
+        // DeleteProject2 among them, the 48 of the permissions, metadata and tag methods, QueryViewPermissions among them,
+        // and the 33 of the workbooks, views, data sources and revisions methods, QueryView and QueryViewCrosstabExcel among them.
+        Assert.HasCount(11, pathParameters, string.Join("\n", pathParameters));
     }
 
     private static IEnumerable<MethodInfo> PublicMethods() =>

@@ -32,9 +32,10 @@ namespace Tableau.Api.Tests;
 /// <see cref="FixtureRecorder"/> too. The suite's cleanup disposes it, after the cleanup's own client has signed out.
 /// </para>
 /// <para>
-/// The run's project is named <see cref="ProjectPrefix"/> and the run, made by the first test that needs it and deleted
-/// when the suite ends. Before it is made, the suite's projects older than a day, which a run that broke off left behind,
-/// are deleted: a top-level project with the suite's description and a run's name, nothing else.
+/// The run's project is named <see cref="ProjectPrefix"/> and the run, made by the first test that needs it, with
+/// Tableau's sample workbooks and their data source published into it, and deleted with them when the suite ends. Before
+/// it is made, the suite's projects older than a day, which a run that broke off left behind, are deleted, their samples
+/// with them: a top-level project with the suite's description and a run's name, nothing else.
 /// </para>
 /// <para>
 /// A group the suite makes is local, and named after the run and the second it was made, since Tableau's groups have no
@@ -54,13 +55,18 @@ internal static partial class LiveSite
     public const string ProjectDescription = "Made by Tableau.Api's live suite; deleted when the run ends.";
 
     /// <summary>
-    /// The scopes the suite's connected app asks for: to read content and users, the Metadata API's queries among the
-    /// reads; to make, change and delete its projects and groups; and to read, add and delete a permission on its project.
+    /// The scopes the suite's connected app asks for: to read content and users, the Metadata API's queries and the
+    /// revision lists among the reads; to make, change and delete its projects and groups; to read, add and delete a
+    /// permission on its project; to update, download and delete its sample workbooks and data source, their revisions
+    /// among them, export their views and run their extract refreshes; and to tag them, one at a time and in a batch.
     /// </summary>
     public static readonly string[] Scopes =
     [
         "tableau:content:read", "tableau:projects:*", "tableau:groups:*", "tableau:users:read", "tableau:permissions:read",
-        "tableau:permissions:update", "tableau:permissions:delete",
+        "tableau:permissions:update", "tableau:permissions:delete", "tableau:workbooks:update", "tableau:workbooks:download",
+        "tableau:workbooks:delete", "tableau:views:download", "tableau:datasources:update", "tableau:datasources:download",
+        "tableau:datasources:delete", "tableau:tasks:run", "tableau:workbook_tags:update", "tableau:workbook_tags:delete",
+        "tableau:tags:batch_create", "tableau:tags:batch_delete",
     ];
 
     /// <summary>The settings whose values name the site or the sign-in without being secrets.</summary>
@@ -75,6 +81,9 @@ internal static partial class LiveSite
     private static readonly SemaphoreSlim _projectLock = new(1, 1);
     private static readonly SemaphoreSlim _groupLock = new(1, 1);
     private static readonly ConcurrentDictionary<string, byte> _groups = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentQueue<string> _fileHeaders = new();
+    private static readonly SemaphoreSlim _samplesLock = new(1, 1);
+    private static IReadOnlyList<Workbook>? _samples;
     private static readonly Lazy<HttpClient> _http = new(Http);
     private static string? _projectId;
     private static bool _groupsSwept;
@@ -152,7 +161,8 @@ internal static partial class LiveSite
 
     /// <summary>
     /// The run's project, made by the first caller after the leftovers of earlier runs are swept, in the session of the
-    /// client given.
+    /// client given, with Tableau's sample workbooks published into it: the content of the suite's own that its workbook,
+    /// view and tag tests work on. Deleting the project deletes them.
     /// </summary>
     public static async Task<string> ProjectAsync(TableauClient client, CancellationToken cancellationToken = default)
     {
@@ -161,8 +171,8 @@ internal static partial class LiveSite
         {
             if (_projectId is { } id) return id;
             await SweepAsync(client, cancellationToken);
-            var made = await client.Projects.CreateAsync(new Project { Name = ProjectName, Description = ProjectDescription },
-                cancellationToken: cancellationToken);
+            var made = await client.Projects.CreateAsync(new Project { Name = ProjectName, Description = ProjectDescription }, publishSamples: true,
+                cancellationToken);
             return _projectId = made.Id ?? throw new InvalidOperationException("Create Project answered no id.");
         }
         finally
@@ -170,6 +180,56 @@ internal static partial class LiveSite
             _projectLock.Release();
         }
     }
+
+    /// <summary>
+    /// The sample workbooks Tableau published into the run's project, by name, once it lists <see cref="Samples"/> of them,
+    /// found once a run. Read with a filter on the run's project's name, so no other content is listed.
+    /// </summary>
+    public static async Task<IReadOnlyList<Workbook>> SamplesAsync(TableauClient client, CancellationToken cancellationToken = default)
+    {
+        await _samplesLock.WaitAsync(cancellationToken);
+        try
+        {
+            // Found once a run, so a test that deletes a sample leaves the others' list as it was.
+            return _samples ??= await PublishedSamplesAsync(client, cancellationToken);
+        }
+        finally
+        {
+            _samplesLock.Release();
+        }
+    }
+
+    /// <summary>How long the samples took to be listed, once <see cref="SamplesAsync"/> found them.</summary>
+    public static TimeSpan? SamplesTook { get; private set; }
+
+    // Tableau Server 2025.1 publishes its two samples before it answers Create Project, and lists them at once; the wait is
+    // for a server whose search index lags.
+    private static async Task<IReadOnlyList<Workbook>> PublishedSamplesAsync(TableauClient client, CancellationToken cancellationToken)
+    {
+        var project = await ProjectAsync(client, cancellationToken);
+        var options = new WorkbookListOptions { Filter = TableauFilter.Eq(WorkbookField.ProjectName, ProjectName) };
+        var started = DateTimeOffset.UtcNow;
+        var samples = await EventuallyAsync(async () =>
+        {
+            var found = new List<Workbook>();
+            await foreach (var workbook in client.Workbooks.ListAsync(options, cancellationToken))
+            {
+                if (workbook.Project?.Id == project) found.Add(workbook);
+            }
+            return found.Count >= Samples ? found : null;
+        }, $"{Samples} sample workbooks in the run's project", TimeSpan.FromMinutes(2));
+        SamplesTook = DateTimeOffset.UtcNow - started;
+        return [.. samples.OrderBy(workbook => workbook.Name, StringComparer.Ordinal)];
+    }
+
+    /// <summary>How many sample workbooks Tableau Server 2025.1 publishes into a project, the fewest the suite takes.</summary>
+    public const int Samples = 2;
+
+    /// <summary>
+    /// The Content-Type and Content-Disposition of each answer that wasn't JSON, by its method and path, the LUIDs in it
+    /// written as <c>{id}</c>: what Tableau sends for a file, which the live suite records.
+    /// </summary>
+    public static IReadOnlyCollection<string> FileHeaders => [.. _fileHeaders];
 
     /// <summary>
     /// Whether a project is one of the suite's: top-level, with the suite's description and a run's name, the prefix and
@@ -375,6 +435,7 @@ internal static partial class LiveSite
                     InnerHandler = chain,
                 };
             }
+            chain = new FileHeaderWatcher(_fileHeaders.Enqueue) { InnerHandler = chain };
             chain = new TokenWatcher(token => _secrets.TryAdd(token, 0)) { InnerHandler = chain };
             var http = new HttpClient(chain, disposeHandler: true) { Timeout = Timeout.InfiniteTimeSpan };
             chain = null;
@@ -393,6 +454,35 @@ internal static partial class LiveSite
     [GeneratedRegex(@"^Tableau\.Api live run (?:[0-9]+-[0-9]+|local-[0-9]{8}-[0-9]{6}-[0-9a-f]{4}) (?<made>[0-9]{8}T[0-9]{6}Z)$",
         RegexOptions.CultureInvariant)]
     private static partial Regex RunGroupName();
+
+    [GeneratedRegex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", RegexOptions.CultureInvariant)]
+    private static partial Regex Luid();
+
+    [GeneratedRegex("filename(\\*?)=\"?[^\";]*?(\\.[A-Za-z0-9]{1,8})?\"?(;|$)", RegexOptions.CultureInvariant)]
+    private static partial Regex FileName();
+
+    /// <summary>
+    /// Keeps the shape of each answer that isn't JSON: its method, its path with every LUID as <c>{id}</c> and every query
+    /// value hidden, its status, its Content-Type and its Content-Disposition with each file name's stem as <c>name</c>.
+    /// </summary>
+    private sealed class FileHeaderWatcher(Action<string> saw) : DelegatingHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var response = await base.SendAsync(request, cancellationToken);
+            var type = response.Content.Headers.ContentType?.ToString();
+            if (response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.NoContent
+                && type?.Contains("json", StringComparison.OrdinalIgnoreCase) != true)
+            {
+                var path = Luid().Replace(RequestUri.Redacted(request.RequestUri!), "{id}");
+                var disposition = response.Content.Headers.TryGetValues("Content-Disposition", out var values) ? string.Join(", ", values) : null;
+                saw(string.Create(CultureInfo.InvariantCulture,
+                    $"{request.Method} {path} {(int)response.StatusCode}: Content-Type {type ?? "(none)"}; Content-Disposition "
+                    + $"{(disposition is null ? "(none)" : FileName().Replace(disposition, "filename$1=\"name$2\"$3"))}"));
+            }
+            return response;
+        }
+    }
 
     /// <summary>Keeps each session token a request carries, in <c>X-Tableau-Auth</c>.</summary>
     private sealed class TokenWatcher(Action<string> saw) : DelegatingHandler

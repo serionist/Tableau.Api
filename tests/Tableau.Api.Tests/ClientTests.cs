@@ -17,7 +17,7 @@ namespace Tableau.Api.Tests;
 [TestClass]
 public sealed class ClientTests
 {
-    private const string DataSourcesPath = "/api/" + Fixtures.ApiVersion + "/sites/" + Fixtures.SiteId + "/datasources";
+    private const string SubscriptionsPath = "/api/" + Fixtures.ApiVersion + "/sites/" + Fixtures.SiteId + "/subscriptions";
     private static readonly Uri _url = new("https://tableau.example.com/");
 
     [TestMethod]
@@ -43,8 +43,10 @@ public sealed class ClientTests
         var log = new RecordingLogger();
 
         var client = new TableauApiClient(_url, log, given);
+        var withoutLog = new TableauApiClient(_url, given);
 
         Assert.AreEqual(new Version(3, 14), client.ApiVersion);
+        Assert.AreEqual(new Version(3, 14), withoutLog.ApiVersion);
         Assert.Contains(given, Warnings(log).Single());
     }
 
@@ -65,10 +67,10 @@ public sealed class ClientTests
     {
         using var server = FakeTableauServer.Start();
         var client = Fixtures.Client(server);
-        server.Map("GET", DataSourcesPath, FakeResponse.Error(403, "403069", "Forbidden", "Invented: not these."));
+        server.Map("GET", SubscriptionsPath, FakeResponse.Error(403, "403069", "Forbidden", "Invented: not these."));
 
         var thrown = await Assert.ThrowsExactlyAsync<TableauRequestException>(
-            () => client.QueryDataSources(Fixtures.Session()));
+            () => client.QuerySubscriptions(Fixtures.Session()));
 
         Assert.AreEqual(HttpStatusCode.Forbidden, thrown.StatusCode);
         Assert.AreEqual("403069", thrown.Details.code);
@@ -82,10 +84,10 @@ public sealed class ClientTests
         using var server = FakeTableauServer.Start();
         var log = new RecordingLogger();
         var client = new TableauApiClient(server.BaseUrl, log, Fixtures.ApiVersion);
-        server.Map("GET", DataSourcesPath, FakeResponse.Content(502, "text/html", "<html>Bad gateway</html>"));
+        server.Map("GET", SubscriptionsPath, FakeResponse.Content(502, "text/html", "<html>Bad gateway</html>"));
 
         var thrown = await Assert.ThrowsExactlyAsync<TableauRequestException>(
-            () => client.QueryDataSources(Fixtures.Session()));
+            () => client.QuerySubscriptions(Fixtures.Session()));
 
         Assert.AreEqual(HttpStatusCode.BadGateway, thrown.StatusCode);
         Assert.IsFalse(thrown.HasDetails);
@@ -101,7 +103,7 @@ public sealed class ClientTests
         await cancelled.CancelAsync();
 
         await Assert.ThrowsAsync<OperationCanceledException>(
-            () => client.QueryDataSources(Fixtures.Session(), cancelToken: cancelled.Token));
+            () => client.QuerySubscriptions(Fixtures.Session(), cancelToken: cancelled.Token));
 
         Assert.IsEmpty(server.Requests);
     }

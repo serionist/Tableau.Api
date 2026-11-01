@@ -10,7 +10,7 @@ namespace Tableau.Api.Tests;
 internal static class OldPublicTypes
 {
     /// <summary>The most types the list may hold: lowered as it shrinks, never raised.</summary>
-    public const int Most = 232;
+    public const int Most = 230;
 
     public static readonly IReadOnlyList<string> Names =
     [
@@ -20,10 +20,8 @@ internal static class OldPublicTypes
         "Tableau.Api.Enums.DatasourceFileType",
         "Tableau.Api.Enums.DefinedBy",
         "Tableau.Api.Enums.MetadataContentType",
-        "Tableau.Api.Enums.Orientation",
         "Tableau.Api.Enums.PageOrientation",
         "Tableau.Api.Enums.PageType",
-        "Tableau.Api.Enums.TableauImageWidth",
         "Tableau.Api.Enums.TargetType",
         "Tableau.Api.Enums.WorkbookFileType",
         "Tableau.Api.Exceptions.TableauApiVersionException",
