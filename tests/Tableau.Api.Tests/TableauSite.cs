@@ -22,9 +22,10 @@ namespace Tableau.Api.Tests;
 /// It runs only when its category's switch, TABLEAU_LIVE or TABLEAU_SERVER_ONLY, is 1. When the switch is unset or
 /// empty the test is inconclusive, so a run without it, every CI run among them, reaches no site; any value but 1 fails
 /// the test, so a typo can't skip a run meant for a site. With the switch at 1, a setting that is missing or empty
-/// fails the test and names it; a test that signs in (<c>SignsIn = true</c>) also needs one sign-in's settings, a
-/// connected app's or a personal access token's (<see cref="SignInSettings"/>). Settings are environment variables, kept
-/// outside the clone with the site's secrets; <see cref="LiveSite"/> names the live suite's.
+/// fails the test and names it. A test that signs in names its sign-in, <c>SignsIn = LiveSignIn.Token</c> for the
+/// content work or <c>SignsIn = LiveSignIn.ConnectedApp</c> for the connected app's own tests, and needs that sign-in's
+/// settings too (<see cref="SettingsOf"/>): the other sign-in's settings never stand in for them. Settings are environment
+/// variables, kept outside the clone with the site's secrets; <see cref="LiveSite"/> names the live suite's.
 /// <see cref="TableauSiteTests"/> fails on a site test without its category, or a category without the attribute.
 /// </summary>
 internal static class TableauSite
@@ -38,24 +39,24 @@ internal static class TableauSite
         [ServerOnly] = "TABLEAU_SERVER_ONLY",
     };
 
-    /// <summary>The settings of the connected app the suite signs in with by direct trust: the user is the JWT's sub.</summary>
-    public static readonly string[] DirectTrustSettings =
-        ["TABLEAU_LIVE_CLIENT_ID", "TABLEAU_LIVE_SECRET_ID", "TABLEAU_LIVE_SECRET_VALUE", "TABLEAU_LIVE_USER"];
+    /// <summary>The settings of the personal access token every content test signs in with.</summary>
+    public static readonly string[] TokenSettings = ["TABLEAU_LIVE_PAT_NAME", "TABLEAU_LIVE_PAT_SECRET"];
 
-    /// <summary>The settings of a personal access token, which the suite signs in with when no direct-trust setting is set.</summary>
-    public static readonly string[] PersonalAccessTokenSettings = ["TABLEAU_LIVE_PAT_NAME", "TABLEAU_LIVE_PAT_SECRET"];
+    /// <summary>The settings of the connected app its own tests sign in with by direct trust: the user is the JWT's sub.</summary>
+    public static readonly string[] ConnectedAppSettings =
+        ["TABLEAU_LIVE_CLIENT_ID", "TABLEAU_LIVE_SECRET_ID", "TABLEAU_LIVE_SECRET_VALUE", "TABLEAU_LIVE_USER"];
 
     /// <summary>The site categories.</summary>
     public static IReadOnlyCollection<string> Categories => _switches.Keys;
 
-    /// <summary>
-    /// The settings a sign-in on the site needs: the connected app's when any of them is set, so a half-set app fails
-    /// naming what it lacks; else a personal access token's; null when neither has any set.
-    /// </summary>
-    public static IReadOnlyList<string>? SignInSettings(Func<string, string?> environment) =>
-        DirectTrustSettings.Any(setting => !string.IsNullOrEmpty(environment(setting))) ? DirectTrustSettings
-        : PersonalAccessTokenSettings.Any(setting => !string.IsNullOrEmpty(environment(setting))) ? PersonalAccessTokenSettings
-        : null;
+    /// <summary>The settings a sign-in needs: none for <see cref="LiveSignIn.None"/>.</summary>
+    public static IReadOnlyList<string> SettingsOf(LiveSignIn signIn) => signIn switch
+    {
+        LiveSignIn.None => [],
+        LiveSignIn.Token => TokenSettings,
+        LiveSignIn.ConnectedApp => ConnectedAppSettings,
+        _ => throw new ArgumentOutOfRangeException(nameof(signIn), signIn, "No such sign-in."),
+    };
 
     /// <summary>A setting the test's <see cref="SiteTestAttribute"/> named, which it found set before the test.</summary>
     public static string Setting(string name) =>
@@ -65,10 +66,10 @@ internal static class TableauSite
 
     /// <summary>
     /// Whether a test of category runs, with the environment environment gives. A test that signs in also needs the
-    /// settings of one sign-in (<see cref="SignInSettings"/>), each named when missing.
+    /// settings of its sign-in (<see cref="SettingsOf"/>), each named when missing, whatever the other sign-in has set.
     /// </summary>
     public static SiteCheck Check(string category, IReadOnlyList<string> settings, Func<string, string?> environment,
-        bool signsIn = false)
+        LiveSignIn signIn = LiveSignIn.None)
     {
         if (!_switches.TryGetValue(category, out var name))
         {
@@ -86,24 +87,21 @@ internal static class TableauSite
             return new SiteCheck(SiteOutcome.Fail,
                 $"{name} is '{value}': set it to 1 to run the {category} tests, or unset it.");
         }
-        var missing = settings.Where(setting => string.IsNullOrEmpty(environment(setting))).ToList();
-        if (signsIn)
-        {
-            if (SignInSettings(environment) is not { } signIn)
-            {
-                return new SiteCheck(SiteOutcome.Fail,
-                    $"{name}=1, but no sign-in is set: a connected app's {string.Join(", ", DirectTrustSettings)}, or a personal "
-                    + $"access token's {string.Join(" and ", PersonalAccessTokenSettings)}.");
-            }
-            missing.AddRange(signIn.Where(setting => string.IsNullOrEmpty(environment(setting))));
-        }
+        var signInSettings = SettingsOf(signIn);
+        var missing = settings.Concat(signInSettings).Distinct(StringComparer.Ordinal)
+            .Where(setting => string.IsNullOrEmpty(environment(setting))).ToList();
         if (missing.Count > 0)
         {
+            // Said when the sign-in lacks a setting, so a run with only the other sign-in's settings says why it fails.
+            var why = signInSettings.Any(missing.Contains) ? $": the test signs in with {Described(signIn)}" : "";
             return new SiteCheck(SiteOutcome.Fail,
-                $"{name}=1, but {string.Join(", ", missing)} {(missing.Count == 1 ? "is" : "are")} not set.");
+                $"{name}=1, but {string.Join(", ", missing)} {(missing.Count == 1 ? "is" : "are")} not set{why}.");
         }
         return new SiteCheck(SiteOutcome.Run, "");
     }
+
+    private static string Described(LiveSignIn signIn) =>
+        signIn == LiveSignIn.Token ? "the personal access token" : "the connected app";
 
     /// <summary>What is wrong with a test's marks: a site test without its category, or the reverse.</summary>
     public static IEnumerable<string> MarkProblems(string test, SiteTestAttribute? site, IEnumerable<string> categories)
@@ -134,8 +132,8 @@ internal sealed class SiteTestAttribute(
 
     public IReadOnlyList<string> Settings { get; } = settings;
 
-    /// <summary>Whether the test signs in, and so needs the settings of one sign-in besides its own.</summary>
-    public bool SignsIn { get; set; }
+    /// <summary>The sign-in the test needs, whose settings it needs besides its own; none by default.</summary>
+    public LiveSignIn SignsIn { get; set; }
 
     public override Task<TestResult[]> ExecuteAsync(ITestMethod testMethod) =>
         Ended(TableauSite.Check(Category, Settings, Environment.GetEnvironmentVariable, SignsIn)) is { } ended
@@ -157,6 +155,26 @@ internal sealed class SiteTestAttribute(
         },
         _ => null,
     };
+}
+
+/// <summary>
+/// The sign-in a live test needs, each with its own job: the personal access token does the content work, and the
+/// connected app signs in for its own tests alone, since on Tableau Server 2025.1 a connected app's session can't call a
+/// method whose scope came in REST API 3.27.
+/// </summary>
+internal enum LiveSignIn
+{
+    /// <summary>No sign-in of the live suite's: the test signs in with its own settings, or not at all, as Server Info's.</summary>
+    None,
+
+    /// <summary>The personal access token: TABLEAU_LIVE_PAT_NAME and TABLEAU_LIVE_PAT_SECRET.</summary>
+    Token,
+
+    /// <summary>
+    /// The connected app's direct trust: TABLEAU_LIVE_CLIENT_ID, TABLEAU_LIVE_SECRET_ID, TABLEAU_LIVE_SECRET_VALUE and
+    /// TABLEAU_LIVE_USER.
+    /// </summary>
+    ConnectedApp,
 }
 
 internal enum SiteOutcome

@@ -29,7 +29,7 @@ public sealed partial class LiveContentTests
 
     public TestContext TestContext { get; set; } = null!;
 
-    [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = true), TestCategory(TableauSite.Live)]
+    [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = LiveSignIn.Token), TestCategory(TableauSite.Live)]
     public async Task SampleWorkbooksAreListedGotDownloadedAndUpdated()
     {
         await using var client = LiveSite.Client(LiveSite.Credentials());
@@ -160,7 +160,7 @@ public sealed partial class LiveContentTests
         RecordFiles();
     }
 
-    [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = true), TestCategory(TableauSite.Live)]
+    [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = LiveSignIn.Token), TestCategory(TableauSite.Live)]
     public async Task ThePublishedSampleDataSourceIsReadDownloadedUpdatedAndDeleted()
     {
         await using var client = LiveSite.Client(LiveSite.Credentials());
@@ -266,7 +266,7 @@ public sealed partial class LiveContentTests
         return outcome;
     }
 
-    [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = true), TestCategory(TableauSite.Live)]
+    [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = LiveSignIn.Token), TestCategory(TableauSite.Live)]
     public async Task ASampleViewIsListedGotAndExportedWithAViewFilter()
     {
         await using var client = LiveSite.Client(LiveSite.Credentials());
@@ -339,7 +339,7 @@ public sealed partial class LiveContentTests
         RecordFiles();
     }
 
-    [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = true), TestCategory(TableauSite.Live)]
+    [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = LiveSignIn.Token), TestCategory(TableauSite.Live)]
     public async Task SamplesAreTaggedWithASpaceAndACommaOneAtATimeAndInABatchAndOneIsDeleted()
     {
         await using var client = LiveSite.Client(LiveSite.Credentials());

@@ -8,6 +8,7 @@ using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Tableau.Api.Pipeline;
 using Tableau.Api.Rest.Models;
 using Group = Tableau.Api.Rest.Models.Group;
@@ -15,16 +16,19 @@ using Group = Tableau.Api.Rest.Models.Group;
 namespace Tableau.Api.Tests;
 
 /// <summary>
-/// The live suite's site: its settings, the client it signs in with, and the run's project, which every object a live
-/// test makes goes in.
+/// The live suite's site: its settings, its two sign-ins, and the run's project, which every object a live test makes
+/// goes in.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Settings, as environment variables set outside the clone (<see cref="TableauSite"/> checks them before a test runs):
 /// TABLEAU_LIVE_SERVER_URL, the server's address; TABLEAU_LIVE_SITE, the site's content URL, unset or empty for the
-/// default site; and one sign-in: a connected app's direct trust (TABLEAU_LIVE_CLIENT_ID, TABLEAU_LIVE_SECRET_ID,
-/// TABLEAU_LIVE_SECRET_VALUE and TABLEAU_LIVE_USER, the user the JWT names), or else a personal access token
-/// (TABLEAU_LIVE_PAT_NAME and TABLEAU_LIVE_PAT_SECRET), which signing in with ends any other session of the token.
+/// default site; and two sign-ins, each with its own job. A personal access token (TABLEAU_LIVE_PAT_NAME and
+/// TABLEAU_LIVE_PAT_SECRET, <see cref="Credentials"/>) does every content test's work; it allows one session at a time,
+/// so signing in with it ends any other session of the token, and a local run takes another token than CI's. A connected
+/// app's direct trust (TABLEAU_LIVE_CLIENT_ID, TABLEAU_LIVE_SECRET_ID, TABLEAU_LIVE_SECRET_VALUE and TABLEAU_LIVE_USER,
+/// the user the JWT names; <see cref="ConnectedApp"/> and <see cref="Jwt"/>) signs in for its own tests alone, which
+/// read and change nothing but a page of projects.
 /// </para>
 /// <para>
 /// Every live client sends through one HttpClient, which follows no redirect and keeps no cookies, and which keeps each
@@ -55,19 +59,11 @@ internal static partial class LiveSite
     public const string ProjectDescription = "Made by Tableau.Api's live suite; deleted when the run ends.";
 
     /// <summary>
-    /// The scopes the suite's connected app asks for: to read content and users, the Metadata API's queries and the
-    /// revision lists among the reads; to make, change and delete its projects and groups; to read, add and delete a
-    /// permission on its project; to update, download and delete its sample workbooks and data source, their revisions
-    /// among them, export their views and run their extract refreshes; and to tag them, one at a time and in a batch.
+    /// The scopes the connected app's JWT asks for: <c>tableau:content:read</c>, for Query Projects, the one call its
+    /// tests make in its session. The content tests sign in with the token, since on Tableau Server 2025.1 a connected
+    /// app's session can't call a method whose scope came in REST API 3.27, such as the tags and the revision lists.
     /// </summary>
-    public static readonly string[] Scopes =
-    [
-        "tableau:content:read", "tableau:projects:*", "tableau:groups:*", "tableau:users:read", "tableau:permissions:read",
-        "tableau:permissions:update", "tableau:permissions:delete", "tableau:workbooks:update", "tableau:workbooks:download",
-        "tableau:workbooks:delete", "tableau:views:download", "tableau:datasources:update", "tableau:datasources:download",
-        "tableau:datasources:delete", "tableau:tasks:run", "tableau:workbook_tags:update", "tableau:workbook_tags:delete",
-        "tableau:tags:batch_create", "tableau:tags:batch_delete",
-    ];
+    public static readonly string[] Scopes = ["tableau:content:read"];
 
     /// <summary>The settings whose values name the site or the sign-in without being secrets.</summary>
     private static readonly string[] _knownSettings =
@@ -123,19 +119,33 @@ internal static partial class LiveSite
         Site = SiteContentUrl,
     };
 
-    /// <summary>Whether the suite signs in with the connected app, and not a personal access token.</summary>
-    public static bool UsesDirectTrust => TableauSite.SignInSettings(Environment.GetEnvironmentVariable) == TableauSite.DirectTrustSettings;
+    /// <summary>The personal access token every content test signs in with, its secret kept for the log check.</summary>
+    public static TableauCredentials Credentials() =>
+        TableauCredentials.PersonalAccessToken(TableauSite.Setting("TABLEAU_LIVE_PAT_NAME"), Secret("TABLEAU_LIVE_PAT_SECRET"));
 
-    /// <summary>The credentials the settings give, each secret kept for the log check.</summary>
-    public static TableauCredentials Credentials()
+    /// <summary>
+    /// The connected app's direct trust, asking for <see cref="Scopes"/>: the client mints its JWT at each sign-in. Its
+    /// secret value is kept for the log check.
+    /// </summary>
+    public static TableauCredentials ConnectedApp() =>
+        TableauCredentials.ConnectedAppDirectTrust(TableauSite.Setting("TABLEAU_LIVE_CLIENT_ID"), TableauSite.Setting("TABLEAU_LIVE_SECRET_ID"),
+            Secret("TABLEAU_LIVE_SECRET_VALUE"), TableauSite.Setting("TABLEAU_LIVE_USER"), Scopes);
+
+    /// <summary>
+    /// A JWT sign-in whose JWT the suite mints at each sign-in, as a caller's own code would, with the library's minting
+    /// and the connected app's settings: each JWT it gives is kept with the live secrets, so the log check and the
+    /// recorder's scan know it.
+    /// </summary>
+    public static TableauCredentials Jwt()
     {
-        if (UsesDirectTrust)
+        var (clientId, secretId) = (TableauSite.Setting("TABLEAU_LIVE_CLIENT_ID"), TableauSite.Setting("TABLEAU_LIVE_SECRET_ID"));
+        var (value, user) = (Secret("TABLEAU_LIVE_SECRET_VALUE"), TableauSite.Setting("TABLEAU_LIVE_USER"));
+        return TableauCredentials.Jwt(_ =>
         {
-            var value = Secret("TABLEAU_LIVE_SECRET_VALUE");
-            return TableauCredentials.ConnectedAppDirectTrust(TableauSite.Setting("TABLEAU_LIVE_CLIENT_ID"), TableauSite.Setting("TABLEAU_LIVE_SECRET_ID"),
-                value, TableauSite.Setting("TABLEAU_LIVE_USER"), Scopes);
-        }
-        return TableauCredentials.PersonalAccessToken(TableauSite.Setting("TABLEAU_LIVE_PAT_NAME"), Secret("TABLEAU_LIVE_PAT_SECRET"));
+            var jwt = ConnectedAppJwt.Mint(clientId, secretId, value, user, Scopes, DateTimeOffset.UtcNow);
+            _secrets.TryAdd(jwt, 0);
+            return ValueTask.FromResult(jwt);
+        });
     }
 
     /// <summary>
@@ -152,8 +162,24 @@ internal static partial class LiveSite
         return session;
     }
 
+    /// <summary>
+    /// What <paramref name="call"/> answers; a sign-in it fails says what to check for <paramref name="signIn"/>, never a
+    /// setting's value.
+    /// </summary>
+    public static async Task<T> SignedInAsync<T>(LiveSignIn signIn, Func<Task<T>> call)
+    {
+        try
+        {
+            return await call();
+        }
+        catch (TableauException e) when (e.Kind == TableauErrorKind.Authentication)
+        {
+            throw new AssertFailedException($"The sign-in failed ({e.ErrorCode}: {e.Summary}): {SignInHint(signIn)}.", e);
+        }
+    }
+
     /// <summary>What a failed sign-in may mean, for an assertion's message: never a setting's value.</summary>
-    public static string SignInHint => UsesDirectTrust
+    public static string SignInHint(LiveSignIn signIn) => signIn == LiveSignIn.ConnectedApp
         ? "the connected app refused the JWT: check that it is enabled, that its secret is current, and that TABLEAU_LIVE_USER is the "
             + "user's name as Tableau Server shows it; with Active Directory or LDAP that may need the domain, as the server's users "
             + "page shows it, such as domain\\user or domain/user"

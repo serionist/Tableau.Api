@@ -23,7 +23,7 @@ public sealed class LiveAreaTests
     /// <summary>A name with an ampersand, pluses, a hash, a percent and a space, which a filter carries as written.</summary>
     private const string NestedName = "R&D C++ #1 100%";
 
-    [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = true), TestCategory(TableauSite.Live)]
+    [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = LiveSignIn.Token), TestCategory(TableauSite.Live)]
     public async Task AProjectIsMadeFoundByAFilterUpdatedAndDeletedInTheRunsProject()
     {
         await using var client = LiveSite.Client(LiveSite.Credentials());
@@ -58,7 +58,7 @@ public sealed class LiveAreaTests
         Assert.IsGreaterThanOrEqualTo(1, page.TotalAvailable ?? 0);
     }
 
-    [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = true), TestCategory(TableauSite.Live)]
+    [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = LiveSignIn.Token), TestCategory(TableauSite.Live)]
     public async Task ALocalGroupIsMadeFoundRenamedGivenTheSuitesUserAndDeleted()
     {
         await using var client = LiveSite.Client(LiveSite.Credentials());
@@ -88,7 +88,7 @@ public sealed class LiveAreaTests
         await ClientFixtures.FailsAsync(TableauErrorKind.NotFound, () => AreaFixtures.AllAsync(client.Groups.ListUsersAsync(group.Id!)));
     }
 
-    [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = true), TestCategory(TableauSite.Live)]
+    [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = LiveSignIn.Token), TestCategory(TableauSite.Live)]
     public async Task UsersAreListedPageByPageAndTheSuitesOwnIsReadByIdAndByFilter()
     {
         await using var client = LiveSite.Client(LiveSite.Credentials());
@@ -114,7 +114,7 @@ public sealed class LiveAreaTests
         Assert.IsTrue(groups.Any(group => group.Name == "All Users"), "every user is in All Users");
     }
 
-    [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = true), TestCategory(TableauSite.Live)]
+    [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = LiveSignIn.Token), TestCategory(TableauSite.Live)]
     public async Task ACapabilityIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted()
     {
         await using var client = LiveSite.Client(LiveSite.Credentials());
@@ -144,7 +144,7 @@ public sealed class LiveAreaTests
         Assert.IsFalse(Grants(after, group.Id!), "the delete took the group's Read away");
     }
 
-    [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = true), TestCategory(TableauSite.Live)]
+    [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = LiveSignIn.Token), TestCategory(TableauSite.Live)]
     public async Task AMetadataQueryReadsTheWorkbooksPageByPage()
     {
         await using var client = LiveSite.Client(LiveSite.Credentials());
