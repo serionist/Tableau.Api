@@ -166,6 +166,9 @@ public sealed class LiveAreaTests
         var variables = InProject();
         variables["first"] = 1;
         var first = await client.Metadata.QueryAsync(Workbooks, variables, LiveJson.Default.LiveWorkbooksData);
+        // A page by itself, and the next from its cursor.
+        var page = await client.Metadata.QueryPageAsync(Workbooks, "workbooksConnection", LiveJson.Default.LiveWorkbookNode, variables: InProject(), pageSize: 1);
+        var next = await client.Metadata.QueryPageAsync(Workbooks, "workbooksConnection", LiveJson.Default.LiveWorkbookNode, page.EndCursor, InProject(), 1);
 
         Assert.AreEqual(total, all.Count);
         Assert.HasCount(all.Count, all.Select(workbook => workbook.Luid).Distinct(), "no workbook twice across pages");
@@ -173,6 +176,9 @@ public sealed class LiveAreaTests
             "the run's project holds the samples alone");
         Assert.AreEqual(total, first.WorkbooksConnection.TotalCount);
         CollectionAssert.AreEqual(all.Take(1).Select(workbook => workbook.Luid).ToArray(), first.WorkbooksConnection.Nodes.Select(workbook => workbook.Luid).ToArray());
+        Assert.AreEqual((true, false), (page.HasNextPage, string.IsNullOrEmpty(page.EndCursor)), "the first page of one says more follow, and where");
+        CollectionAssert.AreEqual(all.Take(2).Select(workbook => workbook.Luid).ToArray(), page.Items.Concat(next.Items).Select(workbook => workbook.Luid).ToArray(),
+            "the next page starts after the first's cursor");
     }
 }
 

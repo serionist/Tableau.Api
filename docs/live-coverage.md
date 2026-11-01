@@ -92,8 +92,8 @@ run: it stays checked by hand.
 | `PermissionsClient.GetAsync` | List Flow Permissions | no | no flow in the run's site, and the 2.0 client can't publish one |
 | `PermissionsClient.GetAsync` | List Virtual Connection Permissions | no | no virtual connection on the server, and the 2.0 client can't make one |
 | `PermissionsClient.GetAsync` | List Collection Permissions | no | the 2.0 client can't make a collection |
-| `PermissionsClient.GetAsync` | List Database Permissions | no | not live yet (#57) |
-| `PermissionsClient.GetAsync` | List Table Permissions | no | not live yet (#57) |
+| `PermissionsClient.GetAsync` | List Database Permissions | refused 400120 | `LiveCatalogTests.TheSamplesCatalogAssetsAreListedGotDescribedTaggedPermittedWarnedAndDeleted` |
+| `PermissionsClient.GetAsync` | List Table Permissions | refused 400120 | `LiveCatalogTests.TheSamplesCatalogAssetsAreListedGotDescribedTaggedPermittedWarnedAndDeleted` |
 | `PermissionsClient.AddAsync` | Add Project Permissions | yes | `LiveAreaTests.ACapabilityIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted` |
 | `PermissionsClient.AddAsync` | Add Workbook Permissions | yes | `LiveAccessTests.ACapabilityIsGrantedToARunsGroupOnASampleWorkbookViewAndDataSourceReadBackAndDeleted` |
 | `PermissionsClient.AddAsync` | Add View Permissions | yes | `LiveAccessTests.ACapabilityIsGrantedToARunsGroupOnASampleWorkbookViewAndDataSourceReadBackAndDeleted` |
@@ -101,8 +101,8 @@ run: it stays checked by hand.
 | `PermissionsClient.AddAsync` | Add Flow Permissions | no | no flow in the run's site, and the 2.0 client can't publish one |
 | `PermissionsClient.AddAsync` | Add Virtual Connection Permissions | no | no virtual connection on the server, and the 2.0 client can't make one |
 | `PermissionsClient.AddAsync` | Add Collection Permissions | no | the 2.0 client can't make a collection |
-| `PermissionsClient.AddAsync` | Add Database Permissions | no | not live yet (#57) |
-| `PermissionsClient.AddAsync` | Add Table Permissions | no | not live yet (#57) |
+| `PermissionsClient.AddAsync` | Add Database Permissions | refused 400120 | `LiveCatalogTests.TheSamplesCatalogAssetsAreListedGotDescribedTaggedPermittedWarnedAndDeleted` |
+| `PermissionsClient.AddAsync` | Add Table Permissions | refused 400120 | `LiveCatalogTests.TheSamplesCatalogAssetsAreListedGotDescribedTaggedPermittedWarnedAndDeleted` |
 | `PermissionsClient.DeleteAsync` | Delete Project Permission | yes | `LiveAreaTests.ACapabilityIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted` |
 | `PermissionsClient.DeleteAsync` | Delete Workbook Permission | yes | `LiveAccessTests.ACapabilityIsGrantedToARunsGroupOnASampleWorkbookViewAndDataSourceReadBackAndDeleted` |
 | `PermissionsClient.DeleteAsync` | Delete View Permission | yes | `LiveAccessTests.ACapabilityIsGrantedToARunsGroupOnASampleWorkbookViewAndDataSourceReadBackAndDeleted` |
@@ -110,8 +110,8 @@ run: it stays checked by hand.
 | `PermissionsClient.DeleteAsync` | Delete Flow Permission | no | no flow in the run's site, and the 2.0 client can't publish one |
 | `PermissionsClient.DeleteAsync` | Delete Virtual Connection Permission | no | no virtual connection on the server, and the 2.0 client can't make one |
 | `PermissionsClient.DeleteAsync` | Delete Collection Permission | no | the 2.0 client can't make a collection |
-| `PermissionsClient.DeleteAsync` | Delete Database Permissions | no | not live yet (#57) |
-| `PermissionsClient.DeleteAsync` | Delete Table Permissions | no | not live yet (#57) |
+| `PermissionsClient.DeleteAsync` | Delete Database Permissions | refused 400120 | `LiveCatalogTests.TheSamplesCatalogAssetsAreListedGotDescribedTaggedPermittedWarnedAndDeleted` |
+| `PermissionsClient.DeleteAsync` | Delete Table Permissions | refused 400120 | `LiveCatalogTests.TheSamplesCatalogAssetsAreListedGotDescribedTaggedPermittedWarnedAndDeleted` |
 | `PermissionsClient.GetDefaultAsync` | List Default Permissions for Workbooks | yes | `LiveAccessTests.EachKindOfDefaultPermissionIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted` |
 | `PermissionsClient.GetDefaultAsync` | List Default Permissions for Data Sources | yes | `LiveAccessTests.EachKindOfDefaultPermissionIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted` |
 | `PermissionsClient.GetDefaultAsync` | List Default Permissions for Data Roles | refused 405000 | `LiveAccessTests.EachKindOfDefaultPermissionIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted` |
@@ -134,45 +134,45 @@ run: it stays checked by hand.
 | `PermissionsClient.DeleteDefaultAsync` | Delete Default Permission for Databases | yes | `LiveAccessTests.EachKindOfDefaultPermissionIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted` |
 | `PermissionsClient.DeleteDefaultAsync` | Delete Default Permission for Tables | yes | `LiveAccessTests.EachKindOfDefaultPermissionIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted` |
 | `TagsClient.AddAsync` | Add Tags to Workbook | yes | `LiveContentTests.SamplesAreTaggedWithASpaceAndACommaOneAtATimeAndInABatchAndOneIsDeleted` |
-| `TagsClient.AddAsync` | Add Tags to View | no | not live yet (#57) |
-| `TagsClient.AddAsync` | Add Tags to Data Source | no | not live yet (#57) |
+| `TagsClient.AddAsync` | Add Tags to View | yes | `LiveContentTests.ASampleViewIsListedGotAndExportedWithAViewFilter` |
+| `TagsClient.AddAsync` | Add Tags to Data Source | yes | `LiveContentTests.ThePublishedSampleDataSourceIsReadDownloadedUpdatedAndDeleted` |
 | `TagsClient.AddAsync` | Add Tags to Virtual Connection | no | no virtual connection on the server, and the 2.0 client can't make one |
-| `TagsClient.AddAsync` | Add Tags to Database | no | not live yet (#57) |
-| `TagsClient.AddAsync` | Add Tags to Table | no | not live yet (#57) |
-| `TagsClient.AddAsync` | Add Tags to Column | no | not live yet (#57) |
+| `TagsClient.AddAsync` | Add Tags to Database | yes | `LiveCatalogTests.TheSamplesCatalogAssetsAreListedGotDescribedTaggedPermittedWarnedAndDeleted` |
+| `TagsClient.AddAsync` | Add Tags to Table | yes | `LiveCatalogTests.TheSamplesCatalogAssetsAreListedGotDescribedTaggedPermittedWarnedAndDeleted` |
+| `TagsClient.AddAsync` | Add Tags to Column | yes | `LiveCatalogTests.TheSamplesCatalogAssetsAreListedGotDescribedTaggedPermittedWarnedAndDeleted` |
 | `TagsClient.DeleteAsync` | Delete Tag from Workbook | yes | `LiveContentTests.SamplesAreTaggedWithASpaceAndACommaOneAtATimeAndInABatchAndOneIsDeleted` |
-| `TagsClient.DeleteAsync` | Delete Tag from View | no | not live yet (#57) |
-| `TagsClient.DeleteAsync` | Delete Tag from Data Source | no | not live yet (#57) |
+| `TagsClient.DeleteAsync` | Delete Tag from View | yes | `LiveContentTests.ASampleViewIsListedGotAndExportedWithAViewFilter` |
+| `TagsClient.DeleteAsync` | Delete Tag from Data Source | yes | `LiveContentTests.ThePublishedSampleDataSourceIsReadDownloadedUpdatedAndDeleted` |
 | `TagsClient.DeleteAsync` | Delete Tag from Virtual Connection | no | no virtual connection on the server, and the 2.0 client can't make one |
-| `TagsClient.DeleteAsync` | Delete Tag from Database | no | not live yet (#57) |
-| `TagsClient.DeleteAsync` | Delete Tag from Table | no | not live yet (#57) |
-| `TagsClient.DeleteAsync` | Delete Tag from Column | no | not live yet (#57) |
+| `TagsClient.DeleteAsync` | Delete Tag from Database | yes | `LiveCatalogTests.TheSamplesCatalogAssetsAreListedGotDescribedTaggedPermittedWarnedAndDeleted` |
+| `TagsClient.DeleteAsync` | Delete Tag from Table | yes | `LiveCatalogTests.TheSamplesCatalogAssetsAreListedGotDescribedTaggedPermittedWarnedAndDeleted` |
+| `TagsClient.DeleteAsync` | Delete Tag from Column | yes | `LiveCatalogTests.TheSamplesCatalogAssetsAreListedGotDescribedTaggedPermittedWarnedAndDeleted` |
 | `TagsClient.AddBatchAsync` | Batch Add Tags | yes | `LiveContentTests.SamplesAreTaggedWithASpaceAndACommaOneAtATimeAndInABatchAndOneIsDeleted`, `LiveContentTests.ThePublishedSampleDataSourceIsReadDownloadedUpdatedAndDeleted` |
 | `TagsClient.DeleteBatchAsync` | Batch Delete Tags | yes | `LiveContentTests.SamplesAreTaggedWithASpaceAndACommaOneAtATimeAndInABatchAndOneIsDeleted`, `LiveContentTests.ThePublishedSampleDataSourceIsReadDownloadedUpdatedAndDeleted` |
-| `MetadataClient.ListDatabasesAsync` | Query Databases | no | not live yet (#57) |
-| `MetadataClient.ListDatabasesPageAsync` | Query Databases | no | not live yet (#57) |
-| `MetadataClient.GetDatabaseAsync` | Query Database | no | not live yet (#57) |
-| `MetadataClient.UpdateDatabaseAsync` | Update Database | no | not live yet (#57) |
-| `MetadataClient.DeleteDatabaseAsync` | Delete Database | no | not live yet (#57) |
-| `MetadataClient.ListTablesAsync` | Query Tables | no | not live yet (#57) |
-| `MetadataClient.ListTablesPageAsync` | Query Tables | no | not live yet (#57) |
-| `MetadataClient.GetTableAsync` | Query Table | no | not live yet (#57) |
-| `MetadataClient.UpdateTableAsync` | Update Table | no | not live yet (#57) |
-| `MetadataClient.DeleteTableAsync` | Delete Table | no | not live yet (#57) |
-| `MetadataClient.ListColumnsAsync` | Query Columns in a Table | no | not live yet (#57) |
-| `MetadataClient.UpdateColumnAsync` | Update Column | no | not live yet (#57) |
-| `MetadataClient.DeleteColumnAsync` | Delete Column | no | not live yet (#57) |
-| `MetadataClient.AddDataQualityWarningAsync` | Add Data Quality Warning | no | not live yet (#57) |
-| `MetadataClient.AddDataQualityWarningAsync` | Add Data Quality Warning to a column | no | not live yet (#57) |
-| `MetadataClient.UpdateDataQualityWarningAsync` | Update Data Quality Warning | no | not live yet (#57) |
-| `MetadataClient.ListDataQualityWarningsAsync` | Query Data Quality Warning by Content | no | not live yet (#57) |
-| `MetadataClient.ListDataQualityWarningsAsync` | Query Data Quality Warning by Content, of a column | no | not live yet (#57) |
-| `MetadataClient.DeleteDataQualityWarningAsync` | Delete Data Quality Warning by ID | no | not live yet (#57) |
-| `MetadataClient.DeleteDataQualityWarningsAsync` | Delete Data Quality Warning by Content | no | not live yet (#57) |
-| `MetadataClient.DeleteDataQualityWarningsAsync` | Delete Data Quality Warning by Content, of a column | no | not live yet (#57) |
+| `MetadataClient.ListDatabasesAsync` | Query Databases | yes | `LiveCatalogTests.TheSamplesCatalogAssetsAreListedGotDescribedTaggedPermittedWarnedAndDeleted` |
+| `MetadataClient.ListDatabasesPageAsync` | Query Databases | yes | `LiveCatalogTests.TheSamplesCatalogAssetsAreListedGotDescribedTaggedPermittedWarnedAndDeleted` |
+| `MetadataClient.GetDatabaseAsync` | Query Database | yes | `LiveCatalogTests.TheSamplesCatalogAssetsAreListedGotDescribedTaggedPermittedWarnedAndDeleted` |
+| `MetadataClient.UpdateDatabaseAsync` | Update Database | yes | `LiveCatalogTests.TheSamplesCatalogAssetsAreListedGotDescribedTaggedPermittedWarnedAndDeleted` |
+| `MetadataClient.DeleteDatabaseAsync` | Delete Database | yes | `LiveCatalogTests.TheSamplesCatalogAssetsAreListedGotDescribedTaggedPermittedWarnedAndDeleted` |
+| `MetadataClient.ListTablesAsync` | Query Tables | yes | `LiveCatalogTests.TheSamplesCatalogAssetsAreListedGotDescribedTaggedPermittedWarnedAndDeleted` |
+| `MetadataClient.ListTablesPageAsync` | Query Tables | yes | `LiveCatalogTests.TheSamplesCatalogAssetsAreListedGotDescribedTaggedPermittedWarnedAndDeleted` |
+| `MetadataClient.GetTableAsync` | Query Table | yes | `LiveCatalogTests.TheSamplesCatalogAssetsAreListedGotDescribedTaggedPermittedWarnedAndDeleted` |
+| `MetadataClient.UpdateTableAsync` | Update Table | yes | `LiveCatalogTests.TheSamplesCatalogAssetsAreListedGotDescribedTaggedPermittedWarnedAndDeleted` |
+| `MetadataClient.DeleteTableAsync` | Delete Table | yes | `LiveCatalogTests.TheSamplesCatalogAssetsAreListedGotDescribedTaggedPermittedWarnedAndDeleted` |
+| `MetadataClient.ListColumnsAsync` | Query Columns in a Table | yes | `LiveCatalogTests.TheSamplesCatalogAssetsAreListedGotDescribedTaggedPermittedWarnedAndDeleted` |
+| `MetadataClient.UpdateColumnAsync` | Update Column | yes | `LiveCatalogTests.TheSamplesCatalogAssetsAreListedGotDescribedTaggedPermittedWarnedAndDeleted` |
+| `MetadataClient.DeleteColumnAsync` | Delete Column | yes | `LiveCatalogTests.TheSamplesCatalogAssetsAreListedGotDescribedTaggedPermittedWarnedAndDeleted` |
+| `MetadataClient.AddDataQualityWarningAsync` | Add Data Quality Warning | yes | `LiveCatalogTests.TheSamplesCatalogAssetsAreListedGotDescribedTaggedPermittedWarnedAndDeleted` |
+| `MetadataClient.AddDataQualityWarningAsync` | Add Data Quality Warning to a column | yes | `LiveCatalogTests.TheSamplesCatalogAssetsAreListedGotDescribedTaggedPermittedWarnedAndDeleted` |
+| `MetadataClient.UpdateDataQualityWarningAsync` | Update Data Quality Warning | yes | `LiveCatalogTests.TheSamplesCatalogAssetsAreListedGotDescribedTaggedPermittedWarnedAndDeleted` |
+| `MetadataClient.ListDataQualityWarningsAsync` | Query Data Quality Warning by Content | yes | `LiveCatalogTests.TheSamplesCatalogAssetsAreListedGotDescribedTaggedPermittedWarnedAndDeleted` |
+| `MetadataClient.ListDataQualityWarningsAsync` | Query Data Quality Warning by Content, of a column | yes | `LiveCatalogTests.TheSamplesCatalogAssetsAreListedGotDescribedTaggedPermittedWarnedAndDeleted` |
+| `MetadataClient.DeleteDataQualityWarningAsync` | Delete Data Quality Warning by ID | yes | `LiveCatalogTests.TheSamplesCatalogAssetsAreListedGotDescribedTaggedPermittedWarnedAndDeleted` |
+| `MetadataClient.DeleteDataQualityWarningsAsync` | Delete Data Quality Warning by Content | yes | `LiveCatalogTests.TheSamplesCatalogAssetsAreListedGotDescribedTaggedPermittedWarnedAndDeleted` |
+| `MetadataClient.DeleteDataQualityWarningsAsync` | Delete Data Quality Warning by Content, of a column | yes | `LiveCatalogTests.TheSamplesCatalogAssetsAreListedGotDescribedTaggedPermittedWarnedAndDeleted` |
 | `MetadataClient.QueryAsync` | Metadata API query | yes | `LiveAreaTests.AMetadataQueryReadsTheWorkbooksPageByPage` |
 | `MetadataClient.QueryAsync<T>` | Metadata API query | yes | `LiveAreaTests.AMetadataQueryReadsTheWorkbooksPageByPage` |
-| `MetadataClient.QueryPageAsync<T>` | Metadata API query | no | not live yet (#57) |
+| `MetadataClient.QueryPageAsync<T>` | Metadata API query | yes | `LiveAreaTests.AMetadataQueryReadsTheWorkbooksPageByPage` |
 | `MetadataClient.ListNodesAsync<T>` | Metadata API query | yes | `LiveAreaTests.AMetadataQueryReadsTheWorkbooksPageByPage` |
 | `WorkbooksClient.ListAsync` | Query Workbooks for Site | yes | `LiveContentTests.SampleWorkbooksAreListedGotDownloadedAndUpdated`, `LiveSite` |
 | `WorkbooksClient.ListPageAsync` | Query Workbooks for Site | yes | `LiveContentTests.SampleWorkbooksAreListedGotDownloadedAndUpdated` |
@@ -194,11 +194,11 @@ run: it stays checked by hand.
 | `WorkbooksClient.DownloadRevisionAsync` | Download Workbook Revision | refused 400057 | `LiveContentTests.SampleWorkbooksAreListedGotDownloadedAndUpdated` |
 | `WorkbooksClient.RemoveRevisionAsync` | Remove Workbook Revision | refused 403055 | `LiveContentTests.SampleWorkbooksAreListedGotDownloadedAndUpdated` |
 | `ViewsClient.ListAsync` | Query Views for Site | yes | `LiveContentTests.ASampleViewIsListedGotAndExportedWithAViewFilter` |
-| `ViewsClient.ListPageAsync` | Query Views for Site | no | not live yet (#57) |
+| `ViewsClient.ListPageAsync` | Query Views for Site | yes | `LiveContentTests.ASampleViewIsListedGotAndExportedWithAViewFilter` |
 | `ViewsClient.GetAsync` | Get View | yes | `LiveContentTests.ASampleViewIsListedGotAndExportedWithAViewFilter` |
 | `ViewsClient.ListForWorkbookAsync` | Query Views for Workbook | yes | `LiveContentTests.ASampleViewIsListedGotAndExportedWithAViewFilter` |
 | `ViewsClient.DownloadDataAsync` | Query View Data | yes | `LiveContentTests.ASampleViewIsListedGotAndExportedWithAViewFilter` |
-| `ViewsClient.DownloadImageAsync` | Query View Image | no | not live yet (#57) |
+| `ViewsClient.DownloadImageAsync` | Query View Image | yes | `LiveContentTests.ASampleViewIsListedGotAndExportedWithAViewFilter` |
 | `ViewsClient.DownloadImageAsync` | Query View Image at a size | yes | `LiveContentTests.ASampleViewIsListedGotAndExportedWithAViewFilter` |
 | `ViewsClient.DownloadPdfAsync` | Query View PDF | yes | `LiveContentTests.ASampleViewIsListedGotAndExportedWithAViewFilter` |
 | `ViewsClient.DownloadCrosstabAsync` | Download View Crosstab Excel | yes | `LiveContentTests.ASampleViewIsListedGotAndExportedWithAViewFilter` |

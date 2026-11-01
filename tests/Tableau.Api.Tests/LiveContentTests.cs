@@ -216,6 +216,12 @@ public sealed partial class LiveContentTests
         // A batch names a data source Datasource, the least obvious of the types: tagged and untagged in one, each call's
         // refusal, if any, scrubbed before it reaches the log.
         var content = TableauContent.DataSource(listed.Id!);
+        // The data source alone first, then in a batch.
+        var ownAdded = (await client.Tags.AddAsync(content, _labels)).Select(tag => tag.Label ?? "").ToArray();
+        var ownTagged = (await client.DataSources.GetAsync(listed.Id!)).Tags?.Select(tag => tag.Label ?? "").ToArray() ?? [];
+        foreach (var label in _labels)
+            await client.Tags.DeleteAsync(content, label);
+        var ownUntagged = (await client.DataSources.GetAsync(listed.Id!)).Tags?.Select(tag => tag.Label ?? "").ToArray() ?? [];
         var batchAdded = await OutcomeAsync("a data source's batch tags added", async () =>
         {
             await client.Tags.AddBatchAsync(_labels, [content]);
@@ -247,6 +253,12 @@ public sealed partial class LiveContentTests
         Assert.IsTrue(refresh.StartsWith("job RefreshExtract", StringComparison.Ordinal) || refresh.Contains(" 403180 ", StringComparison.Ordinal), refresh);
         Assert.AreEqual(("added", "deleted"), (batchAdded, batchDeleted));
         foreach (var label in _labels)
+        {
+            Assert.AreEqual(1, ownAdded.Count(tag => tag == label), $"Add Tags to Data Source answers '{label}' once: [{string.Join(" | ", ownAdded)}]");
+            Assert.AreEqual(1, ownTagged.Count(tag => tag == label), $"the data source holds '{label}' once: [{string.Join(" | ", ownTagged)}]");
+        }
+        Assert.IsFalse(ownUntagged.Intersect(_labels).Any(), $"Delete Tag from Data Source took the labels off: [{string.Join(" | ", ownUntagged)}]");
+        foreach (var label in _labels)
             Assert.AreEqual(1, tagged.Count(tag => tag == label), $"the batch tagged the data source with '{label}' once: [{string.Join(" | ", tagged)}]");
         Assert.IsFalse(untagged.Intersect(_labels).Any(), $"the batch took the labels off the data source: [{string.Join(" | ", untagged)}]");
         await ClientFixtures.FailsAsync(TableauErrorKind.NotFound, () => client.DataSources.GetAsync(listed.Id!));
@@ -277,18 +289,23 @@ public sealed partial class LiveContentTests
         var sample = samples[0];
 
         var views = await AreaFixtures.AllAsync(client.Views.ListForWorkbookAsync(sample.Id!, includeUsageStatistics: true));
+        var ofSample = TableauFilter.And(TableauFilter.Eq(ViewField.ProjectName, LiveSite.ProjectName), TableauFilter.Eq(ViewField.WorkbookName, sample.Name!));
         // Tableau lists a view from its search index, which may take a moment after the sample is published.
         var listed = await LiveSite.EventuallyAsync(async () =>
         {
-            var found = await AreaFixtures.AllAsync(client.Views.ListAsync(new ViewListOptions
-            {
-                Filter = TableauFilter.And(TableauFilter.Eq(ViewField.ProjectName, LiveSite.ProjectName), TableauFilter.Eq(ViewField.WorkbookName, sample.Name!)),
-                PageSize = 2,
-            }));
+            var found = await AreaFixtures.AllAsync(client.Views.ListAsync(new ViewListOptions { Filter = ofSample, PageSize = 2 }));
             return found.Count >= views.Count ? found : null;
         }, "The sample's views", TimeSpan.FromMinutes(2));
+        var viewPage = await client.Views.ListPageAsync(1, new ViewListOptions { Filter = ofSample, PageSize = 1 });
         var worksheet = listed.FirstOrDefault(found => string.Equals(found.SheetType, "worksheet", StringComparison.OrdinalIgnoreCase)) ?? listed[0];
         var view = await client.Views.GetAsync(worksheet.Id!, includeUsageStatistics: true);
+        // A shared sample's view, tagged and untagged in the test.
+        var viewContent = TableauContent.View(view.Id!);
+        var viewAdded = (await client.Tags.AddAsync(viewContent, _labels)).Select(tag => tag.Label ?? "").ToArray();
+        var viewTagged = (await client.Views.GetAsync(view.Id!)).Tags?.Select(tag => tag.Label ?? "").ToArray() ?? [];
+        foreach (var label in _labels)
+            await client.Tags.DeleteAsync(viewContent, label);
+        var viewUntagged = (await client.Views.GetAsync(view.Id!)).Tags?.Select(tag => tag.Label ?? "").ToArray() ?? [];
         string csv;
         await using (var data = await client.Views.DownloadDataAsync(view.Id!))
         {
@@ -311,6 +328,8 @@ public sealed partial class LiveContentTests
             Filters = filters,
         }))
             Assert.AreEqual((TableauFileKind.Png, "\u0089PNG"), (image.Kind, await StartAsync(image, 4)));
+        await using (var image = await client.Views.DownloadImageAsync(view.Id!))
+            Assert.AreEqual((TableauFileKind.Png, "\u0089PNG"), (image.Kind, await StartAsync(image, 4)), "an image at the view's own size");
         await using (var pdf = await client.Views.DownloadPdfAsync(view.Id!, new ExportOptions
         {
             PageType = PageType.Letter,
@@ -330,7 +349,14 @@ public sealed partial class LiveContentTests
         Assert.IsTrue(views.All(found => found.Usage is not null), "each view comes with its usage");
         Assert.IsTrue(listed.All(found => found.Workbook?.Id == sample.Id), "the filter keeps the sample's views");
         Assert.HasCount(listed.Count, listed.Select(found => found.Id).Distinct(), "no view twice across pages of two");
+        Assert.AreEqual((1, (int?)listed.Count), (viewPage.Items.Count, viewPage.TotalAvailable), "a page of one, of the sample's views");
         Assert.AreEqual(worksheet.Id, view.Id);
+        foreach (var label in _labels)
+        {
+            Assert.AreEqual(1, viewAdded.Count(tag => tag == label), $"Add Tags to View answers '{label}' once: [{string.Join(" | ", viewAdded)}]");
+            Assert.AreEqual(1, viewTagged.Count(tag => tag == label), $"the view holds '{label}' once: [{string.Join(" | ", viewTagged)}]");
+        }
+        Assert.IsFalse(viewUntagged.Intersect(_labels).Any(), $"Delete Tag from View took the labels off: [{string.Join(" | ", viewUntagged)}]");
         Assert.IsGreaterThan(1, rows.Count, "the data has a header and a row at least");
         if (column >= 0)
         {
