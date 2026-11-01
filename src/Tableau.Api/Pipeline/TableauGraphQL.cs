@@ -88,14 +88,24 @@ internal static class TableauGraphQL
     }
 
     /// <summary>The errors as an exception carries them, whatever the answer's status.</summary>
-    public static Described Describe(IReadOnlyList<Error> errors) =>
-        new(errors[0].Code, errors[0].Message, errors.Count > 1 ? string.Join("; ", errors.Skip(1).Select(error => error.Message)) : null,
+    /// <remarks>
+    /// The code and the summary are the first entry's that isn't a warning, which is why the call failed; the first
+    /// entry's when all are warnings. Every other entry's message is in the detail, in order.
+    /// </remarks>
+    public static Described Describe(IReadOnlyList<Error> errors)
+    {
+        var failed = 0;
+        while (failed < errors.Count && errors[failed].IsWarning) failed++;
+        if (failed == errors.Count) failed = 0;
+        var others = errors.Where((_, index) => index != failed).Select(error => error.Message).ToList();
+        return new(errors[failed].Code, errors[failed].Message, others.Count > 0 ? string.Join("; ", others) : null,
             errors.Any(error => string.Equals(error.Code, RateExceeded, StringComparison.Ordinal)));
+    }
 
     /// <summary>
     /// What <paramref name="select"/> makes of a query's <c>data</c>. An answer whose <c>errors</c> are all warnings,
-    /// which come with data that may be partial, logs each at Warning and returns the data; any other entry, or an
-    /// answer that isn't GraphQL's JSON, throws <see cref="TableauException"/>.
+    /// which come with data that may be partial, returns the data and logs each warning at Warning once it is read; any
+    /// other entry, warnings with no data, or an answer that isn't GraphQL's JSON, throws <see cref="TableauException"/>.
     /// </summary>
     /// <param name="pipeline">The pipeline that logs a warning.</param>
     /// <param name="endpoint">The query's descriptor, which a message names.</param>
@@ -121,18 +131,24 @@ internal static class TableauGraphQL
             var errors = Errors(root);
             if (errors.Any(error => !error.IsWarning))
                 throw Failed(endpoint, answer, errors);
-            foreach (var warning in errors)
-                pipeline.Warned(endpoint, answer.Path, warning.Code, warning.Message);
             if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object)
-                throw Invalid(endpoint, answer, "no data", null);
+            {
+                // Warnings with no data to return are the call's failure, under the warning's own code.
+                throw errors.Count > 0 ? Failed(endpoint, answer, errors) : Invalid(endpoint, answer, "no data", null);
+            }
+            T result;
             try
             {
-                return select(data);
+                result = select(data);
             }
             catch (Exception e) when (e is JsonException or InvalidDataException)
             {
                 throw Invalid(endpoint, answer, $"data it couldn't read: {e.Message}", e);
             }
+            // Logged once the data is returned, which is what the line says.
+            foreach (var warning in errors)
+                pipeline.Warned(endpoint, answer.Path, warning.Code, warning.Message);
+            return result;
         }
     }
 
@@ -183,9 +199,9 @@ internal static class TableauGraphQL
         return new CursorPage<T>(items.AsReadOnly(), endCursor, hasNextPage.GetBoolean());
     }
 
-    // An answer with an error that is no warning: Tableau's own code and message for each, the warnings among them, the
-    // first as the code and summary. RATE_EXCEEDED is a rate limit, which RateLimited names; any other is Http, as
-    // Tableau's other error answers are.
+    // An answer with an error that is no warning, or with warnings and no data: Tableau's own code and message for each
+    // entry, as Describe picks the code and the summary. RATE_EXCEEDED is a rate limit, which RateLimited names; any
+    // other is Http, as Tableau's other error answers are.
     private static TableauException Failed(Endpoint endpoint, JsonAnswer answer, IReadOnlyList<Error> errors)
     {
         var listed = string.Join("; ", errors.Select(error => error.Code is null ? error.Message : $"{error.Code}: {error.Message}"));

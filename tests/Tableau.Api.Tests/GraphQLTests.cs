@@ -118,9 +118,11 @@ public sealed class GraphQLTests
         var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.Http, () => client.Metadata.QueryAsync(Paged));
 
         Assert.AreEqual(HttpStatusCode.OK, thrown.StatusCode);
-        Assert.AreEqual("NODE_LIMIT_EXCEEDED", thrown.ErrorCode);
-        Assert.StartsWith("Showing partial results.", thrown.Summary);
-        Assert.AreEqual("Invented: a second error, its code left out.", thrown.Detail);
+        // The warning comes first; the code and the summary are the error's, which failed the call, and the warning's
+        // message is in Detail.
+        Assert.IsNull(thrown.ErrorCode);
+        Assert.AreEqual("Invented: a second error, its code left out.", thrown.Summary);
+        Assert.StartsWith("Showing partial results.", thrown.Detail);
         Assert.AreEqual(Endpoint, thrown.RequestPath);
         Assert.Contains("Metadata API query (POST /api/metadata/graphql) answered with errors: NODE_LIMIT_EXCEEDED: Showing partial results.", thrown.Message);
         Assert.Contains("NODE_LIMIT_EXCEEDED", thrown.ResponseBody!);
@@ -361,9 +363,48 @@ public sealed class GraphQLTests
 
         var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.Http, () => client.Metadata.QueryAsync(Paged));
 
-        Assert.AreEqual(("BACKFILL_RUNNING", "Invented: an error."), (thrown.ErrorCode, thrown.Detail));
+        // The error, not the warning before it, names why the call failed; the warning is in Detail and the message.
+        Assert.AreEqual(("INVALID_ARGUMENT", "Invented: an error.", "Still creating the Metadata API Store."),
+            (thrown.ErrorCode, thrown.Summary, thrown.Detail));
         Assert.Contains("BACKFILL_RUNNING: Still creating the Metadata API Store.; INVALID_ARGUMENT: Invented: an error.", thrown.Message);
         Assert.IsEmpty(Partial(log));
+    }
+
+    [TestMethod]
+    [DataRow("""{"data":null,""")]
+    [DataRow("""{""")]
+    public async Task WarningsWithNoDataFailUnderTheWarningsCodeAndLogNothing(string start)
+    {
+        using var server = AreaFixtures.Server();
+        server.Map("POST", Endpoint, FakeResponse.Json(200, start + """
+             "errors":[{"message":"Can't show all data because the timeout limit has been exceeded.","extensions":{"severity":"WARNING","code":"TIME_LIMIT_EXCEEDED"}}]}
+            """));
+        var log = new RecordingLogger();
+        await using var client = Logged(server, log);
+
+        var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.Http, () => client.Metadata.QueryAsync(Paged));
+
+        Assert.AreEqual(("TIME_LIMIT_EXCEEDED", "Can't show all data because the timeout limit has been exceeded."), (thrown.ErrorCode, thrown.Summary));
+        Assert.IsNull(thrown.Detail);
+        Assert.IsEmpty(Partial(log), "nothing is returned, so no line says it is");
+    }
+
+    [TestMethod]
+    public async Task WarningsBesideDataThatDoesntReadLogNothing()
+    {
+        using var server = AreaFixtures.Server();
+        server.Map("POST", Endpoint, FakeResponse.Json(200, """
+            {"data":{"databasesConnection":"none"},
+             "errors":[{"message":"Still creating the Metadata API Store.","extensions":{"severity":"WARNING","code":"BACKFILL_RUNNING"}}]}
+            """));
+        var log = new RecordingLogger();
+        await using var client = Logged(server, log);
+
+        await ClientFixtures.FailsAsync(TableauErrorKind.InvalidResponse, () => client.Metadata.QueryAsync(Paged, null, GraphQLJson.Default.DatabasesData));
+        await ClientFixtures.FailsAsync(TableauErrorKind.InvalidResponse,
+            () => client.Metadata.QueryPageAsync(Paged, "databasesConnection", GraphQLJson.Default.DatabaseNode));
+
+        Assert.IsEmpty(Partial(log), "nothing is returned, so no line says it is");
     }
 
     [TestMethod]

@@ -146,8 +146,9 @@ and [the migration guide](docs/migration-2.0.md) lists every change from 1.2.5 a
     `ListNodesAsync` reads a connection page by page by its `pageInfo`'s `endCursor` until `hasNextPage` is false, and
     `QueryPageAsync` returns one `CursorPage<T>`. An `errors` entry Tableau marks a warning, such as
     `BACKFILL_RUNNING` or `NODE_LIMIT_EXCEEDED`, which comes with partial data, is logged at Warning and the data
-    returned; any other throws `TableauException`, its first code as `ErrorCode`, `RateLimited` for `RATE_EXCEEDED`
-    whatever the status; a 403 says the Metadata API may be off.
+    returned; any other throws `TableauException`, the first entry that isn't a warning giving `ErrorCode` and
+    `Summary`, `RateLimited` for `RATE_EXCEEDED` whatever the status; warnings with no data throw too, under the
+    first warning's code; a 403 says the Metadata API may be off.
 - **The library builds with the trim and native AOT analyzers on** (`IsAotCompatible`), and the models pass them: they
   read and write JSON through System.Text.Json's source generator, with no reflection, and CI runs them in a native
   AOT app. The 1.x client is exempt: its `XmlSerializer` and Newtonsoft.Json code doesn't work trimmed or under native
