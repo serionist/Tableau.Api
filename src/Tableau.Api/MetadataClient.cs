@@ -24,6 +24,11 @@ namespace Tableau.Api;
 /// Updating or deleting an asset, and data quality warnings, need Tableau's Data Management; reading assets doesn't.
 /// </para>
 /// <para>
+/// An asset's <see cref="Location"/> comes from Tableau Server 2025.1 with its type as <c>PROJECT</c>, where the
+/// schema's value is <c>Project</c>, so <c>location.Type == LocationType.Project</c> is false: compare
+/// <see cref="LocationType.Value"/> case aside.
+/// </para>
+/// <para>
 /// A GraphQL query goes to <c>api/metadata/graphql</c> in the client's session. On Tableau Server the Metadata API is off
 /// until a server administrator runs <c>tsm maintenance metadata-services enable</c>; Tableau Cloud needs Data
 /// Management. Its JSON is read through the <see cref="JsonTypeInfo{T}"/> you give, such as one from a
@@ -96,7 +101,10 @@ public class MetadataClient
     /// <summary>Query Database: one database asset.</summary>
     /// <param name="id">The database's LUID.</param>
     /// <param name="cancellationToken">Cancels the call.</param>
-    /// <returns>The database.</returns>
+    /// <returns>
+    /// The database; its location's type as Tableau sends it, <c>PROJECT</c> from Tableau Server 2025.1, which isn't
+    /// <see cref="LocationType.Project"/> (the class's remarks).
+    /// </returns>
     /// <exception cref="ArgumentException"><paramref name="id"/> is no LUID.</exception>
     /// <exception cref="TableauException">The call failed; <see cref="TableauException.Kind"/> says how.</exception>
     public virtual Task<Database> GetDatabaseAsync(string id, CancellationToken cancellationToken = default) =>
@@ -172,7 +180,10 @@ public class MetadataClient
     /// <summary>Query Table: one table asset.</summary>
     /// <param name="id">The table's LUID.</param>
     /// <param name="cancellationToken">Cancels the call.</param>
-    /// <returns>The table.</returns>
+    /// <returns>
+    /// The table; its location's type as Tableau sends it, <c>PROJECT</c> from Tableau Server 2025.1, which isn't
+    /// <see cref="LocationType.Project"/> (the class's remarks).
+    /// </returns>
     /// <exception cref="ArgumentException"><paramref name="id"/> is no LUID.</exception>
     /// <exception cref="TableauException">The call failed; <see cref="TableauException.Kind"/> says how.</exception>
     public virtual Task<Table> GetTableAsync(string id, CancellationToken cancellationToken = default) =>

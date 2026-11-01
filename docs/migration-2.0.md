@@ -257,8 +257,9 @@ What changes for a caller:
   such as `CapabilityName.Read`; a capability Tableau adds later is `new CapabilityName("...")`. A delete names its user
   or group with `PermissionGrantee.User(id)` or `.Group(id)`, where 1.2.5 had a method for each; a group set's is
   `.GroupSet(id)`, new.
-- **Rules:** `GranteeCapabilities` with its `User` or `Group` by id, where 1.2.5 took `granteeCapabilitiesType[]`; the
-  client sends each grantee's id and each capability's name and mode, nothing else.
+- **Rules:** `GranteeCapabilities` with its `User`, `Group` or `GroupSet` by id, where 1.2.5 took
+  `granteeCapabilitiesType[]` for a user or a group; the client sends each grantee's id and each capability's name and
+  mode, nothing else.
 - **Lists:** databases and tables page themselves, where 1.2.5 returned the first page alone; a table's columns come
   from one call of up to 1,000, as Tableau Server 2025.1 refuses the second page of them.
 - **Tags** are escaped as one segment of the request's path, so a tag with `/`, `#` or `%` is deleted as written. In

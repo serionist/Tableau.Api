@@ -19,10 +19,11 @@ namespace Tableau.Api;
 /// refused before anything is sent.
 /// </para>
 /// <para>
-/// A rule grants or denies capabilities to one user or group: a <see cref="GranteeCapabilities"/> whose
-/// <see cref="GranteeCapabilities.User"/> or <see cref="GranteeCapabilities.Group"/> names the grantee by its LUID, and
-/// whose <see cref="GranteeCapabilities.Capabilities"/> each have a <see cref="CapabilityName"/> and a
-/// <see cref="CapabilityMode"/>.
+/// A rule grants or denies capabilities to one user, group or group set: a <see cref="GranteeCapabilities"/> whose
+/// <see cref="GranteeCapabilities.User"/>, <see cref="GranteeCapabilities.Group"/> or
+/// <see cref="GranteeCapabilities.GroupSet"/> names the grantee by its LUID, and whose
+/// <see cref="GranteeCapabilities.Capabilities"/> each have a <see cref="CapabilityName"/> and a
+/// <see cref="CapabilityMode"/>. A delete names its grantee with a <see cref="PermissionGrantee"/>.
 /// </para>
 /// </remarks>
 public class PermissionsClient
@@ -44,7 +45,7 @@ public class PermissionsClient
 
     private TableauPipeline Pipeline => _pipeline ?? throw TableauClient.ForMocksOnly();
 
-    /// <summary>List Permissions: the users and groups the content grants or denies capabilities, and which.</summary>
+    /// <summary>List Permissions: the users, groups and group sets the content grants or denies capabilities, and which.</summary>
     /// <param name="content">The content, such as <c>TableauContent.Project(id)</c>.</param>
     /// <param name="cancellationToken">Cancels the call.</param>
     /// <returns>
@@ -61,8 +62,8 @@ public class PermissionsClient
     }
 
     /// <summary>
-    /// Add Permissions: grants or denies capabilities on the content to users and groups. A capability a grantee already
-    /// has in either mode is left as it is; delete it first to change its mode.
+    /// Add Permissions: grants or denies capabilities on the content to users, groups and group sets. A capability a
+    /// grantee already has in either mode is left as it is; delete it first to change its mode.
     /// </summary>
     /// <param name="content">The content, such as <c>TableauContent.Workbook(id)</c>.</param>
     /// <param name="rules">Each grantee and its capabilities, one rule at least.</param>
