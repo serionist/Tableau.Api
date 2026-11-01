@@ -17,6 +17,7 @@ on a break the ledger doesn't list. Each section below groups the ledger's entri
 | [The 2.0 client](#the-20-client) | `TableauClient` takes over `TableauApiClient`'s calls area by area, Server Info first | 1, `CP0002` |
 | [Sessions](#sessions) | `TableauApiClient`'s sign-in methods gone: the 2.0 client signs itself in, or you sign in through `client.Sessions` | 4, `CP0002` |
 | [Sites, projects, users, groups and favorites](#sites-projects-users-groups-and-favorites) | `TableauApiClient`'s methods for them gone, `DeleteProject2` with them: `client.Sites`, `.Projects`, `.Users`, `.Groups` and `.Favorites`, with lists that page themselves | 40, `CP0002` |
+| [Permissions, tags and metadata](#permissions-tags-and-metadata) | `TableauApiClient`'s permissions, metadata and tag methods gone, `AddWorkbookToSchedule` excepted: `client.Permissions`, `.Tags` and `.Metadata`, over every kind of content | 35, `CP0002` |
 | [Dependencies](#dependencies) | Microsoft.Extensions' abstractions in place of Microsoft.Extensions.Logging, and Newtonsoft.Json added | none |
 
 ## Target: net10.0 only
@@ -212,14 +213,100 @@ What changes for a caller:
 | `RemoveUserFromGroup(session, groupId, userId, cancelToken)` | `client.Groups.RemoveUserAsync(groupId, userId, cancellationToken)` | None |
 | `GetUsersInGroup(session, groupId, pageSize, pageNumber, cancelToken)` returns `(paginationType, userType[])` | `client.Groups.ListUsersAsync(groupId, cancellationToken)` | Every page, 100 at a time |
 | `GetFavoritesForUser(session, userId, cancelToken)` returns `favoriteType[]` | `client.Favorites.ListAsync(userId, cancellationToken)` | Every page, where 1.2.5 read the first |
-| `AddWorkbookToFavorites(session, userId, workbookId, favoriteLabel, cancelToken)` returns `favoriteType` | `client.Favorites.AddAsync(userId, label, FavoriteTarget.Workbook(id), cancellationToken)` | It returns the favorites Tableau answers with |
-| `AddViewToFavorites(session, userId, viewId, favoriteLabel, cancelToken)` | `client.Favorites.AddAsync(userId, label, FavoriteTarget.View(id), cancellationToken)` | The same |
-| `AddDataSourceToFavorites(session, userId, datasourceId, favoriteLabel, cancelToken)` | `client.Favorites.AddAsync(userId, label, FavoriteTarget.DataSource(id), cancellationToken)` | The same |
-| `AddProjectToFavorites(session, userId, projectId, favoriteLabel, cancelToken)` | `client.Favorites.AddAsync(userId, label, FavoriteTarget.Project(id), cancellationToken)` | The same; `FavoriteTarget.Flow(id)` is new |
-| `DeleteWorkbookFromFavorites(session, userId, workbookId, cancelToken)` | `client.Favorites.RemoveAsync(userId, FavoriteTarget.Workbook(id), cancellationToken)` | None |
-| `DeleteViewFromFavorites(session, userId, viewId, cancelToken)` | `client.Favorites.RemoveAsync(userId, FavoriteTarget.View(id), cancellationToken)` | None |
-| `DeleteDataSourceFromFavorites(session, userId, datasourceId, cancelToken)` | `client.Favorites.RemoveAsync(userId, FavoriteTarget.DataSource(id), cancellationToken)` | None |
-| `DeleteProjectFromFavorites(session, userId, projectId, cancelToken)` | `client.Favorites.RemoveAsync(userId, FavoriteTarget.Project(id), cancellationToken)` | None |
+| `AddWorkbookToFavorites(session, userId, workbookId, favoriteLabel, cancelToken)` returns `favoriteType` | `client.Favorites.AddAsync(userId, label, TableauContent.Workbook(id), cancellationToken)` | It returns the favorites Tableau answers with |
+| `AddViewToFavorites(session, userId, viewId, favoriteLabel, cancelToken)` | `client.Favorites.AddAsync(userId, label, TableauContent.View(id), cancellationToken)` | The same |
+| `AddDataSourceToFavorites(session, userId, datasourceId, favoriteLabel, cancelToken)` | `client.Favorites.AddAsync(userId, label, TableauContent.DataSource(id), cancellationToken)` | The same |
+| `AddProjectToFavorites(session, userId, projectId, favoriteLabel, cancelToken)` | `client.Favorites.AddAsync(userId, label, TableauContent.Project(id), cancellationToken)` | The same; `TableauContent.Flow(id)` is new |
+| `DeleteWorkbookFromFavorites(session, userId, workbookId, cancelToken)` | `client.Favorites.RemoveAsync(userId, TableauContent.Workbook(id), cancellationToken)` | None |
+| `DeleteViewFromFavorites(session, userId, viewId, cancelToken)` | `client.Favorites.RemoveAsync(userId, TableauContent.View(id), cancellationToken)` | None |
+| `DeleteDataSourceFromFavorites(session, userId, datasourceId, cancelToken)` | `client.Favorites.RemoveAsync(userId, TableauContent.DataSource(id), cancellationToken)` | None |
+| `DeleteProjectFromFavorites(session, userId, projectId, cancelToken)` | `client.Favorites.RemoveAsync(userId, TableauContent.Project(id), cancellationToken)` | None |
+
+A favorite names its content with a `TableauContent`, as permissions, tags and data quality warnings do; a kind favorites
+don't take, such as a table, is refused before anything is sent.
+
+## Permissions, tags and metadata
+
+`TableauApiClient`'s permissions, metadata and tag methods are gone, `AddWorkbookToSchedule` excepted, which stays with
+the old schedule methods until schedules move. `TableauClient` has one API for each over every kind of content:
+`client.Permissions`, `client.Tags` and `client.Metadata`, which name content with a `TableauContent`, such as
+`TableauContent.Workbook(id)` or `TableauContent.Column(tableId, columnId)`.
+
+```csharp
+var project = TableauContent.Project(projectId);
+await tableau.Permissions.AddAsync(project,
+[
+    new GranteeCapabilities
+    {
+        Group = new Group { Id = groupId },
+        Capabilities = [new Capability { Name = CapabilityName.Read, Mode = CapabilityMode.Allow }],
+    },
+], cancellationToken);
+await tableau.Permissions.DeleteAsync(project, PermissionGrantee.Group(groupId), CapabilityName.Read, CapabilityMode.Allow, cancellationToken);
+```
+
+What changes for a caller:
+
+- **One call per verb, every kind:** permissions on projects, workbooks, views, data sources, flows, virtual
+  connections, collections, databases and tables, where 1.2.5 had them for projects, workbooks, data sources and a
+  view's list; a project's default permissions for workbooks, data sources, data roles, flows, virtual connections,
+  databases and tables, where 1.2.5 had the first two; tags on workbooks, views, data sources, virtual connections,
+  databases, tables and columns, and in a batch. A kind a call doesn't take is refused before anything is sent, and
+  each kind is gated by the REST API version it came in.
+- **Capabilities:** `CapabilityName` and `CapabilityMode` in place of `capabilityTypeName` and `capabilityTypeMode`,
+  such as `CapabilityName.Read`; a capability Tableau adds later is `new CapabilityName("...")`. A delete names its user
+  or group with `PermissionGrantee.User(id)` or `.Group(id)`, where 1.2.5 had a method for each.
+- **Rules:** `GranteeCapabilities` with its `User` or `Group` by id, where 1.2.5 took `granteeCapabilitiesType[]`; the
+  client sends each grantee's id and each capability's name and mode, nothing else.
+- **Lists:** databases and tables page themselves, where 1.2.5 returned the first page alone; a table's columns come
+  from one call of up to 1,000, as Tableau Server 2025.1 refuses the second page of them.
+- **Tags** are escaped as one segment of the request's path, so a tag with `/`, `#` or `%` is deleted as written.
+- **Data quality warnings** take a `DataQualityWarning` with its `Type` as text, such as `"WARNING"`, where 1.2.5 took
+  `DataQualityWarningType` and `MetadataContentType`, which stay, unused, until the old client goes.
+- **New:** default permissions for every kind, permissions on views, flows, virtual connections, collections, databases
+  and tables, tags on the catalog's assets and virtual connections, batch tags, data quality warnings deleted by id or by
+  content, Query Database, Query Table, Delete Database, Delete Table, Delete Column, and the Metadata API's GraphQL:
+  `client.Metadata.QueryAsync`, with your own `JsonTypeInfo<T>`, and `ListNodesAsync`, a connection read page by page
+  by its cursor.
+
+| 1.2.5 | 2.0 | How to move over |
+|---|---|---|
+| `QueryProjectPermissions(session, projectId, cancelToken)` returns `permissionsType` | `client.Permissions.GetAsync(TableauContent.Project(id), cancellationToken)` returns `Permissions` | `GranteeCapabilities` is never null |
+| `QueryWorkbookPermissions(session, workbookId, cancelToken)` | `client.Permissions.GetAsync(TableauContent.Workbook(id), cancellationToken)` | The same |
+| `QueryDataSourcePermissions(session, datasourceId, cancelToken)` | `client.Permissions.GetAsync(TableauContent.DataSource(id), cancellationToken)` | The same |
+| `QueryViewPermissions(session, viewId, cancelToken)` | `client.Permissions.GetAsync(TableauContent.View(id), cancellationToken)` | The same; never released: `main` added it after 1.2.5, so it is no ledger entry |
+| `AddProjectPermissions(session, projectId, granteeCapabilities, cancelToken)` returns `permissionsType` | `client.Permissions.AddAsync(TableauContent.Project(id), rules, cancellationToken)` returns `Permissions` | `rules` is `GranteeCapabilities`, as above |
+| `AddWorkbookPermissions(session, workbookId, granteeCapabilities, cancelToken)` | `client.Permissions.AddAsync(TableauContent.Workbook(id), rules, cancellationToken)` | The same |
+| `AddDataSourcePermissions(session, datasourceId, granteeCapabilities, cancelToken)` | `client.Permissions.AddAsync(TableauContent.DataSource(id), rules, cancellationToken)` | The same |
+| `DeleteProjectPermissionForUser(session, projectId, userId, capabilityName, capabilityMode, cancelToken)` | `client.Permissions.DeleteAsync(TableauContent.Project(id), PermissionGrantee.User(userId), capability, mode, cancellationToken)` | `capabilityTypeName.Read` is `CapabilityName.Read`, `capabilityTypeMode.Allow` is `CapabilityMode.Allow` |
+| `DeleteProjectPermissionForGroup(session, projectId, groupId, capabilityName, capabilityMode, cancelToken)` | `client.Permissions.DeleteAsync(TableauContent.Project(id), PermissionGrantee.Group(groupId), capability, mode, cancellationToken)` | The same |
+| `DeleteWorkbookPermissionForUser(session, workbookId, userId, capabilityName, capabilityMode, cancelToken)` | `client.Permissions.DeleteAsync(TableauContent.Workbook(id), PermissionGrantee.User(userId), capability, mode, cancellationToken)` | The same |
+| `DeleteWorkbookPermissionForGroup(session, workbookId, groupId, capabilityName, capabilityMode, cancelToken)` | `client.Permissions.DeleteAsync(TableauContent.Workbook(id), PermissionGrantee.Group(groupId), capability, mode, cancellationToken)` | The same |
+| `DeleteDataSourcePermissionForUser(session, datasourceId, userId, capabilityName, capabilityMode, cancelToken)` | `client.Permissions.DeleteAsync(TableauContent.DataSource(id), PermissionGrantee.User(userId), capability, mode, cancellationToken)` | The same |
+| `DeleteDataSourcePermissionForGroup(session, datasourceId, groupId, capabilityName, capabilityMode, cancelToken)` | `client.Permissions.DeleteAsync(TableauContent.DataSource(id), PermissionGrantee.Group(groupId), capability, mode, cancellationToken)` | The same |
+| `QueryDefaultPermissionsForWorkbooks(session, workbookId, cancelToken)` | `client.Permissions.GetDefaultAsync(projectId, DefaultPermissionsKind.Workbooks, cancellationToken)` | Its parameter, named `workbookId`, took the project's id |
+| `QueryDefaultPermissionsForDataSources(session, datasourceId, cancelToken)` | `client.Permissions.GetDefaultAsync(projectId, DefaultPermissionsKind.DataSources, cancellationToken)` | Its parameter, named `datasourceId`, took the project's id |
+| `AddDefaultPermissionsForWorkbooks(session, projectId, granteeCapabilities, cancelToken)` | `client.Permissions.AddDefaultAsync(projectId, DefaultPermissionsKind.Workbooks, rules, cancellationToken)` | `rules` is `GranteeCapabilities` |
+| `AddDefaultPermissionsForDataSources(session, projectId, granteeCapabilities, cancelToken)` | `client.Permissions.AddDefaultAsync(projectId, DefaultPermissionsKind.DataSources, rules, cancellationToken)` | The same |
+| `DeleteDefaultWorkbookPermissionForUser(session, projectId, userId, capabilityName, capabilityMode, cancelToken)` | `client.Permissions.DeleteDefaultAsync(projectId, DefaultPermissionsKind.Workbooks, PermissionGrantee.User(userId), capability, mode, cancellationToken)` | As for a delete above |
+| `DeleteDefaultWorkbookPermissionForGroup(session, projectId, groupId, capabilityName, capabilityMode, cancelToken)` | `client.Permissions.DeleteDefaultAsync(projectId, DefaultPermissionsKind.Workbooks, PermissionGrantee.Group(groupId), capability, mode, cancellationToken)` | The same |
+| `DeleteDefaultDataSourcePermissionForUser(session, projectId, userId, capabilityName, capabilityMode, cancelToken)` | `client.Permissions.DeleteDefaultAsync(projectId, DefaultPermissionsKind.DataSources, PermissionGrantee.User(userId), capability, mode, cancellationToken)` | The same |
+| `DeleteDefaultDataSourcePermissionForGroup(session, projectId, groupId, capabilityName, capabilityMode, cancelToken)` | `client.Permissions.DeleteDefaultAsync(projectId, DefaultPermissionsKind.DataSources, PermissionGrantee.Group(groupId), capability, mode, cancellationToken)` | The same |
+| `AddTagsToWorkbook(session, workbookId, tagsToAdd, cancelToken)` returns `tagType[]` | `client.Tags.AddAsync(TableauContent.Workbook(id), tags, cancellationToken)` returns `IReadOnlyList<Tag>` | Never null |
+| `AddTagsToView(session, viewId, tagsToAdd, cancelToken)` | `client.Tags.AddAsync(TableauContent.View(id), tags, cancellationToken)` | The same |
+| `AddTagsToDataSource(session, datasourceId, tagsToAdd, cancelToken)` | `client.Tags.AddAsync(TableauContent.DataSource(id), tags, cancellationToken)` | The same |
+| `DeleteTagFromWorkbook(session, workbookId, tagName, cancelToken)` | `client.Tags.DeleteAsync(TableauContent.Workbook(id), tag, cancellationToken)` | None |
+| `DeleteTagFromView(session, viewId, tagName, cancelToken)` | `client.Tags.DeleteAsync(TableauContent.View(id), tag, cancellationToken)` | None |
+| `DeleteTagFromDataSource(session, datasourceId, tag, cancelToken)` | `client.Tags.DeleteAsync(TableauContent.DataSource(id), tag, cancellationToken)` | None |
+| `QueryDatabases(session, cancelToken)` returns `databaseType[]` | `client.Metadata.ListDatabasesAsync(options, cancellationToken)`, or `ListDatabasesPageAsync(pageNumber, options, cancellationToken)` | Every page, where 1.2.5 returned the first; `new DatabaseListOptions { PageSize = ... }` |
+| `QueryTables(session, cancelToken)` returns `tableType[]` | `client.Metadata.ListTablesAsync(options, cancellationToken)`, or `ListTablesPageAsync(pageNumber, options, cancellationToken)` | The same; `TableListOptions` |
+| `UpdateDatabase(session, databaseId, newDescription, newContactId, isCertified, newCertificationNote, cancelToken)` | `client.Metadata.UpdateDatabaseAsync(id, changes, cancellationToken)` | `new Database { Description = ..., Contact = new User { Id = ... }, IsCertified = ..., CertificationNote = ... }`, and `ContentPermissions` |
+| `UpdateTable(session, tableId, newDescription, newContactId, isCertified, newCertificationNote, cancelToken)` | `client.Metadata.UpdateTableAsync(id, changes, cancellationToken)` | `new Table { ... }`, as for a database |
+| `QueryColumnsInTable(session, tableId, cancelToken)` returns `columnType[]` | `client.Metadata.ListColumnsAsync(tableId, cancellationToken)` | `Column` in `Tableau.Api.Rest.Models` |
+| `UpdateColumn(session, tableId, columnId, newDescription, cancelToken)` | `client.Metadata.UpdateColumnAsync(tableId, columnId, new Column { Description = ... }, cancellationToken)` | None |
+| `QueryDataQualityWarningByContent(session, contentType, luid, cancelToken)` returns `dataQualityWarningType[]` | `client.Metadata.ListDataQualityWarningsAsync(content, cancellationToken)` | `MetadataContentType.database` and `luid` are `TableauContent.Database(luid)`; a flow, a column and a virtual connection too |
+| `AddDataQualityWarning(session, contentType, luid, type, message, severity, state, cancelToken)` | `client.Metadata.AddDataQualityWarningAsync(content, warning, cancellationToken)` | `new DataQualityWarning { Type = "WARNING", Message = ..., IsSevere = severity, IsActive = state }` |
+| `UpdateDataQualityWarning(session, dataQualityWarningId, type, message, severity, state, cancelToken)` | `client.Metadata.UpdateDataQualityWarningAsync(id, changes, cancellationToken)` | The same; the type is needed |
 
 ## Dependencies
 

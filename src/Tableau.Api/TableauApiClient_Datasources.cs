@@ -18,53 +18,6 @@ public partial class TableauApiClient
 {
 
     /// <summary>
-    /// Adds one or more tags to the specified data source. Available in all versions 
-    /// </summary>
-    /// <param name="session"></param>
-    /// <param name="datasourceId">The ID of the data source to add tags to.</param>
-    /// <param name="tagsToAdd">The data source to add the tag to. If the data source is already tagged with a tag that's included in the request body, those tags are ignored and the data source retains them.</param>
-    /// <param name="cancelToken"></param>
-    /// <returns></returns>
-    /// <exception cref="TableauRequestException"></exception>
-    /// <exception cref="TableauApiVersionException"></exception>
-    /// <exception cref="TableauOnlineNotSupportedException"></exception>
-    [ApiVersion(1, 0)]
-    public async Task<tagType[]> AddTagsToDataSource(Models.TableauSession session, string datasourceId,
-        string[] tagsToAdd, CancellationToken? cancelToken = null)
-    {
-        checkEndpointAvailability();
-        checkNullParameters((nameof(session), session), (nameof(datasourceId), datasourceId), (nameof(tagsToAdd), tagsToAdd));
-        checkEmptyArrays((nameof(tagsToAdd), tagsToAdd));
-        return (await getResponseAsObject<tagListType>(await apiRequest(
-            buildUri($"sites/{session.SiteId}/datasources/{datasourceId}/tags"), HttpMethod.Put, 200,
-            cancelToken, session,
-            getObjectAsRequestContent(new tagListType()
-            {
-                tag = tagsToAdd.Select(e => new tagType() { label = e }).ToArray()
-            })))).tag;
-    }
-    /// <summary>
-    /// Deletes a tag from the specified data source. Available in all versions
-    /// </summary>
-    /// <param name="session"></param>
-    /// <param name="datasourceId">The ID of the data source to remove the tag from.</param>
-    /// <param name="tag">The name of the tag to remove from the data source.</param>
-    /// <param name="cancelToken"></param>
-    /// <returns></returns>
-    /// <exception cref="TableauRequestException"></exception>
-    /// <exception cref="TableauApiVersionException"></exception>
-    /// <exception cref="TableauOnlineNotSupportedException"></exception>
-    [ApiVersion(1, 0)]
-    public async Task DeleteTagFromDataSource(Models.TableauSession session, string datasourceId, string tag,
-        CancellationToken? cancelToken = null)
-    {
-        checkEndpointAvailability();
-        checkNullParameters((nameof(session), session), (nameof(datasourceId), datasourceId), (nameof(tag), tag));
-        await apiRequest(buildUri($"sites/{session.SiteId}/datasources/{datasourceId}/tags/{tag}"),
-            HttpMethod.Delete, 204, cancelToken, session);
-    }
-
-    /// <summary>
     /// Returns information about the specified data source. Available in all versions
     /// </summary>
     /// <param name="session"></param>
