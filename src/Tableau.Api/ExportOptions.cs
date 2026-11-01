@@ -204,7 +204,7 @@ internal static class ExportQuery
             query.Add(new("vizWidth", Number(width)));
             query.Add(new("vizHeight", Number(height)));
         }
-        int? values = null;
+        (string Name, int Count)? first = null;
         foreach (var (name, value) in options.Filters ?? new Dictionary<string, string>())
         {
             if (value is null) throw new ArgumentException($"The view filter '{name}' has no value.", parameter);
@@ -214,13 +214,14 @@ internal static class ExportQuery
             // rule is for view filters: a parameter holds one value, and the reference documents none, so it isn't counted.
             if (key.StartsWith(ParameterKey, StringComparison.Ordinal)) continue;
             var count = ValueCount(value);
-            if (values is { } first && first != count)
+            // The refusal names both fields, so a caller with many filters finds the one that differs.
+            if (first is { } counted && counted.Count != count)
             {
                 throw new ArgumentException(string.Create(CultureInfo.InvariantCulture,
-                    $"The view filters hold {first} and {count} values: with more than one field, Tableau links their values by position, ")
-                    + "so every field must hold as many.", parameter);
+                    $"The view filters '{counted.Name}' and '{name}' hold {counted.Count} and {count} values: with more than one field, ")
+                    + "Tableau links their values by position, so every field must hold as many.", parameter);
             }
-            values = count;
+            first ??= (name, count);
         }
         return query;
     }

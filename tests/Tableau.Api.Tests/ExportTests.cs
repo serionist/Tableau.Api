@@ -245,7 +245,8 @@ public sealed class ExportTests : IDisposable
     [DataRow("a filter that names no field", "A view filter names no field")]
     [DataRow("a filter that is the prefix alone", "A view filter names no field")]
     [DataRow("a filter with no value", "The view filter 'Region' has no value")]
-    [DataRow("filters of unequal counts", "The view filters hold 2 and 1 values")]
+    [DataRow("filters of unequal counts", "The view filters 'Year' and 'Region' hold 2 and 1 values")]
+    [DataRow("an escaped backslash and comma beside two values", "The view filters 'Region' and 'Year' hold 1 and 2 values")]
     public async Task AnOptionOutOfRangeIsRefusedBeforeSending(string what, string message)
     {
         var options = what switch
@@ -262,6 +263,11 @@ public sealed class ExportTests : IDisposable
             "filters of unequal counts" => new ExportOptions
             {
                 Filters = new Dictionary<string, string> { ["Year"] = "2025,2026", ["Region"] = @"Nord\, Sud" },
+            },
+            // \\ is a backslash and \, a comma, both data: one value.
+            "an escaped backslash and comma beside two values" => new ExportOptions
+            {
+                Filters = new Dictionary<string, string> { ["Region"] = @"a\\\,b", ["Year"] = "2025,2026" },
             },
             _ => new ExportOptions { Filters = new Dictionary<string, string> { ["vf_"] = "West" } },
         };
@@ -292,6 +298,27 @@ public sealed class ExportTests : IDisposable
         await using var client = AreaFixtures.Client(server);
 
         await using (await client.Workbooks.DownloadPdfAsync(Id, new ExportOptions { Filters = filters }))
+        {
+        }
+
+        CollectionAssert.AreEqual(new[] { $"{Site}/workbooks/{Id}/pdf?{query}" }, AreaFixtures.Calls(server).Select(request => request.Target).ToArray(), what);
+    }
+
+    // \\ is a backslash held as data, so the comma after it separates two values; \\\, is a backslash and a comma held
+    // as data, one value. Each goes beside a field of as many values, and is sent as written.
+    [TestMethod]
+    [DataRow("an escaped backslash, then a separator", @"a\\,b", "2025,2026", "vf_Region=a%5C%5C%2Cb&vf_Year=2025%2C2026")]
+    [DataRow("an escaped backslash, then an escaped comma", @"a\\\,b", "2026", "vf_Region=a%5C%5C%5C%2Cb&vf_Year=2026")]
+    public async Task AnEscapedBackslashEndsAValueWhereAnEscapedCommaDoesnt(string what, string region, string year, string query)
+    {
+        using var server = AreaFixtures.Server();
+        server.Map("GET", $"{Site}/workbooks/{Id}/pdf", FakeResponse.Content(200, "application/pdf", "invented"));
+        await using var client = AreaFixtures.Client(server);
+
+        await using (await client.Workbooks.DownloadPdfAsync(Id, new ExportOptions
+        {
+            Filters = new Dictionary<string, string> { ["Region"] = region, ["Year"] = year },
+        }))
         {
         }
 

@@ -210,11 +210,20 @@ public sealed partial class LiveContentTests
             var job = await client.DataSources.RunExtractRefreshAsync(listed.Id!);
             return $"job {job.Type?.Value} {job.Mode?.Value}";
         });
-        // A batch names a data source Datasource, the least obvious of the types: tagged and untagged in one.
+        // A batch names a data source Datasource, the least obvious of the types: tagged and untagged in one, each call's
+        // refusal, if any, scrubbed before it reaches the log.
         var content = TableauContent.DataSource(listed.Id!);
-        await client.Tags.AddBatchAsync(_labels, [content]);
+        var batchAdded = await OutcomeAsync("a data source's batch tags added", async () =>
+        {
+            await client.Tags.AddBatchAsync(_labels, [content]);
+            return "added";
+        });
         var tagged = (await client.DataSources.GetAsync(listed.Id!)).Tags?.Select(tag => tag.Label ?? "").ToArray() ?? [];
-        await client.Tags.DeleteBatchAsync(_labels, [content]);
+        var batchDeleted = await OutcomeAsync("a data source's batch tags deleted", async () =>
+        {
+            await client.Tags.DeleteBatchAsync(_labels, [content]);
+            return "deleted";
+        });
         var untagged = (await client.DataSources.GetAsync(listed.Id!)).Tags?.Select(tag => tag.Label ?? "").ToArray() ?? [];
         await client.DataSources.DeleteAsync(listed.Id!);
 
@@ -233,6 +242,7 @@ public sealed partial class LiveContentTests
         Assert.Contains(" 400057 ", downloadedRevision);
         Assert.Contains(" 403055 ", removedRevision);
         Assert.IsTrue(refresh.StartsWith("job RefreshExtract", StringComparison.Ordinal) || refresh.Contains(" 403180 ", StringComparison.Ordinal), refresh);
+        Assert.AreEqual(("added", "deleted"), (batchAdded, batchDeleted));
         foreach (var label in _labels)
             Assert.AreEqual(1, tagged.Count(tag => tag == label), $"the batch tagged the data source with '{label}' once: [{string.Join(" | ", tagged)}]");
         Assert.IsFalse(untagged.Intersect(_labels).Any(), $"the batch took the labels off the data source: [{string.Join(" | ", untagged)}]");
@@ -372,11 +382,12 @@ public sealed partial class LiveContentTests
     private void Record(string line) => TestContext.WriteLine(Scrubbed(line));
 
     // The text with every setting that names the site, its server or the sign-in, and every live secret, as ***: a
-    // refusal's detail can name the site or the user, and an assertion's message carries it into the log.
+    // refusal's detail can name the site or the user, and an assertion's message carries it into the log. Case aside,
+    // since a server may echo a host or a content URL in another case.
     private static string Scrubbed(string text)
     {
         foreach (var value in LiveSite.Known.Concat(LiveSite.Secrets).Where(value => value.Length > 0).OrderByDescending(value => value.Length))
-            text = text.Replace(value, "***", StringComparison.Ordinal);
+            text = text.Replace(value, "***", StringComparison.OrdinalIgnoreCase);
         return text;
     }
 
