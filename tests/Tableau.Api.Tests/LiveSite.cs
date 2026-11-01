@@ -94,8 +94,8 @@ internal static partial class LiveSite
     public static string ProjectName => ProjectPrefix + Run;
 
     /// <summary>
-    /// Every live secret the suite held, its settings' and every session token its clients carried: no log line may hold
-    /// one, and a failure that finds one names no line.
+    /// Every live secret the suite held, its settings', every session token its clients carried and every JWT
+    /// <see cref="Jwt"/> minted: no log line may hold one, and a failure that finds one names no line.
     /// </summary>
     public static IReadOnlyCollection<string> Secrets => [.. _secrets.Keys];
 
@@ -163,8 +163,8 @@ internal static partial class LiveSite
     }
 
     /// <summary>
-    /// What <paramref name="call"/> answers; a sign-in it fails says what to check for <paramref name="signIn"/>, never a
-    /// setting's value.
+    /// What <paramref name="call"/> answers. A session Tableau refuses fails the test with what its code may mean for
+    /// <paramref name="signIn"/> (<see cref="Refused"/>), never a setting's value.
     /// </summary>
     public static async Task<T> SignedInAsync<T>(LiveSignIn signIn, Func<Task<T>> call)
     {
@@ -174,12 +174,30 @@ internal static partial class LiveSite
         }
         catch (TableauException e) when (e.Kind == TableauErrorKind.Authentication)
         {
-            throw new AssertFailedException($"The sign-in failed ({e.ErrorCode}: {e.Summary}): {SignInHint(signIn)}.", e);
+            throw new AssertFailedException(Refused(signIn, e.ErrorCode, e.Summary), e);
         }
     }
 
-    /// <summary>What a failed sign-in may mean, for an assertion's message: never a setting's value.</summary>
-    public static string SignInHint(LiveSignIn signIn) => signIn == LiveSignIn.ConnectedApp
+    /// <summary>
+    /// What a refused session may mean, for an assertion's message, never a setting's value: 401001 is a sign-in Tableau
+    /// refused; 401002 a call the session may not make. The client signs in again once after a 401 before it gives up, so
+    /// a 401002 in the connected app's session is most likely a scope its JWT lacks, such as one that came in a REST API
+    /// version above the server's.
+    /// </summary>
+    public static string Refused(LiveSignIn signIn, string? errorCode, string? summary) => (errorCode, signIn) switch
+    {
+        ("401001", _) => $"The sign-in failed (401001: {summary}): {SignInHint(signIn)}.",
+        ("401002", LiveSignIn.ConnectedApp) => $"Tableau refused a call in the connected app's session (401002: {summary}): its JWT asks "
+            + $"for the scopes {string.Join(", ", Scopes)} (LiveSite.Scopes), and the call may need one it doesn't ask for, or one this "
+            + "server's version lacks: the reference's scope line for the call says which, and from which REST API version.",
+        ("401002", _) => $"Tableau refused a call in the token's session (401002: {summary}): a sign-in elsewhere with the same token ends "
+            + "its session, so check that no other run signs in with it at the same time.",
+        _ => $"Tableau or the client refused the session ({errorCode ?? "no error code"}: {summary}); if it was the sign-in, "
+            + $"{SignInHint(signIn)}.",
+    };
+
+    // What to check when a sign-in itself was refused.
+    private static string SignInHint(LiveSignIn signIn) => signIn == LiveSignIn.ConnectedApp
         ? "the connected app refused the JWT: check that it is enabled, that its secret is current, and that TABLEAU_LIVE_USER is the "
             + "user's name as Tableau Server shows it; with Active Directory or LDAP that may need the domain, as the server's users "
             + "page shows it, such as domain\\user or domain/user"

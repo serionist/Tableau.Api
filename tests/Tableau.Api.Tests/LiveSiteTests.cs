@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Tableau.Api.Rest.Models;
 
@@ -7,7 +8,9 @@ namespace Tableau.Api.Tests;
 /// <summary>
 /// The live suite's sweep deletes only its own leftovers: a top-level project with the suite's description and a run's
 /// exact name, made more than a day ago; and a local group named exactly after a run and the second it was made, more
-/// than a day ago. Every other project and group stays, whatever its name.
+/// than a day ago. Every other project and group stays, whatever its name. And a live session Tableau refuses fails its
+/// test with what the code may mean: 401001 a sign-in refused, 401002 a call the session may not make, which for the
+/// connected app names its JWT's scopes.
 /// </summary>
 [TestClass]
 public sealed class LiveSiteTests
@@ -78,6 +81,66 @@ public sealed class LiveSiteTests
         Assert.IsTrue(LiveSite.IsRunGroup(Group(LiveSite.GroupName(_now))), "the run's own, listed but not swept");
         Assert.IsFalse(LiveSite.IsLeftover(Group(LiveSite.GroupName(_now)), _now));
     }
+
+    [TestMethod]
+    [DataRow(nameof(LiveSignIn.Token), "the personal access token was refused: check that it is current and not revoked")]
+    [DataRow(nameof(LiveSignIn.ConnectedApp), "the connected app refused the JWT: check that it is enabled")]
+    public async Task A401001IsASignInTableauRefusedWithWhatToCheckForItsSignIn(string name, string hint)
+    {
+        var refused = await RefusedAsync(Enum.Parse<LiveSignIn>(name), "401001", "Signin Error");
+
+        Assert.StartsWith("The sign-in failed (401001: Signin Error): " + hint, refused.Message);
+        Assert.AreEqual("401001", ((TableauException)refused.InnerException!).ErrorCode, "the refusal is kept as the inner exception");
+    }
+
+    [TestMethod]
+    public async Task A401002InTheConnectedAppsSessionNamesTheJwtsScopesAndNoSignInFailure()
+    {
+        var refused = await RefusedAsync(LiveSignIn.ConnectedApp, "401002", "Unauthorized Access");
+
+        Assert.StartsWith("Tableau refused a call in the connected app's session (401002: Unauthorized Access): its JWT asks for the "
+            + "scopes tableau:content:read (LiveSite.Scopes)", refused.Message);
+        Assert.Contains("one this server's version lacks", refused.Message);
+        Assert.DoesNotContain("sign-in failed", refused.Message);
+        Assert.DoesNotContain("refused the JWT", refused.Message);
+    }
+
+    [TestMethod]
+    public async Task A401002InTheTokensSessionIsNoSignInFailure()
+    {
+        var refused = await RefusedAsync(LiveSignIn.Token, "401002", "Unauthorized Access");
+
+        Assert.StartsWith("Tableau refused a call in the token's session (401002: Unauthorized Access): a sign-in elsewhere with the same "
+            + "token ends its session", refused.Message);
+        Assert.DoesNotContain("sign-in failed", refused.Message);
+    }
+
+    [TestMethod]
+    public async Task AnotherRefusalIsNamedByItsCodeOrItsLackAndHintsAtTheSignIn()
+    {
+        var other = await RefusedAsync(LiveSignIn.ConnectedApp, "401003", "Switch Site Error");
+        var none = await RefusedAsync(LiveSignIn.Token, null, null);
+
+        Assert.StartsWith("Tableau or the client refused the session (401003: Switch Site Error); if it was the sign-in, the connected app "
+            + "refused the JWT", other.Message);
+        Assert.StartsWith("Tableau or the client refused the session (no error code: ); if it was the sign-in, the personal access token",
+            none.Message);
+    }
+
+    [TestMethod]
+    public async Task ACallThatAnswersOrFailsOtherwiseIsLeftAsItIs()
+    {
+        var notFound = new TableauException(TableauErrorKind.NotFound, "Not here.") { ErrorCode = "404000" };
+
+        Assert.AreEqual(7, await LiveSite.SignedInAsync(LiveSignIn.Token, () => Task.FromResult(7)));
+        Assert.AreSame(notFound, await Assert.ThrowsExactlyAsync<TableauException>(
+            () => LiveSite.SignedInAsync<int>(LiveSignIn.ConnectedApp, () => throw notFound)));
+    }
+
+    // What a live test's sign-in fails with when Tableau refuses its session with the code given.
+    private static Task<AssertFailedException> RefusedAsync(LiveSignIn signIn, string? errorCode, string? summary) =>
+        Assert.ThrowsExactlyAsync<AssertFailedException>(() => LiveSite.SignedInAsync<int>(signIn,
+            () => throw new TableauException(TableauErrorKind.Authentication, "Refused.") { ErrorCode = errorCode, Summary = summary }));
 
     private static Group Group(string name) => new()
     {
