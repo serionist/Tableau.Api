@@ -40,7 +40,8 @@ public class ProjectsClient
     /// </summary>
     /// <remarks>
     /// Without a sort the oldest come first, then by name, so the pages of a list that doesn't change neither skip nor
-    /// repeat a project; one made, deleted or renamed while you read can still be missed or met twice.
+    /// repeat a project; a sort you give is followed by those of the two it doesn't name. One made, deleted or renamed
+    /// while you read can still be missed or met twice.
     /// </remarks>
     /// <param name="options">The filter, the sort and the page size; null for every project, 100 a page.</param>
     /// <param name="cancellationToken">Stops the list, between projects and between pages.</param>
@@ -50,7 +51,8 @@ public class ProjectsClient
     public virtual async IAsyncEnumerable<Project> ListAsync(ProjectListOptions? options = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        await foreach (var project in TableauPaging.ListAsync((number, token) => ListPageAsync(number, options, token), cancellationToken)
+        await foreach (var project in TableauPaging.ListAsync((number, token) => ListPageAsync(number, options, token), Endpoints.QueryProjects.Name, null,
+                               cancellationToken)
                            .ConfigureAwait(false))
             yield return project;
     }

@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Tableau.Api.Rest.Models;
 using Tableau.Api.Tests.Fakes;
 
 namespace Tableau.Api.Tests;
@@ -103,7 +105,7 @@ public sealed class FilterTests
             Sort = TableauSort.Asc(ProjectField.Name),
         });
 
-        Assert.AreEqual("pageSize=100&pageNumber=1&filter=name:in:%5BR%26D,C%2B%2B%5D,siteRole:eq:Viewer&sort=name:asc",
+        Assert.AreEqual("pageSize=100&pageNumber=1&filter=name:in:%5BR%26D,C%2B%2B%5D,siteRole:eq:Viewer&sort=name:asc,createdAt:asc",
             AreaFixtures.Calls(server).Single().Query);
     }
 
@@ -122,12 +124,17 @@ public sealed class FilterTests
     [TestMethod]
     public void AnEmptyOrNullArgumentIsRefused()
     {
-        Assert.ThrowsExactly<ArgumentException>(() => TableauFilter.In(ProjectField.Name));
+        Assert.ThrowsExactly<ArgumentException>(() => TableauFilter.In(ProjectField.Name, Array.Empty<string>()));
+        Assert.ThrowsExactly<ArgumentException>(() => TableauFilter.In(UserField.SiteRole, Array.Empty<SiteRole>()));
+        Assert.AreEqual("value", Assert.ThrowsExactly<ArgumentException>(() => TableauFilter.Eq(UserField.SiteRole, default(SiteRole))).ParamName);
+        Assert.ThrowsExactly<ArgumentException>(() => TableauFilter.In(UserField.SiteRole, SiteRole.Viewer, default));
         Assert.ThrowsExactly<ArgumentException>(() => TableauFilter.And());
         Assert.ThrowsExactly<ArgumentNullException>(() => TableauFilter.And(TableauFilter.Eq(ProjectField.Name, "a"), null!));
         Assert.ThrowsExactly<ArgumentNullException>(() => TableauFilter.And(null!));
-        Assert.ThrowsExactly<ArgumentNullException>(() => TableauFilter.In(ProjectField.Name, null!));
+        Assert.ThrowsExactly<ArgumentNullException>(() => TableauFilter.In(ProjectField.Name, (IEnumerable<string>)null!));
+        Assert.ThrowsExactly<ArgumentNullException>(() => TableauFilter.In(UserField.SiteRole, (IEnumerable<SiteRole>)null!));
         Assert.ThrowsExactly<ArgumentNullException>(() => TableauFilter.Eq(null!, "a"));
+        Assert.ThrowsExactly<ArgumentNullException>(() => TableauFilter.Eq(null!, SiteRole.Viewer));
         Assert.ThrowsExactly<ArgumentNullException>(() => TableauFilter.Eq(ProjectField.Name, null!));
         Assert.ThrowsExactly<ArgumentException>(() => TableauFilter.FromString(" "));
         Assert.ThrowsExactly<ArgumentNullException>(() => TableauSort.Asc(null!));
@@ -141,15 +148,71 @@ public sealed class FilterTests
         await using var client = AreaFixtures.Client(server);
 
         var filtered = await AreaFixtures.RefusedAsync<ArgumentException>(server, () => client.Projects.ListPageAsync(1,
-            new ProjectListOptions { Filter = TableauFilter.And(TableauFilter.Eq(ProjectField.Name, "a"), TableauFilter.Eq(UserField.SiteRole, "Viewer")) }));
+            new ProjectListOptions { Filter = TableauFilter.And(TableauFilter.Eq(ProjectField.Name, "a"), TableauFilter.Eq(UserField.SiteRole, SiteRole.Viewer)) }));
         var sorted = await AreaFixtures.RefusedAsync<ArgumentException>(server, () => AreaFixtures.AllAsync(client.Groups.ListAsync(
             new GroupListOptions { Sort = TableauSort.Asc(GroupField.Name).Then(TableauSort.Asc(ProjectField.CreatedAt)) })));
         await AreaFixtures.RefusedAsync<ArgumentException>(server, () => client.Users.ListPageAsync(1,
             new UserListOptions { Filter = TableauFilter.Eq(GroupField.Name, "Finance") }));
 
         Assert.AreEqual("options", filtered.ParamName);
-        Assert.Contains("UserField.siteRole is a field of users, and a list of projects", filtered.Message);
-        Assert.Contains("ProjectField.createdAt is a field of projects, and a list of groups", sorted.Message);
+        Assert.Contains("UserField.SiteRole is a field of users, and a list of projects", filtered.Message);
+        Assert.Contains("ProjectField.CreatedAt is a field of projects, and a list of groups", sorted.Message);
+    }
+
+    [TestMethod]
+    public void ASiteRoleIsWrittenByItsText()
+    {
+        Assert.AreEqual("siteRole:eq:Viewer", TableauFilter.Eq(UserField.SiteRole, SiteRole.Viewer).ToString());
+        Assert.AreEqual("minimumSiteRole:in:[Explorer,Creator]", TableauFilter.In(GroupField.MinimumSiteRole, SiteRole.Explorer, SiteRole.Creator).ToString());
+        Assert.AreEqual(TableauFilter.Eq(UserField.SiteRole, "Viewer"), TableauFilter.Eq(UserField.SiteRole, SiteRole.Viewer));
+        Assert.AreEqual("siteRole:eq:InventedFutureRole", TableauFilter.Eq(UserField.SiteRole, new SiteRole("InventedFutureRole")).ToString());
+    }
+
+    [TestMethod]
+    public void FiltersAndSortsBuiltAlikeAreEqualAndSoAreTheirOptions()
+    {
+        static TableauFilter Filter() => TableauFilter.And(TableauFilter.Eq(UserField.SiteRole, SiteRole.Viewer), TableauFilter.Gt(UserField.LastLogin,
+            new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero)));
+        static TableauSort Sort() => TableauSort.Asc(UserField.SiteRole).Then(TableauSort.Desc(UserField.Name));
+
+        Assert.AreEqual(Filter(), Filter());
+        Assert.AreEqual(Filter().GetHashCode(), Filter().GetHashCode());
+        Assert.AreEqual(Sort(), Sort());
+        Assert.AreEqual(Sort().GetHashCode(), Sort().GetHashCode());
+        Assert.AreEqual(new UserListOptions { Filter = Filter() }, new UserListOptions { Filter = Filter() });
+        Assert.AreEqual(new UserListOptions { Sort = Sort(), PageSize = 5 }, new UserListOptions { Sort = Sort(), PageSize = 5 });
+        Assert.AreEqual(TableauFilter.FromString("name:like:a*"), TableauFilter.FromString("name:like:a*"));
+
+        // The same text over another resource's field, or with no field, filters otherwise: refused, or not checked.
+        Assert.AreNotEqual(TableauFilter.Eq(UserField.Name, "ada"), TableauFilter.Eq(GroupField.Name, "ada"));
+        Assert.AreNotEqual(TableauFilter.Eq(UserField.Name, "ada"), TableauFilter.FromString("name:eq:ada"));
+        Assert.AreNotEqual(TableauSort.Asc(UserField.Name), TableauSort.Asc(GroupField.Name));
+        Assert.AreNotEqual(TableauSort.Asc(UserField.Name), TableauSort.Desc(UserField.Name));
+        Assert.AreNotEqual(new UserListOptions { Filter = Filter() }, new UserListOptions { Filter = TableauFilter.Eq(UserField.Name, "ada") });
+        Assert.IsFalse(Filter().Equals(null));
+        Assert.IsFalse(Sort().Equals((object)"siteRole:asc,name:desc"));
+    }
+
+    [TestMethod]
+    public async Task ASortGivenIsFollowedByTheDefaultFieldsItDoesntName()
+    {
+        using var server = AreaFixtures.Server();
+        server.MapPrefix("GET", AreaFixtures.SitePath, FakeResponse.Json(200, "{}"));
+        await using var serverClient = AreaFixtures.Client(server);
+        await using var cloudClient = AreaFixtures.Client(server, TableauDeployment.Cloud);
+
+        await serverClient.Users.ListPageAsync(1, new UserListOptions { Sort = TableauSort.Asc(UserField.SiteRole) });
+        await serverClient.Users.ListPageAsync(1, new UserListOptions { Sort = TableauSort.Desc(UserField.DomainName) });
+        await cloudClient.Users.ListPageAsync(1, new UserListOptions { Sort = TableauSort.Asc(UserField.SiteRole) });
+        await cloudClient.Users.ListPageAsync(1);
+        await serverClient.Groups.ListPageAsync(1, new GroupListOptions { Sort = TableauSort.Desc(GroupField.Name) });
+        await serverClient.Projects.ListPageAsync(1, new ProjectListOptions { Sort = TableauSort.Desc(ProjectField.Name) });
+
+        CollectionAssert.AreEqual(new[]
+        {
+            "siteRole:asc,name:asc,domainName:asc", "domainName:desc,name:asc", "siteRole:asc,name:asc", "name:asc", "name:desc",
+            "name:desc,createdAt:asc",
+        }, AreaFixtures.Calls(server).Select(call => call.QueryParameters.Single(pair => pair.Key == "sort").Value).ToArray());
     }
 
     [TestMethod]

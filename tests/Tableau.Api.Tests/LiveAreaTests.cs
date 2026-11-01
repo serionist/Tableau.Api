@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -90,16 +91,21 @@ public sealed class LiveAreaTests
     {
         await using var client = LiveSite.Client(LiveSite.Credentials());
 
-        var all = await AreaFixtures.AllAsync(client.Users.ListAsync(new UserListOptions { PageSize = 2 }));
+        // Three pages of two at most, so a site with a large directory isn't read whole each night.
+        var some = new List<User>();
+        await foreach (var user in client.Users.ListAsync(new UserListOptions { PageSize = 2 }))
+        {
+            some.Add(user);
+            if (some.Count == 6) break;
+        }
         var self = LiveSite.Saw(client.Pipeline.State.Sessions.Current!).UserId;
         var read = await client.Users.GetAsync(self);
         var filtered = await AreaFixtures.AllAsync(client.Users.ListAsync(new UserListOptions { Filter = TableauFilter.Eq(UserField.Luid, self) }));
         var groups = await AreaFixtures.AllAsync(client.Users.ListGroupsAsync(self));
         var firstPage = await client.Users.ListPageAsync(1, new UserListOptions { PageSize = 2 });
 
-        Assert.IsTrue(all.Any(user => user.Id == self), "the list holds the suite's own user");
-        Assert.HasCount(all.Count, all.Select(user => user.Id).Distinct(), "no user twice across pages");
-        Assert.AreEqual(firstPage.TotalAvailable, all.Count);
+        Assert.HasCount(some.Count, some.Select(user => user.Id).Distinct(), "no user twice across pages");
+        Assert.AreEqual(Math.Min(6, firstPage.TotalAvailable ?? 0), some.Count);
         Assert.AreEqual(self, read.Id);
         Assert.IsNotNull(read.SiteRole);
         Assert.AreEqual(self, filtered.Single().Id);
@@ -133,7 +139,7 @@ public sealed class ServerOnlyAreaTests
         await using var client = Client();
         var first = await SignInAsync(client);
         var contentUrl = "tableau-api-server-only-" + LiveSite.Run;
-        Site made;
+        Site? made = null;
         Site updated;
         Site read;
         try
@@ -145,23 +151,30 @@ public sealed class ServerOnlyAreaTests
                 RevisionHistoryEnabled = true,
                 RevisionLimit = 25,
             });
+            // Tableau updates only the site a session is on, so the update, the read and the delete are made from one.
+            var onIt = LiveSite.Saw(await client.Sessions.SignInAsync(TableauCredentials.Password(TableauSite.Setting(User),
+                LiveSite.Secret(Password)), contentUrl));
+            var there = client.WithSession(onIt);
+            updated = await there.Sites.UpdateAsync(made.Id!, new Site { RevisionLimit = 30 });
+            read = await there.Sites.GetByContentUrlAsync(contentUrl);
+            await there.Sites.DeleteAsync(made.Id!);
+        }
+        catch (Exception failed) when (made?.Id is { } id)
+        {
+            // The site the test made goes whatever failed; one that can't is named, so it can be deleted by hand.
+            try
+            {
+                await client.WithSession(first).Sites.DeleteAsync(id);
+            }
+            catch (TableauException cleanup)
+            {
+                throw new AggregateException($"The site '{contentUrl}' ({id}) is left on the server: delete it by hand.", failed, cleanup);
+            }
+            throw;
         }
         finally
         {
             await client.Sessions.SignOutAsync(first);
-        }
-        // Tableau updates and deletes only the site a session is on.
-        var onIt = LiveSite.Saw(await client.Sessions.SignInAsync(TableauCredentials.Password(TableauSite.Setting(User),
-            LiveSite.Secret(Password)), contentUrl));
-        var there = client.WithSession(onIt);
-        try
-        {
-            updated = await there.Sites.UpdateAsync(made.Id!, new Site { RevisionLimit = 30 });
-            read = await there.Sites.GetByContentUrlAsync(contentUrl);
-        }
-        finally
-        {
-            await there.Sites.DeleteAsync(made.Id!);
         }
 
         Assert.AreEqual((contentUrl, 25L), (made.ContentUrl, made.RevisionLimit));
@@ -193,12 +206,22 @@ public sealed class ServerOnlyAreaTests
                 await bound.Groups.DeleteAsync(imported.Id!);
             }
             var importJob = await bound.Groups.ImportFromActiveDirectoryAsJobAsync(name, domain, SiteRole.Unlicensed);
-            // The job makes the group in its own time; the test deletes it once it is there.
-            var byJob = await LiveSite.EventuallyAsync(async () => (await AreaFixtures.AllAsync(bound.Groups.ListAsync(new GroupListOptions
+            // The job makes the group in its own time, and the list may still show the one just deleted: the new one has
+            // the directory group's name and domain and another id. The test deletes it once it is there, or names it.
+            Group? byJob = null;
+            try
             {
-                Filter = TableauFilter.Eq(GroupField.Name, name),
-            }))).SingleOrDefault(), "The group the import job made");
-            await bound.Groups.DeleteAsync(byJob.Id!);
+                byJob = await LiveSite.EventuallyAsync(async () => (await AreaFixtures.AllAsync(bound.Groups.ListAsync(new GroupListOptions
+                {
+                    Filter = TableauFilter.Eq(GroupField.Name, name),
+                }))).FirstOrDefault(group => group.Id != imported.Id && string.Equals(group.Domain?.Name, domain, StringComparison.OrdinalIgnoreCase)),
+                    $"The group the import job made, '{name}' in {domain}, which is left to delete by hand should it show later,",
+                    TimeSpan.FromMinutes(2));
+            }
+            finally
+            {
+                if (byJob?.Id is { } id) await bound.Groups.DeleteAsync(id);
+            }
 
             Assert.AreEqual((name, domain), (imported.Name, imported.Import?.DomainName));
             Assert.AreEqual(imported.Id, synchronised.Id);

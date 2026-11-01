@@ -30,8 +30,8 @@ internal static class TableauPaging
     /// <param name="pageNumber">The page's number, from 1.</param>
     /// <param name="pageSize">The page's size, 1 to 1,000.</param>
     /// <param name="filter">The filter, or null.</param>
-    /// <param name="sort">The sort, or null for <paramref name="stableSort"/>.</param>
-    /// <param name="stableSort">The sort a list takes when it is given none, or null for Tableau's own order.</param>
+    /// <param name="sort">The caller's sort, then <paramref name="stableSort"/>'s fields it doesn't name; or null for <paramref name="stableSort"/>.</param>
+    /// <param name="stableSort">The sort that keeps a list's pages apart, or null for Tableau's own order.</param>
     /// <param name="resource">What the list holds, which its fields must belong to: <c>projects</c>.</param>
     /// <param name="select">The list in Tableau's answer.</param>
     /// <param name="cancellationToken">The caller's token.</param>
@@ -41,29 +41,41 @@ internal static class TableauPaging
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(pageNumber, 1);
         Check(pageSize, filter, sort, resource, OptionsParameter);
+        var order = sort is null ? stableSort : stableSort is null ? sort : sort.ThenStable(stableSort);
         return PageAsync(pipeline, endpoint, new TableauRequest(pathValues, [
             new("pageSize", pageSize.ToString(CultureInfo.InvariantCulture)),
             new("pageNumber", pageNumber.ToString(CultureInfo.InvariantCulture)),
             new("filter", filter?.ToString()),
-            new("sort", (sort ?? stableSort)?.ToString()),
+            new("sort", order?.ToString()),
         ]), pageNumber, pageSize, select, cancellationToken);
     }
 
     /// <summary>
     /// Every item of a list, a page at a time as the caller reads on: it stops after the page that reaches Tableau's
     /// <c>totalAvailable</c>, or after a page shorter than its size, so it never asks for a page past the end, which
-    /// Tableau answers with an error for some lists.
+    /// Tableau answers with an error for some lists. A server that answers another page than the one asked for, which
+    /// would serve the first page again and again, fails the list instead.
     /// </summary>
     /// <param name="page">A page by its number.</param>
+    /// <param name="call">The list's call, which the failure names: <c>Get Favorites for User</c>.</param>
+    /// <param name="identity">
+    /// For a list whose answer has no pagination: an item as text, so a page whose first item is the page before's shows
+    /// the server ignored the page's number; null for a list that has it.
+    /// </param>
     /// <param name="cancellationToken">Stops the list between items and between pages.</param>
-    public static async IAsyncEnumerable<T> ListAsync<T>(Func<int, CancellationToken, Task<Page<T>>> page,
-        [EnumeratorCancellation] CancellationToken cancellationToken)
+    public static async IAsyncEnumerable<T> ListAsync<T>(Func<int, CancellationToken, Task<Page<T>>> page, string call,
+        Func<T, string>? identity, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         long seen = 0;
+        string? firstBefore = null;
         for (var number = 1; ; number++)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var current = await page(number, cancellationToken).ConfigureAwait(false);
+            var first = identity is not null && current.TotalAvailable is null && current.Items.Count > 0 ? identity(current.Items[0]) : null;
+            if (current.PageNumber < number || (first is not null && string.Equals(first, firstBefore, StringComparison.Ordinal)))
+                throw Repeated(call, number, current.PageNumber < number ? current.PageNumber : number - 1);
+            firstBefore = first;
             foreach (var item in current.Items)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -74,6 +86,13 @@ internal static class TableauPaging
                 yield break;
         }
     }
+
+    // A list whose server answered an earlier page than the one asked for: reading on would repeat it without end.
+    private static TableauException Repeated(string call, int asked, int answered) =>
+        new(TableauErrorKind.InvalidResponse,
+            string.Create(CultureInfo.InvariantCulture, $"{call} answered page {answered} when asked for page {asked}, so the server doesn't page this list")
+            + "; it stops here rather than read the same page again.")
+        { Method = System.Net.Http.HttpMethod.Get };
 
     /// <summary>The name a list method gives its options, which an exception for one of them names.</summary>
     private const string OptionsParameter = "options";

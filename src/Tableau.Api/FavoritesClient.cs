@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Tableau.Api.Pipeline;
@@ -28,6 +29,10 @@ public class FavoritesClient
 
     private TableauPipeline Pipeline => _pipeline ?? throw TableauClient.ForMocksOnly();
 
+    // A favorite as Tableau's JSON writes it: Get Favorites for User answers no pagination, so a page that starts with the
+    // page before's first favorite is how a server that ignores the page's number shows.
+    private static string Identity(Favorite favorite) => JsonSerializer.Serialize(favorite, TableauJsonContext.Default.Favorite);
+
     /// <summary>
     /// Get Favorites for User, every page: the user's favorites, read a page at a time as you go. A favorite whose content
     /// was deleted comes with its label alone.
@@ -42,7 +47,7 @@ public class FavoritesClient
         RequestUri.Luid(userId, nameof(userId));
         await foreach (var favorite in TableauPaging.ListAsync((number, token) => TableauPaging.PageAsync(Pipeline, Endpoints.GetFavoritesForUser,
                                [userId], number, TableauPaging.DefaultPageSize, null, null, null, "favorites", static body => body.Favorites, token),
-                           cancellationToken).ConfigureAwait(false))
+                           Endpoints.GetFavoritesForUser.Name, Identity, cancellationToken).ConfigureAwait(false))
             yield return favorite;
     }
 

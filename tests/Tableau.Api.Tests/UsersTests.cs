@@ -31,7 +31,7 @@ public sealed class UsersTests
     }
 
     [TestMethod]
-    public async Task ListPageSortsByNameUnlessToldAndReadsTheUsers()
+    public async Task ListPageSortsByNameThenDomainOnServerUnlessToldAndReadsTheUsers()
     {
         using var server = AreaFixtures.Server();
         server.Map("GET", Users, FakeResponse.Fixture(200, "users-page.json"));
@@ -39,7 +39,7 @@ public sealed class UsersTests
 
         var page = await client.Users.ListPageAsync(2, new UserListOptions { PageSize = 1 });
 
-        AreaFixtures.Sent(server, $"GET {Users}?pageSize=1&pageNumber=2&sort=name:asc");
+        AreaFixtures.Sent(server, $"GET {Users}?pageSize=1&pageNumber=2&sort=name:asc,domainName:asc");
         Assert.AreEqual((2, 1, 2), (page.PageNumber, page.PageSize, page.TotalAvailable));
         Assert.AreEqual("ada", page.Items.Single().Name);
     }
@@ -54,13 +54,13 @@ public sealed class UsersTests
 
         var users = await AreaFixtures.AllAsync(client.Users.ListAsync(new UserListOptions
         {
-            Filter = TableauFilter.And(TableauFilter.In(UserField.SiteRole, SiteRole.Viewer.Value, SiteRole.Creator.Value),
+            Filter = TableauFilter.And(TableauFilter.In(UserField.SiteRole, SiteRole.Viewer, SiteRole.Creator),
                 TableauFilter.Gte(UserField.LastLogin, since), TableauFilter.CiEq(UserField.Name, "ADA")),
             Sort = TableauSort.Asc(UserField.SiteRole).Then(TableauSort.Desc(UserField.Name)),
         }));
 
         AreaFixtures.Sent(server, $"GET {Users}?pageSize=100&pageNumber=1"
-            + "&filter=siteRole:in:%5BViewer,Creator%5D,lastLogin:gte:2026-01-01T00:00:00Z,name:cieq:ADA&sort=siteRole:asc,name:desc");
+            + "&filter=siteRole:in:%5BViewer,Creator%5D,lastLogin:gte:2026-01-01T00:00:00Z,name:cieq:ADA&sort=siteRole:asc,name:desc,domainName:asc");
         CollectionAssert.AreEqual(new[] { "ada", "grace" }, users.Select(user => user.Name).ToArray());
         Assert.IsNull(users[1].LastLogin, "a user who never signed in has no lastLogin");
     }
@@ -153,14 +153,16 @@ public sealed class UsersTests
     public async Task ListGroupsReadsTheUsersGroupsPageByPage()
     {
         using var server = AreaFixtures.Server();
-        server.Map("GET", $"{Users}/{Fixtures.UserId}/groups", FakeResponse.Fixture(200, "groups-page.json"));
+        server.Map("GET", $"{Users}/{Fixtures.UserId}/groups", request => AreaFixtures.PageNumber(request) == 1
+            ? AreaFixtures.Page("groups", "group", 1, 100, 103, 100)
+            : AreaFixtures.Page("groups", "group", 2, 100, 103, 3));
         await using var client = AreaFixtures.Client(server);
 
         var groups = await AreaFixtures.AllAsync(client.Users.ListGroupsAsync(Fixtures.UserId));
 
-        AreaFixtures.Sent(server, $"GET {Users}/{Fixtures.UserId}/groups?pageSize=100&pageNumber=1");
-        CollectionAssert.AreEqual(new[] { "All Users", "Finance analysts", "Finance" }, groups.Select(group => group.Name).ToArray());
-        Assert.AreEqual(ImportSource.ActiveDirectory, groups[2].Import?.Source);
+        CollectionAssert.AreEqual(new[] { $"{Users}/{Fixtures.UserId}/groups?pageSize=100&pageNumber=1", $"{Users}/{Fixtures.UserId}/groups?pageSize=100&pageNumber=2" },
+            AreaFixtures.Calls(server).Select(call => call.Target).ToArray());
+        CollectionAssert.AreEqual(Enumerable.Range(0, 103).Select(i => $"n{i}").ToArray(), groups.Select(group => group.Name).ToArray());
     }
 
     [TestMethod]

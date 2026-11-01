@@ -48,7 +48,7 @@ public sealed class ProjectsTests
         });
 
         AreaFixtures.Sent(server, $"GET {Projects}?pageSize=1000&pageNumber=3&filter=parentProjectId:eq:{AreaFixtures.ProjectId},topLevelProject:eq:false"
-            + "&sort=updatedAt:desc");
+            + "&sort=updatedAt:desc,createdAt:asc,name:asc");
         Assert.IsEmpty(page.Items);
         Assert.AreEqual(0, page.TotalAvailable);
     }

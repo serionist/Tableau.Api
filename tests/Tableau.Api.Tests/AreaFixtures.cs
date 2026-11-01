@@ -88,6 +88,23 @@ internal static class AreaFixtures
         return thrown;
     }
 
+    /// <summary>
+    /// A page of a list, as Tableau answers one: <paramref name="count"/> items of <paramref name="element"/> in the wrapper
+    /// <paramref name="list"/>, each with an id and a name that number them across pages.
+    /// </summary>
+    public static FakeResponse Page(string list, string element, int pageNumber, int pageSize, int total, int count)
+    {
+        var items = string.Join(',', Enumerable.Range((pageNumber - 1) * pageSize, count).Select(i =>
+            $$"""{"id":"00000000-0000-4000-8000-{{i.ToString("x12", System.Globalization.CultureInfo.InvariantCulture)}}","name":"n{{i}}"}"""));
+        return FakeResponse.Json(200, $$$"""
+            {"pagination":{"pageNumber":"{{{pageNumber}}}","pageSize":"{{{pageSize}}}","totalAvailable":"{{{total}}}"},"{{{list}}}":{"{{{element}}}":[{{{items}}}]}}
+            """);
+    }
+
+    /// <summary>The page number a request asked for.</summary>
+    public static int PageNumber(RecordedRequest request) =>
+        int.Parse(request.QueryParameters.Single(pair => pair.Key == "pageNumber").Value, System.Globalization.CultureInfo.InvariantCulture);
+
     /// <summary>Every item of an async list.</summary>
     public static async Task<List<T>> AllAsync<T>(IAsyncEnumerable<T> items)
     {

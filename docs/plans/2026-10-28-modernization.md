@@ -543,11 +543,17 @@ As S12 built it (#45, both doors agreed there):
 - Paging stops after the page that reaches `TotalAvailable`, or after a short or empty page, so it never asks for a
   page past the end: Tableau Server 2025.1 answers one with 400006 for groups, 400117 for projects, and an empty page
   with a total of 0 for users. Page size 1 to 1,000 (403014 above), 100 by default, checked before sending; the page
-  number from 1. Lists are never null; a list wrapper missing from a 2xx body is an empty list (F20).
-- **Stable order:** a list the caller doesn't sort sends a sort on fields that don't change from page to page, which
-  Tableau Server 2025.1 took: projects `createdAt:asc,name:asc`, users and groups `name:asc`, the one field the reference's example sorts users by, and which a group holds alone in a site (two users from two directory domains may share a name). It refused
-  `luid`, `id` and `parentProjectId` in a sort. Query Sites ignores any sort, so sites come in Tableau's order. The
-  sub-lists that take no options (a user's groups, a group's users, favorites) come in Tableau's order, 100 a page.
+  number from 1. Lists are never null; a list wrapper missing from a 2xx body is an empty list (F20). A server that
+  answers an earlier page than the one asked for, or, for favorites, which carry no pagination, a page that starts with
+  the page before's first item, fails the list as `InvalidResponse`, where reading on would repeat that page without
+  end.
+- **Stable order:** a list the caller doesn't sort sends a sort on fields that keep its pages apart, which Tableau
+  Server 2025.1 took: projects `createdAt:asc,name:asc`; users `name:asc,domainName:asc` on Tableau Server and
+  `name:asc` on Tableau Cloud, where a user's domain names how they sign in and nothing here shows Cloud sorts by it;
+  groups `name:asc`, which a group holds alone in a site. A sort the caller gives is followed by the default's fields
+  it doesn't name, to break its ties. The server refused `luid`, `id` and `parentProjectId` in a sort. Query Sites
+  ignores any sort, so sites come in Tableau's order. The sub-lists that take no options (a user's groups, a group's
+  users, favorites) come in Tableau's order, 100 a page.
 - **Options records,** one per resource: `ProjectListOptions`, `UserListOptions`, `GroupListOptions` with `Filter`,
   `Sort` and `PageSize`; `SiteListOptions` with `PageSize` alone (below).
 - **Fields:** `TableauField`, made only by the library, in `ProjectField`, `UserField` and `GroupField`, each the
@@ -559,7 +565,10 @@ As S12 built it (#45, both doors agreed there):
   Tableau's syntax with values as written, and the pipeline's rule escapes the parts between `:` and `,` on the wire,
   so `R&D`, `C++`, `#` and `%` arrive as written: the live suite finds a project named `R&D C++ #1 100%` by an `eq`
   filter on Tableau Server 2025.1, though the reference says a filter can't hold `&` even encoded. A comma, which the
-  server refuses even as `%2C` (400065), is refused in a value. Dates go in UTC as `yyyy-MM-ddTHH:mm:ssZ`.
+  server refuses even as `%2C` (400065), is refused in a value. Dates go in UTC as `yyyy-MM-ddTHH:mm:ssZ`, in the
+  invariant culture. `Eq` and `In` also take `SiteRole`, the generated enumeration S12's fields hold (agreed on #45);
+  a later area adds the ones its fields hold. Filters and sorts compare by their expression and fields, so list
+  options built alike are equal.
 - **Sorts:** `TableauSort.Asc` and `Desc`, chained with `Then`.
 - One enumerable model also serves Vizportal's page tokens and GraphQL cursors.
 
@@ -699,6 +708,9 @@ As S12 built it (#45, both doors agreed there):
     and only a top-level project with the suite's description and a run's exact name counts as one. Tableau Server
     lists a project from its index, a second behind a create and minutes behind a delete, so the suite waits for a new
     one and the sweep passes over one already gone.
+  - A group can't be in a project, so the run's local groups (S12) are named after the run and the second each was made,
+    in UTC, since a group has no description or date; the suite deletes each when done with it or at its end, and the
+    sweep takes a local group of that exact name more than a day old.
   - Every live client sends through one `HttpClient` that keeps each session token it carries, renewals included, for
     the log check, and is disposed after the cleanup's client signs out through it.
   - With `TABLEAU_RECORD=1` each JSON body goes through `FixtureRecorder`, which fails closed: every string is invented
@@ -812,7 +824,7 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
 | S9 | main | Client core | F4 F16 F18 F20 F21 F22 F35 F36 F37 F38 F46 F47 F48 | #39 | #40 | done: squash `18c8404` |
 | S10 | main | Resilience and downloads | F17 F19 F42 | #41 | #42 | done: squash `54b6764` |
 | S11 | main | Sessions and the live suite | F27 F34 | #43 | #44 | done: squash `eb79b4b` |
-| S12 | main | Port: server, sites, projects, users, groups, favorites; paging and filters | F13 F33 | #45 | | in review |
+| S12 | main | Port: server, sites, projects, users, groups, favorites; paging and filters | F13 F33 | #45 | #46 | in review |
 | S13 | main | Port: permissions, tags, metadata (REST and GraphQL) | F8 F44 | | | todo |
 | S14 | main | Port: workbooks, views, data sources, revisions | F5 F7 F32 | | | todo |
 | S15 | main | Port: jobs, tasks, schedules, subscriptions, Server and Cloud | F9 F10 F11 F12 F15 F31 | | | todo |
@@ -1480,7 +1492,7 @@ Status: `todo`, `done` (with the PR) or `wontfix` (with the reason). No finding 
 | F10 | Schedule create: 201, `HH:mm:ss`, a checked time, `monthDay` | S15 | yes | todo |
 | F11 | Extract refresh task lists by item type, empty when empty | S15 | yes | todo |
 | F12 | Get Extract Refresh Task on its documented path | S15 | yes | todo |
-| F13 | Active Directory group updates carry the group id | S12 | no | done: `GroupsClient.UpdateFromActiveDirectoryAsync` and its job form PUT to `groups/{id}` |
+| F13 | Active Directory group updates carry the group id | S12 | no | done (#46): `GroupsClient.UpdateFromActiveDirectoryAsync` and its job form PUT to `groups/{id}` |
 | F14 | An unknown enum value never fails a response | S8 | yes: the missing values added | done |
 | F15 | Any 2xx is success; the Cloud subscription form | S15 | yes: any 2xx | todo |
 | F16 | Server and Cloud modelled; no silent version cap; Cloud and Server gates | S9 | no | done |
@@ -1500,7 +1512,7 @@ Status: `todo`, `done` (with the PR) or `wontfix` (with the reason). No finding 
 | F30 | Chunks read from any stream, asynchronously | S17 | no | todo |
 | F31 | Add Workbook to Schedule returns the task; Add Data Source to Schedule | S15 | no; a known issue | todo |
 | F32 | Updates omit nested elements the caller did not set | S14 | no (Q5) | todo |
-| F33 | Update User sends the documented attributes | S12 | no | done: `UsersClient.UpdateAsync` sends the set members of a `User`, the reference's nine among them |
+| F33 | Update User sends the documented attributes | S12 | no | done (#46): `UsersClient.UpdateAsync` sends the set members of a `User`, the reference's nine among them |
 | F34 | A session lifecycle: expiry, signing in again, no token in `ToString` | S11 | no | done (#44): the session manager |
 | F35 | One exception type with the details (D8) | S9 | no | done |
 | F36 | Logging without secrets or noise; Abstractions only | S9 | no | done |

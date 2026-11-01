@@ -200,16 +200,19 @@ internal static partial class LiveSite
         EventuallyAsync(async () => (await RunProjectsAsync(client)).Find(project => project.Id == projectId), "The run's project");
 
     /// <summary>
-    /// What <paramref name="find"/> finds, asked once a second for up to 30 seconds while Tableau's index catches up with
-    /// a change.
+    /// What <paramref name="find"/> finds, asked once a second for up to <paramref name="within"/>, 30 seconds unless
+    /// given, while Tableau's index catches up with a change.
     /// </summary>
-    public static async Task<T> EventuallyAsync<T>(Func<Task<T?>> find, string what)
+    public static async Task<T> EventuallyAsync<T>(Func<Task<T?>> find, string what, TimeSpan? within = null)
         where T : class
     {
-        for (var waited = 0; ; waited++)
+        var wait = within ?? TimeSpan.FromSeconds(30);
+        var deadline = DateTimeOffset.UtcNow + wait;
+        while (true)
         {
             if (await find() is { } found) return found;
-            if (waited == 30) throw new InvalidOperationException($"{what} wasn't listed within 30 seconds.");
+            if (DateTimeOffset.UtcNow > deadline)
+                throw new InvalidOperationException(string.Create(CultureInfo.InvariantCulture, $"{what} wasn't listed within {wait.TotalSeconds:F0} seconds."));
             await Task.Delay(TimeSpan.FromSeconds(1));
         }
     }

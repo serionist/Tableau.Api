@@ -14,7 +14,7 @@ on a break the ledger doesn't list. Each section below groups the ledger's entri
 | [Version](#version) | 2.0.0, from git tags | none |
 | [Signatures](#five-methods-whose-signature-changed) | five methods whose parameters or return type changed | 5, `CP0002` |
 | [Permission capabilities](#permission-capabilities-renumbered) | `capabilityTypeName` members renumbered | 12, `CP0011` |
-| [The 2.0 client](#the-20-client) | `TableauClient` takes over `TableauApiClient`'s calls area by area; so far Server Info | 1, `CP0002` |
+| [The 2.0 client](#the-20-client) | `TableauClient` takes over `TableauApiClient`'s calls area by area, Server Info first | 1, `CP0002` |
 | [Sessions](#sessions) | `TableauApiClient`'s sign-in methods gone: the 2.0 client signs itself in, or you sign in through `client.Sessions` | 4, `CP0002` |
 | [Sites, projects, users, groups and favorites](#sites-projects-users-groups-and-favorites) | `TableauApiClient`'s methods for them gone, `DeleteProject2` with them: `client.Sites`, `.Projects`, `.Users`, `.Groups` and `.Favorites`, with lists that page themselves | 40, `CP0002` |
 | [Dependencies](#dependencies) | Microsoft.Extensions' abstractions in place of Microsoft.Extensions.Logging, and Newtonsoft.Json added | none |
@@ -169,7 +169,9 @@ What changes for a caller:
   `GroupField`), which a list refuses for another resource before sending. Write values as they are: the client
   escapes them. A filter you wrote by hand is `TableauFilter.FromString(filterExpression)`. A value can't hold a comma,
   which Tableau refuses even escaped. A list you don't sort comes in an order that doesn't change from page to page:
-  projects oldest first, then by name; users and groups by name. Query Sites takes no filter or sort, as
+  projects oldest first, then by name; users by name, then on Tableau Server by domain; groups by name. A sort you give
+  is followed by the default fields it doesn't name. `Eq` and `In` take a `SiteRole` too. Query Sites takes no filter or
+  sort, as
   Tableau Server 2025.1 refuses the first, the reference's one included, and ignores the second.
 - **Updates** take a model with only what changes set, such as `new Project { Name = "Finance" }`, where 1.2.5 took
   one parameter for each.

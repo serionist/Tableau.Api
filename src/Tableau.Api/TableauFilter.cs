@@ -2,12 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using Tableau.Api.Rest.Models;
 
 namespace Tableau.Api;
 
 /// <summary>
 /// A filter expression for a list, built over a resource's fields, such as
-/// <c>TableauFilter.And(TableauFilter.Eq(UserField.SiteRole, "Viewer"), TableauFilter.Gte(UserField.LastLogin, since))</c>,
+/// <c>TableauFilter.And(TableauFilter.Eq(UserField.SiteRole, SiteRole.Viewer), TableauFilter.Gte(UserField.LastLogin, since))</c>,
 /// which Tableau's syntax writes <c>siteRole:eq:Viewer,lastLogin:gte:2026-01-01T00:00:00Z</c>.
 /// </summary>
 /// <remarks>
@@ -17,12 +18,16 @@ namespace Tableau.Api;
 /// value can't hold a comma: Tableau splits a filter at each one, escaped or not, and refuses the rest.
 /// </para>
 /// <para>
-/// Tableau's reference lists which operators each field takes, as each field class says; the server refuses another.
-/// Values are compared as Tableau stores them, case included, but by <see cref="CiEq"/>. A list refuses a field of another
-/// resource before it sends anything. The filter is immutable, and safe to share.
+/// Tableau's reference lists which operators each field takes, as each field says; the server refuses another. Values
+/// are compared as Tableau stores them, case included, but by <see cref="CiEq"/>. A list refuses a field of another
+/// resource before it sends anything.
+/// </para>
+/// <para>
+/// The filter is immutable, and safe to share. Two filters are equal when they write the same expression over the same
+/// fields, so list options built the same way are equal too.
 /// </para>
 /// </remarks>
-public sealed class TableauFilter
+public sealed class TableauFilter : IEquatable<TableauFilter>
 {
     private readonly string _expression;
     private readonly IReadOnlyList<TableauField> _fields;
@@ -41,6 +46,12 @@ public sealed class TableauFilter
     /// <param name="value">The value, as written, not URL-encoded.</param>
     /// <exception cref="ArgumentException">The value holds a comma.</exception>
     public static TableauFilter Eq(TableauField field, string value) => Term(field, "eq", Value(value));
+
+    /// <summary><c>field:eq:value</c>: the field, a site role, equals the value, such as <see cref="SiteRole.Viewer"/>.</summary>
+    /// <param name="field">The field, such as <see cref="UserField.SiteRole"/> or <see cref="GroupField.MinimumSiteRole"/>.</param>
+    /// <param name="value">The site role.</param>
+    /// <exception cref="ArgumentException">The site role is a default one, which names none.</exception>
+    public static TableauFilter Eq(TableauField field, SiteRole value) => Term(field, "eq", Value(value));
 
     /// <summary><c>field:eq:true</c> or <c>false</c>: the field, a flag, equals the value.</summary>
     /// <param name="field">The field.</param>
@@ -70,10 +81,17 @@ public sealed class TableauFilter
     public static TableauFilter In(TableauField field, params IEnumerable<string> values)
     {
         ArgumentNullException.ThrowIfNull(values);
-        var list = values.Select(Value).ToList();
-        if (list.Count == 0)
-            throw new ArgumentException("An in filter takes one value at least.", nameof(values));
-        return Term(field, "in", "[" + string.Join(',', list) + "]");
+        return InList(field, [.. values.Select(Value)]);
+    }
+
+    /// <summary><c>field:in:[a,b]</c>: the field, a site role, equals one of the values, such as <see cref="SiteRole.Viewer"/>.</summary>
+    /// <param name="field">The field, such as <see cref="UserField.SiteRole"/> or <see cref="GroupField.MinimumSiteRole"/>.</param>
+    /// <param name="values">The site roles; one at least.</param>
+    /// <exception cref="ArgumentException">There is no value, or one is a default site role, which names none.</exception>
+    public static TableauFilter In(TableauField field, params IEnumerable<SiteRole> values)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        return InList(field, [.. values.Select(Value)]);
     }
 
     /// <summary><c>field:has:value</c>: the field holds the value. Tableau's reference has it for Query Jobs alone.</summary>
@@ -155,10 +173,28 @@ public sealed class TableauFilter
     /// <summary>The expression in Tableau's syntax, values as written, before the client escapes them to send.</summary>
     public override string ToString() => _expression;
 
+    /// <summary>Whether <paramref name="other"/> writes the same expression over the same fields.</summary>
+    /// <param name="other">The other filter.</param>
+    public bool Equals(TableauFilter? other) =>
+        other is not null && string.Equals(_expression, other._expression, StringComparison.Ordinal) && _fields.SequenceEqual(other._fields);
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj) => Equals(obj as TableauFilter);
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => StringComparer.Ordinal.GetHashCode(_expression);
+
     private static TableauFilter Term(TableauField field, string op, string value)
     {
         ArgumentNullException.ThrowIfNull(field);
         return new TableauFilter($"{field.Name}:{op}:{value}", [field]);
+    }
+
+    private static TableauFilter InList(TableauField field, List<string> values)
+    {
+        if (values.Count == 0)
+            throw new ArgumentException("An in filter takes one value at least.", nameof(values));
+        return Term(field, "in", "[" + string.Join(',', values) + "]");
     }
 
     private static string Value(string value)
@@ -171,6 +207,10 @@ public sealed class TableauFilter
         }
         return value;
     }
+
+    // A generated enumeration's text, which a default value lacks; the roles hold no comma.
+    private static string Value(SiteRole value) =>
+        value.Value ?? throw new ArgumentException("A site role is needed, such as SiteRole.Viewer; a default one names none.", nameof(value));
 
     private static string Number(long value) => value.ToString(CultureInfo.InvariantCulture);
 

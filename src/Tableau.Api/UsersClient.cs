@@ -16,9 +16,12 @@ public class UsersClient
 {
     private const string Resource = "users";
 
-    // Made once and never changed: a user's name is the site's own within a domain, and the reference's own example sorts
-    // users by it, so pages don't shift between requests.
-    private static readonly TableauSort _stable = TableauSort.Asc(UserField.Name);
+    // Made once and never changed: a user's name is the site's own within a domain, so on Tableau Server name and domain
+    // keep pages apart, which Tableau Server 2025.1 sorts by. On Tableau Cloud a user's domain names how they sign in,
+    // and nothing here shows Cloud sorts by it, so there the order is the name alone, which the reference's own example
+    // sorts users by and a Cloud user's email makes the site's own.
+    private static readonly TableauSort _onServer = TableauSort.Asc(UserField.Name).Then(TableauSort.Asc(UserField.DomainName));
+    private static readonly TableauSort _onCloud = TableauSort.Asc(UserField.Name);
 
     private readonly TableauPipeline? _pipeline;
 
@@ -49,9 +52,9 @@ public class UsersClient
     /// pages through <see cref="ListPageAsync"/>, so a mock that overrides that serves this too.
     /// </summary>
     /// <remarks>
-    /// Without a sort they come by name, so the pages of a list that doesn't change neither skip nor repeat a user, but for
-    /// two users of one name from two directory domains, who may change places; one added, removed or renamed while you
-    /// read can still be missed or met twice.
+    /// Without a sort they come by name, then on Tableau Server by domain, so the pages of a list that doesn't change
+    /// neither skip nor repeat a user; a sort you give is followed by those of the two it doesn't name. One added, removed
+    /// or renamed while you read can still be missed or met twice.
     /// </remarks>
     /// <param name="options">The filter, the sort and the page size; null for every user, 100 a page.</param>
     /// <param name="cancellationToken">Stops the list, between users and between pages.</param>
@@ -61,7 +64,8 @@ public class UsersClient
     public virtual async IAsyncEnumerable<User> ListAsync(UserListOptions? options = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        await foreach (var user in TableauPaging.ListAsync((number, token) => ListPageAsync(number, options, token), cancellationToken)
+        await foreach (var user in TableauPaging.ListAsync((number, token) => ListPageAsync(number, options, token), Endpoints.GetUsersOnSite.Name, null,
+                               cancellationToken)
                            .ConfigureAwait(false))
             yield return user;
     }
@@ -79,8 +83,10 @@ public class UsersClient
     public virtual Task<Page<User>> ListPageAsync(int pageNumber, UserListOptions? options = null, CancellationToken cancellationToken = default)
     {
         options ??= new UserListOptions();
-        return TableauPaging.PageAsync(Pipeline, Endpoints.GetUsersOnSite, null, pageNumber, options.PageSize, options.Filter, options.Sort,
-            _stable, Resource, static body => body.Users, cancellationToken);
+        var pipeline = Pipeline;
+        var stable = pipeline.State.Deployment == TableauDeployment.Cloud ? _onCloud : _onServer;
+        return TableauPaging.PageAsync(pipeline, Endpoints.GetUsersOnSite, null, pageNumber, options.PageSize, options.Filter, options.Sort,
+            stable, Resource, static body => body.Users, cancellationToken);
     }
 
     /// <summary>
@@ -125,9 +131,10 @@ public class UsersClient
     /// <see cref="User.IdpConfigurationId"/>, <see cref="User.Language"/> and <see cref="User.Locale"/>.
     /// </summary>
     /// <remarks>
-    /// The full name and the password are Tableau Server's; the identity pool is Tableau Server's, and the identity
-    /// provider's configuration, the language and the locale Tableau Cloud's. A user Active Directory holds gets their
-    /// full name and email back from it at the next synchronisation.
+    /// The full name and the password are Tableau Server's, and so is the identity pool, from REST API 3.19. The identity
+    /// provider's configuration is Tableau Cloud's, from 3.25; an email apart from the user's name, Tableau Cloud's from
+    /// 3.26; the language and the locale, Tableau Cloud's from 3.28. A user Active Directory holds gets their full name
+    /// and email back from it at the next synchronisation.
     /// </remarks>
     /// <param name="id">The user's LUID.</param>
     /// <param name="changes">What to change: set only those members, such as <c>new User { SiteRole = SiteRole.Viewer }</c>.</param>
@@ -181,7 +188,7 @@ public class UsersClient
         RequestUri.Luid(userId, nameof(userId));
         await foreach (var group in TableauPaging.ListAsync((number, token) => TableauPaging.PageAsync(Pipeline, Endpoints.GetGroupsForUser,
                                [userId], number, TableauPaging.DefaultPageSize, null, null, null, "groups", static body => body.Groups, token),
-                           cancellationToken).ConfigureAwait(false))
+                           Endpoints.GetGroupsForUser.Name, null, cancellationToken).ConfigureAwait(false))
             yield return group;
     }
 }

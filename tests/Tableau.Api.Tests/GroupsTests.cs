@@ -47,7 +47,7 @@ public sealed class GroupsTests
             Sort = TableauSort.Desc(GroupField.UserCount),
         }));
 
-        AreaFixtures.Sent(server, $"GET {Groups}?pageSize=100&pageNumber=1&filter=isLocal:eq:true,userCount:gt:0&sort=userCount:desc");
+        AreaFixtures.Sent(server, $"GET {Groups}?pageSize=100&pageNumber=1&filter=isLocal:eq:true,userCount:gt:0&sort=userCount:desc,name:asc");
         Assert.HasCount(3, groups);
     }
 
@@ -174,7 +174,7 @@ public sealed class GroupsTests
     }
 
     [TestMethod]
-    public async Task ListUsersReadsTheGroupsUsersPageByPage()
+    public async Task ListUsersReadsTheGroupsUsersAndItsFixture()
     {
         using var server = AreaFixtures.Server();
         server.Map("GET", $"{Group}/users", FakeResponse.Fixture(200, "users-in-group.json"));
@@ -184,6 +184,21 @@ public sealed class GroupsTests
 
         AreaFixtures.Sent(server, $"GET {Group}/users?pageSize=100&pageNumber=1");
         CollectionAssert.AreEqual(new[] { Fixtures.UserId, AreaFixtures.OtherUserId }, users.Select(user => user.Id).ToArray());
+    }
+
+    [TestMethod]
+    public async Task ListUsersReadsTheGroupsUsersPageByPage()
+    {
+        using var server = AreaFixtures.Server();
+        server.Map("GET", $"{Group}/users", request => AreaFixtures.PageNumber(request) == 1
+            ? AreaFixtures.Page("users", "user", 1, 100, 150, 100)
+            : AreaFixtures.Page("users", "user", 2, 100, 150, 50));
+        await using var client = AreaFixtures.Client(server);
+
+        var users = await AreaFixtures.AllAsync(client.Groups.ListUsersAsync(AreaFixtures.GroupId));
+
+        CollectionAssert.AreEqual(new[] { 1, 2 }, AreaFixtures.Calls(server).Select(AreaFixtures.PageNumber).ToArray());
+        Assert.HasCount(150, users.Select(user => user.Id).Distinct());
     }
 
     [TestMethod]

@@ -80,7 +80,8 @@ public class SitesClient
     public virtual async IAsyncEnumerable<Site> ListAsync(SiteListOptions? options = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        await foreach (var site in TableauPaging.ListAsync((number, token) => ListPageAsync(number, options, token), cancellationToken)
+        await foreach (var site in TableauPaging.ListAsync((number, token) => ListPageAsync(number, options, token), Endpoints.QuerySites.Name, null,
+                               cancellationToken)
                            .ConfigureAwait(false))
             yield return site;
     }
@@ -145,8 +146,9 @@ public class SitesClient
     }
 
     /// <summary>
-    /// Delete Site: the site and everything on it; Tableau Server only, by a server administrator signed in to that site.
-    /// The default site can't be deleted.
+    /// Delete Site: the site and everything on it; Tableau Server only, by a server administrator signed in to a site.
+    /// The default site can't be deleted. Sent once, never again after a failure, since deleting a site can outlast an
+    /// attempt and a second would find it half deleted.
     /// </summary>
     /// <param name="id">The site's LUID.</param>
     /// <param name="cancellationToken">Cancels the call.</param>

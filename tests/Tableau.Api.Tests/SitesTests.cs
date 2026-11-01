@@ -45,7 +45,7 @@ public sealed class SitesTests
         CollectionAssert.AreEqual(new[] { $"GET {Sites}/finance?key=contentUrl", $"GET {Sites}/Sales%2FEMEA%3F%20%26%20R%26D?key=name" },
             AreaFixtures.Calls(server).Select(call => $"{call.Method} {call.Target}").ToArray());
         Assert.AreEqual(Fixtures.SiteId, byUrl.Id);
-        Assert.AreEqual(new SiteUsage { NumUsers = 12, Storage = 2048 }, byName.Usage);
+        Assert.AreEqual("Finance", byName.Name);
     }
 
     [TestMethod]
@@ -83,13 +83,14 @@ public sealed class SitesTests
     public async Task ListReadsEveryPageAndTakesAPageSize()
     {
         using var server = AreaFixtures.Server();
-        server.Map("GET", Sites, FakeResponse.Fixture(200, "sites-page.json"));
+        server.Map("GET", Sites, request => AreaFixtures.Page("sites", "site", AreaFixtures.PageNumber(request), 1, 2, 1));
         await using var client = AreaFixtures.Client(server);
 
-        var sites = await AreaFixtures.AllAsync(client.Sites.ListAsync(new SiteListOptions { PageSize = 1000 }));
+        var sites = await AreaFixtures.AllAsync(client.Sites.ListAsync(new SiteListOptions { PageSize = 1 }));
 
-        AreaFixtures.Sent(server, $"GET {Sites}?pageSize=1000&pageNumber=1");
-        Assert.HasCount(2, sites);
+        CollectionAssert.AreEqual(new[] { $"{Sites}?pageSize=1&pageNumber=1", $"{Sites}?pageSize=1&pageNumber=2" },
+            AreaFixtures.Calls(server).Select(call => call.Target).ToArray());
+        CollectionAssert.AreEqual(new[] { "n0", "n1" }, sites.Select(site => site.Name).ToArray());
     }
 
     [TestMethod]

@@ -215,8 +215,11 @@ internal static class Endpoints
     /// <summary>Update Site (REST API 1.0): the same settings set twice are set once.</summary>
     public static readonly Endpoint UpdateSite = Write("Update Site", HttpMethod.Put, "{version}/sites/{id:luid}", 1, 0, idempotent: true);
 
-    /// <summary>Delete Site (REST API 1.0), Tableau Server only; a second answers 404 once the first went through.</summary>
-    public static readonly Endpoint DeleteSite = Write("Delete Site", HttpMethod.Delete, "{version}/sites/{id:luid}", 1, 0, idempotent: true,
+    /// <summary>
+    /// Delete Site (REST API 1.0), Tableau Server only. Sent once: deleting a site can outlast an attempt, and a second
+    /// would find the site half deleted.
+    /// </summary>
+    public static readonly Endpoint DeleteSite = Write("Delete Site", HttpMethod.Delete, "{version}/sites/{id:luid}", 1, 0, idempotent: false,
         TableauDeployments.Server);
 
     // Projects.

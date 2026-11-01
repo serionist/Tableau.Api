@@ -36,7 +36,8 @@ public sealed class PagingTests
     public async Task ListStopsOnAShortPageWhateverTheTotalSays()
     {
         using var server = AreaFixtures.Server();
-        // As Tableau Server 2025.1 answered a case-insensitive filter on users: a total, and no users.
+        // A total above what the list holds, as Tableau Server 2025.1 answered a case-insensitive filter on users with a
+        // total of 1 and no users: the short second page ends the list, not the total.
         server.Map("GET", Users, request => Number(request) == 1 ? Page(1, size: 3, total: 9, count: 3) : Page(2, size: 3, total: 9, count: 1));
         await using var client = AreaFixtures.Client(server);
 
@@ -108,6 +109,45 @@ public sealed class PagingTests
 
         Assert.HasCount(3, read);
         Assert.HasCount(2, AreaFixtures.Calls(server), "no page after the cancellation");
+    }
+
+    [TestMethod]
+    public async Task AServerThatAnswersAnEarlierPageFailsTheListRatherThanRepeatIt()
+    {
+        using var server = AreaFixtures.Server();
+        server.Map("GET", Users, _ => Page(1, size: 2, total: 10, count: 2));
+        await using var client = AreaFixtures.Client(server);
+        var read = new List<User>();
+
+        var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.InvalidResponse, async () =>
+        {
+            await foreach (var user in client.Users.ListAsync(new UserListOptions { PageSize = 2 }))
+                read.Add(user);
+        });
+
+        Assert.HasCount(2, read);
+        Assert.HasCount(2, AreaFixtures.Calls(server));
+        Assert.Contains("Get Users on Site answered page 1 when asked for page 2", thrown.Message);
+    }
+
+    [TestMethod]
+    public async Task AFavoritesServerThatIgnoresThePageFailsTheListRatherThanRepeatIt()
+    {
+        using var server = AreaFixtures.Server();
+        var full = "{\"favorites\":{\"favorite\":[" + string.Join(',', Enumerable.Range(0, 100).Select(i => $"{{\"label\":\"f{i}\"}}")) + "]}}";
+        server.Map("GET", $"{AreaFixtures.SitePath}/favorites/{Fixtures.UserId}", FakeResponse.Json(200, full));
+        await using var client = AreaFixtures.Client(server);
+        var read = 0;
+
+        var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.InvalidResponse, async () =>
+        {
+            await foreach (var _ in client.Favorites.ListAsync(Fixtures.UserId))
+                read++;
+        });
+
+        Assert.AreEqual(100, read);
+        Assert.HasCount(2, AreaFixtures.Calls(server));
+        Assert.Contains("Get Favorites for User answered page 1 when asked for page 2", thrown.Message);
     }
 
     [TestMethod]

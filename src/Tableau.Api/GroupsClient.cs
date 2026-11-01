@@ -44,7 +44,8 @@ public class GroupsClient
     /// </summary>
     /// <remarks>
     /// Without a sort they come by name, which no two groups of a site share, so the pages of a list that doesn't change
-    /// neither skip nor repeat a group; one made, deleted or renamed while you read can still be missed or met twice.
+    /// neither skip nor repeat a group; a sort you give is followed by the name when it doesn't name it. One made, deleted
+    /// or renamed while you read can still be missed or met twice.
     /// </remarks>
     /// <param name="options">The filter, the sort and the page size; null for every group, 100 a page.</param>
     /// <param name="cancellationToken">Stops the list, between groups and between pages.</param>
@@ -54,7 +55,8 @@ public class GroupsClient
     public virtual async IAsyncEnumerable<Group> ListAsync(GroupListOptions? options = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        await foreach (var group in TableauPaging.ListAsync((number, token) => ListPageAsync(number, options, token), cancellationToken)
+        await foreach (var group in TableauPaging.ListAsync((number, token) => ListPageAsync(number, options, token), Endpoints.QueryGroups.Name, null,
+                               cancellationToken)
                            .ConfigureAwait(false))
             yield return group;
     }
@@ -263,7 +265,7 @@ public class GroupsClient
         RequestUri.Luid(groupId, nameof(groupId));
         await foreach (var user in TableauPaging.ListAsync((number, token) => TableauPaging.PageAsync(Pipeline, Endpoints.GetUsersInGroup,
                                [groupId], number, TableauPaging.DefaultPageSize, null, null, null, "users", static body => body.Users, token),
-                           cancellationToken).ConfigureAwait(false))
+                           Endpoints.GetUsersInGroup.Name, null, cancellationToken).ConfigureAwait(false))
             yield return user;
     }
 

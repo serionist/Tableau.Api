@@ -8,7 +8,8 @@ public sealed record ProjectListOptions
 
     /// <summary>
     /// Their order, over <see cref="ProjectField"/>'s fields; null for the oldest first, then by name, an order that
-    /// doesn't change from page to page.
+    /// doesn't change from page to page. A sort given is followed by those two fields where it doesn't name them, to
+    /// break its ties.
     /// </summary>
     public TableauSort? Sort { get; init; }
 
@@ -23,8 +24,9 @@ public sealed record UserListOptions
     public TableauFilter? Filter { get; init; }
 
     /// <summary>
-    /// Their order, over <see cref="UserField"/>'s fields; null for by name, an order that doesn't change from page to
-    /// page.
+    /// Their order, over <see cref="UserField"/>'s fields; null for by name, then on Tableau Server by domain, an order
+    /// that doesn't change from page to page. A sort given is followed by those fields where it doesn't name them, to
+    /// break its ties.
     /// </summary>
     public TableauSort? Sort { get; init; }
 
@@ -40,7 +42,7 @@ public sealed record GroupListOptions
 
     /// <summary>
     /// Their order, over <see cref="GroupField"/>'s fields; null for by name, an order that doesn't change from page to
-    /// page.
+    /// page. A sort given is followed by the name where it doesn't name it, to break its ties.
     /// </summary>
     public TableauSort? Sort { get; init; }
 

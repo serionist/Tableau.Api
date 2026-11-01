@@ -106,8 +106,9 @@ and [the migration guide](docs/migration-2.0.md) lists every change from 1.2.5 a
     among them. `client.Groups` lists, creates, updates and deletes local groups, imports and synchronises Active
     Directory groups on Tableau Server, at once or as a job, to the group's own path, and adds, removes and lists a
     group's users; `client.Favorites` lists a user's favorites and adds and removes a workbook, a view, a data source,
-    a project or a flow, each a `FavoriteTarget`. A create or an import is sent once; an update, a delete, an add to a
-    group and a favorite may be sent again after a failure, as a read is.
+    a project or a flow, each a `FavoriteTarget`. Creating a site, a project or a group, adding a user to the site,
+    importing or synchronising an Active Directory group, at once or as a job, and deleting a site are sent once; an
+    update, another delete, adding a user to a group and a favorite may be sent again after a failure, as a read is.
   - **Lists:** `ListAsync` reads every page lazily, in an `await foreach`, and stops at Tableau's total or on a short
     page, never asking for a page past the end, which Tableau answers with an error; `ListPageAsync` returns one
     `Page<T>`. A list is never null. Options records (`ProjectListOptions`, `UserListOptions`, `GroupListOptions`,
@@ -115,8 +116,11 @@ and [the migration guide](docs/migration-2.0.md) lists every change from 1.2.5 a
     (`Eq`, `In`, `Gt`, `Gte`, `Lt`, `Lte`, `Has`, `CiEq`, joined by `And`, or `FromString` for an expression written by
     hand) and `TableauSort` (`Asc`, `Desc`, `Then`) over the reference's fields (`ProjectField`, `UserField`,
     `GroupField`). Values are escaped on the wire, `&`, `+`, `#` and `%` among them; a value with a comma, which Tableau
-    can't take, and a field of another resource are refused before anything is sent. A list you don't sort comes in
-    an order that doesn't change from page to page: projects oldest first, users and groups by name.
+    can't take, and a field of another resource are refused before anything is sent. `Eq` and `In` take a `SiteRole`
+    too, such as `SiteRole.Viewer`. A list you don't sort comes in an order that doesn't change from page to page:
+    projects oldest first, then by name; users by name, then on Tableau Server by domain; groups by name. A sort you
+    give is followed by those of the default fields it doesn't name, to break its ties. A server that answers an
+    earlier page than the one asked for fails the list with `InvalidResponse`, where reading on would repeat it.
 - **The library builds with the trim and native AOT analyzers on** (`IsAotCompatible`), and the models pass them: they
   read and write JSON through System.Text.Json's source generator, with no reflection, and CI runs them in a native
   AOT app. The 1.x client is exempt: its `XmlSerializer` and Newtonsoft.Json code doesn't work trimmed or under native

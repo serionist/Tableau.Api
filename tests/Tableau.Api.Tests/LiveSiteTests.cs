@@ -6,7 +6,8 @@ namespace Tableau.Api.Tests;
 
 /// <summary>
 /// The live suite's sweep deletes only its own leftovers: a top-level project with the suite's description and a run's
-/// exact name, made more than a day ago. Every other project stays, whatever its name.
+/// exact name, made more than a day ago; and a local group named exactly after a run and the second it was made, more
+/// than a day ago. Every other project and group stays, whatever its name.
 /// </summary>
 [TestClass]
 public sealed class LiveSiteTests
