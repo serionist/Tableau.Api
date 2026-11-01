@@ -8,22 +8,23 @@ using Tableau.Api.Rest.Models;
 namespace Tableau.Api.Tests;
 
 /// <summary>
-/// Sessions on a Tableau site (<see cref="LiveSite"/> has the settings): a client signs itself in for a call and signs
-/// out when disposed; a session signed in by hand serves a bound client through its sub-clients, makes the run's
-/// project, and is signed out. Each test checks the sign-out took: the token is refused after it. They run one at a time:
-/// a personal access token allows one session, so a sign-in of one test would end the other's.
+/// Sessions on a Tableau site, signed in with the live suite's personal access token (<see cref="LiveSite"/> has the
+/// settings): a client signs itself in for a call and signs out when disposed; a session signed in by hand serves a
+/// bound client through its sub-clients, makes the run's project, and is signed out. Each test checks the sign-out took:
+/// the token is refused after it. They run one at a time: a personal access token allows one session, so a sign-in of
+/// one test would end the other's. <see cref="LiveConnectedAppTests"/> has the connected app's sessions.
 /// </summary>
 [TestClass]
 [DoNotParallelize]
 public sealed class LiveSessionTests
 {
-    [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = true), TestCategory(TableauSite.Live)]
+    [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = LiveSignIn.Token), TestCategory(TableauSite.Live)]
     public async Task AClientSignsItselfInForACallAndSignsOutWhenDisposed()
     {
         TableauSession session;
         await using (var client = LiveSite.Client(LiveSite.Credentials()))
         {
-            await SignedInAsync(() => LiveSite.RunProjectsAsync(client));
+            await LiveSite.SignedInAsync(LiveSignIn.Token, () => LiveSite.RunProjectsAsync(client));
             session = LiveSite.Saw(client.Pipeline.State.Sessions.Current!);
             Assert.AreEqual(LiveSite.SiteContentUrl, session.SiteContentUrl);
             Assert.IsTrue(Guid.TryParse(session.SiteId, out _), "the site's LUID");
@@ -36,11 +37,11 @@ public sealed class LiveSessionTests
         await ClientFixtures.FailsAsync(TableauErrorKind.Authentication, () => LiveSite.RunProjectsAsync(check.WithSession(session)));
     }
 
-    [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = true), TestCategory(TableauSite.Live)]
+    [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = LiveSignIn.Token), TestCategory(TableauSite.Live)]
     public async Task ASessionSignedInByHandServesABoundClientAcrossItsSubClients()
     {
         await using var client = LiveSite.Client(null);
-        var session = LiveSite.Saw(await SignedInAsync(() => client.Sessions.SignInAsync(LiveSite.Credentials())));
+        var session = LiveSite.Saw(await LiveSite.SignedInAsync(LiveSignIn.Token, () => client.Sessions.SignInAsync(LiveSite.Credentials())));
         await using var bound = client.WithSession(session);
         ServerInfo info;
         Project listed;
@@ -60,19 +61,6 @@ public sealed class LiveSessionTests
         Assert.AreEqual(LiveSite.ProjectName, listed.Name, "the sweep finds a run's project by its prefix");
         var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.Authentication, () => LiveSite.RunProjectsAsync(bound));
         Assert.Contains("WithSession", thrown.Message, "a bound client never signs in");
-    }
-
-    // A failed sign-in says what to check, never a setting's value.
-    private static async Task<T> SignedInAsync<T>(Func<Task<T>> call)
-    {
-        try
-        {
-            return await call();
-        }
-        catch (TableauException e) when (e.Kind == TableauErrorKind.Authentication)
-        {
-            throw new AssertFailedException($"The sign-in failed ({e.ErrorCode}: {e.Summary}): {LiveSite.SignInHint}.", e);
-        }
     }
 }
 

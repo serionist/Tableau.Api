@@ -1,23 +1,24 @@
 # The live suite: the tests in the Live category (tests/Tableau.Api.Tests/TableauSite.cs and LiveSite.cs), run against
-# the maintainers' Tableau Server, signed in through its direct-trust connected app, every night and by hand, from main
-# alone.
+# the maintainers' Tableau Server every night and by hand, from main alone.
 #
+# - Two sign-ins, each with its own job. Every content test signs in with a personal access token made for CI alone, a
+#   server administrator's on the default site (TABLEAU_LIVE_PAT_NAME, TABLEAU_LIVE_PAT_SECRET). The direct-trust
+#   connected app (TABLEAU_LIVE_CLIENT_ID, TABLEAU_LIVE_SECRET_ID, TABLEAU_LIVE_SECRET_VALUE, TABLEAU_LIVE_USER) signs
+#   in for its own tests alone (LiveConnectedAppTests), since on Tableau Server 2025.1 a connected app's session can't
+#   call a method whose scope came in REST API 3.27. A token allows one session at a time: a maintainer's local run
+#   signs in with another token, so it and this run never sign each other out.
 # - Its job runs in the tableau-live environment, which holds the site's settings as secrets and deploys from main
 #   alone, and the workflow has no pull_request trigger: no pull request, and no fork, reaches them.
 # - The nightly run waits for the repository variable TABLEAU_LIVE_NIGHTLY to be true, so it stays off until the
-#   environment is set up; a run by hand needs no variable. Once it runs, each setting the suite's sign-in needs fails
-#   the run, named, when it is missing: the suite never passes as skipped. A night with the variable unset shows its job
-#   as skipped.
+#   environment is set up; a run by hand needs no variable. Once it runs, each setting a test's sign-in needs fails
+#   the test, named, when it is missing: the suite never passes as skipped. A night with the variable unset shows its
+#   job as skipped.
 # - TABLEAU_LIVE_SITE is optional: GitHub keeps no empty secret, and an unset one reaches the tests as the empty string,
 #   which is the default site.
 # - One run at a time: the suite makes a project, with Tableau's samples published into it, and local groups named
-#   after the run and deletes them at the end, and deletes what an earlier run left behind more than a day ago. Its JWT
-#   asks for the scopes tableau:content:read, which the Metadata API's queries need too, tableau:projects:*,
-#   tableau:groups:*, tableau:users:read, tableau:permissions:read, tableau:permissions:update,
-#   tableau:permissions:delete, tableau:workbooks:update, tableau:workbooks:download, tableau:workbooks:delete,
-#   tableau:views:download, tableau:datasources:update, tableau:datasources:download, tableau:datasources:delete,
-#   tableau:tasks:run, tableau:workbook_tags:update, tableau:workbook_tags:delete, tableau:tags:batch_create and
-#   tableau:tags:batch_delete (LiveSite.cs).
+#   after the run and deletes them at the end, and deletes what an earlier run left behind more than a day ago. The
+#   connected app's JWT asks for the scope tableau:content:read alone, for the page of projects its tests read
+#   (LiveSite.cs).
 # - The suite's log check fails on any log line holding a setting's secret or a token any of its clients carried, and
 #   on one holding an invented secret or a query value; in a run that reached a site it counts such lines and shows
 #   none, since a line may hold a live value no list names, such as a JWT the client minted, and this log is public.
@@ -65,6 +66,8 @@ jobs:
           TABLEAU_LIVE: "1"
           TABLEAU_LIVE_SERVER_URL: ${{ secrets.TABLEAU_LIVE_SERVER_URL }}
           TABLEAU_LIVE_SITE: ${{ secrets.TABLEAU_LIVE_SITE }}
+          TABLEAU_LIVE_PAT_NAME: ${{ secrets.TABLEAU_LIVE_PAT_NAME }}
+          TABLEAU_LIVE_PAT_SECRET: ${{ secrets.TABLEAU_LIVE_PAT_SECRET }}
           TABLEAU_LIVE_CLIENT_ID: ${{ secrets.TABLEAU_LIVE_CLIENT_ID }}
           TABLEAU_LIVE_SECRET_ID: ${{ secrets.TABLEAU_LIVE_SECRET_ID }}
           TABLEAU_LIVE_SECRET_VALUE: ${{ secrets.TABLEAU_LIVE_SECRET_VALUE }}

@@ -146,7 +146,9 @@ public sealed partial class LogTests
     /// too. In a run that reached a site, every failure gives a count and shows no line: a line there may hold a live
     /// value no list names, such as a JWT the client minted, and the run's log is public.
     /// </summary>
-    /// <param name="live">The live suite's secrets: its settings' and every session token its clients carried.</param>
+    /// <param name="live">
+    /// The live suite's secrets: its settings', every session token its clients carried and every JWT it minted.
+    /// </param>
     /// <param name="reachedSite">Whether the run reached a site: a live setting was read, or a site test's switch is set.</param>
     internal static void NoLogLineInTheSuiteHoldsASecretOrAQueryValue(IReadOnlyCollection<string> live, bool reachedSite) =>
         CheckLines([.. RecordingLogger.All.Append(Fixtures.Log).Distinct().SelectMany(log => log.Lines)], live, reachedSite);
