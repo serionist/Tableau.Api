@@ -74,65 +74,65 @@ run: it stays checked by hand.
 | `GroupsClient.AddUserAsync` | Add User to Group | yes | `LiveAreaTests.ALocalGroupIsMadeFoundRenamedGivenTheSuitesUserAndDeleted` |
 | `GroupsClient.RemoveUserAsync` | Remove User from Group | yes | `LiveAreaTests.ALocalGroupIsMadeFoundRenamedGivenTheSuitesUserAndDeleted` |
 | `GroupsClient.ListUsersAsync` | Get Users in Group | yes | `LiveAreaTests.ALocalGroupIsMadeFoundRenamedGivenTheSuitesUserAndDeleted` |
-| `FavoritesClient.ListAsync` | Get Favorites for User | no | not live yet (#57) |
-| `FavoritesClient.AddAsync` | Add Workbook to Favorites | no | not live yet (#57) |
-| `FavoritesClient.AddAsync` | Add View to Favorites | no | not live yet (#57) |
-| `FavoritesClient.AddAsync` | Add Data Source to Favorites | no | not live yet (#57) |
-| `FavoritesClient.AddAsync` | Add Project to Favorites | no | not live yet (#57) |
+| `FavoritesClient.ListAsync` | Get Favorites for User | yes | `LiveAccessTests.ASampleWorkbookViewAndDataSourceAndTheRunsProjectAreFavoritedListedAndRemoved` |
+| `FavoritesClient.AddAsync` | Add Workbook to Favorites | yes | `LiveAccessTests.ASampleWorkbookViewAndDataSourceAndTheRunsProjectAreFavoritedListedAndRemoved` |
+| `FavoritesClient.AddAsync` | Add View to Favorites | yes | `LiveAccessTests.ASampleWorkbookViewAndDataSourceAndTheRunsProjectAreFavoritedListedAndRemoved` |
+| `FavoritesClient.AddAsync` | Add Data Source to Favorites | yes | `LiveAccessTests.ASampleWorkbookViewAndDataSourceAndTheRunsProjectAreFavoritedListedAndRemoved` |
+| `FavoritesClient.AddAsync` | Add Project to Favorites | yes | `LiveAccessTests.ASampleWorkbookViewAndDataSourceAndTheRunsProjectAreFavoritedListedAndRemoved` |
 | `FavoritesClient.AddAsync` | Add Flow to Favorites | no | no flow in the run's site, and the 2.0 client can't publish one |
-| `FavoritesClient.RemoveAsync` | Delete Workbook from Favorites | no | not live yet (#57) |
-| `FavoritesClient.RemoveAsync` | Delete View from Favorites | no | not live yet (#57) |
-| `FavoritesClient.RemoveAsync` | Delete Data Source from Favorites | no | not live yet (#57) |
-| `FavoritesClient.RemoveAsync` | Delete Project from Favorites | no | not live yet (#57) |
+| `FavoritesClient.RemoveAsync` | Delete Workbook from Favorites | yes | `LiveAccessTests.ASampleWorkbookViewAndDataSourceAndTheRunsProjectAreFavoritedListedAndRemoved` |
+| `FavoritesClient.RemoveAsync` | Delete View from Favorites | yes | `LiveAccessTests.ASampleWorkbookViewAndDataSourceAndTheRunsProjectAreFavoritedListedAndRemoved` |
+| `FavoritesClient.RemoveAsync` | Delete Data Source from Favorites | yes | `LiveAccessTests.ASampleWorkbookViewAndDataSourceAndTheRunsProjectAreFavoritedListedAndRemoved` |
+| `FavoritesClient.RemoveAsync` | Delete Project from Favorites | yes | `LiveAccessTests.ASampleWorkbookViewAndDataSourceAndTheRunsProjectAreFavoritedListedAndRemoved` |
 | `FavoritesClient.RemoveAsync` | Delete Flow from Favorites | no | no flow in the run's site, and the 2.0 client can't publish one |
 | `PermissionsClient.GetAsync` | List Project Permissions | yes | `LiveAreaTests.ACapabilityIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted` |
-| `PermissionsClient.GetAsync` | List Workbook Permissions | no | not live yet (#57) |
-| `PermissionsClient.GetAsync` | List View Permissions | no | not live yet (#57) |
-| `PermissionsClient.GetAsync` | List Data Source Permissions | no | not live yet (#57) |
+| `PermissionsClient.GetAsync` | List Workbook Permissions | yes | `LiveAccessTests.ACapabilityIsGrantedToARunsGroupOnASampleWorkbookViewAndDataSourceReadBackAndDeleted` |
+| `PermissionsClient.GetAsync` | List View Permissions | yes | `LiveAccessTests.ACapabilityIsGrantedToARunsGroupOnASampleWorkbookViewAndDataSourceReadBackAndDeleted` |
+| `PermissionsClient.GetAsync` | List Data Source Permissions | yes | `LiveAccessTests.ACapabilityIsGrantedToARunsGroupOnASampleWorkbookViewAndDataSourceReadBackAndDeleted` |
 | `PermissionsClient.GetAsync` | List Flow Permissions | no | no flow in the run's site, and the 2.0 client can't publish one |
 | `PermissionsClient.GetAsync` | List Virtual Connection Permissions | no | no virtual connection on the server, and the 2.0 client can't make one |
 | `PermissionsClient.GetAsync` | List Collection Permissions | no | the 2.0 client can't make a collection |
 | `PermissionsClient.GetAsync` | List Database Permissions | no | not live yet (#57) |
 | `PermissionsClient.GetAsync` | List Table Permissions | no | not live yet (#57) |
 | `PermissionsClient.AddAsync` | Add Project Permissions | yes | `LiveAreaTests.ACapabilityIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted` |
-| `PermissionsClient.AddAsync` | Add Workbook Permissions | no | not live yet (#57) |
-| `PermissionsClient.AddAsync` | Add View Permissions | no | not live yet (#57) |
-| `PermissionsClient.AddAsync` | Add Data Source Permissions | no | not live yet (#57) |
+| `PermissionsClient.AddAsync` | Add Workbook Permissions | yes | `LiveAccessTests.ACapabilityIsGrantedToARunsGroupOnASampleWorkbookViewAndDataSourceReadBackAndDeleted` |
+| `PermissionsClient.AddAsync` | Add View Permissions | yes | `LiveAccessTests.ACapabilityIsGrantedToARunsGroupOnASampleWorkbookViewAndDataSourceReadBackAndDeleted` |
+| `PermissionsClient.AddAsync` | Add Data Source Permissions | yes | `LiveAccessTests.ACapabilityIsGrantedToARunsGroupOnASampleWorkbookViewAndDataSourceReadBackAndDeleted` |
 | `PermissionsClient.AddAsync` | Add Flow Permissions | no | no flow in the run's site, and the 2.0 client can't publish one |
 | `PermissionsClient.AddAsync` | Add Virtual Connection Permissions | no | no virtual connection on the server, and the 2.0 client can't make one |
 | `PermissionsClient.AddAsync` | Add Collection Permissions | no | the 2.0 client can't make a collection |
 | `PermissionsClient.AddAsync` | Add Database Permissions | no | not live yet (#57) |
 | `PermissionsClient.AddAsync` | Add Table Permissions | no | not live yet (#57) |
 | `PermissionsClient.DeleteAsync` | Delete Project Permission | yes | `LiveAreaTests.ACapabilityIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted` |
-| `PermissionsClient.DeleteAsync` | Delete Workbook Permission | no | not live yet (#57) |
-| `PermissionsClient.DeleteAsync` | Delete View Permission | no | not live yet (#57) |
-| `PermissionsClient.DeleteAsync` | Delete Data Source Permission | no | not live yet (#57) |
+| `PermissionsClient.DeleteAsync` | Delete Workbook Permission | yes | `LiveAccessTests.ACapabilityIsGrantedToARunsGroupOnASampleWorkbookViewAndDataSourceReadBackAndDeleted` |
+| `PermissionsClient.DeleteAsync` | Delete View Permission | yes | `LiveAccessTests.ACapabilityIsGrantedToARunsGroupOnASampleWorkbookViewAndDataSourceReadBackAndDeleted` |
+| `PermissionsClient.DeleteAsync` | Delete Data Source Permission | yes | `LiveAccessTests.ACapabilityIsGrantedToARunsGroupOnASampleWorkbookViewAndDataSourceReadBackAndDeleted` |
 | `PermissionsClient.DeleteAsync` | Delete Flow Permission | no | no flow in the run's site, and the 2.0 client can't publish one |
 | `PermissionsClient.DeleteAsync` | Delete Virtual Connection Permission | no | no virtual connection on the server, and the 2.0 client can't make one |
 | `PermissionsClient.DeleteAsync` | Delete Collection Permission | no | the 2.0 client can't make a collection |
 | `PermissionsClient.DeleteAsync` | Delete Database Permissions | no | not live yet (#57) |
 | `PermissionsClient.DeleteAsync` | Delete Table Permissions | no | not live yet (#57) |
-| `PermissionsClient.GetDefaultAsync` | List Default Permissions for Workbooks | no | not live yet (#57) |
-| `PermissionsClient.GetDefaultAsync` | List Default Permissions for Data Sources | no | not live yet (#57) |
-| `PermissionsClient.GetDefaultAsync` | List Default Permissions for Data Roles | no | not live yet (#57) |
-| `PermissionsClient.GetDefaultAsync` | List Default Permissions for Flows | no | not live yet (#57) |
-| `PermissionsClient.GetDefaultAsync` | List Default Permissions for Virtual Connections | no | not live yet (#57) |
-| `PermissionsClient.GetDefaultAsync` | List Default Permissions for Databases | no | not live yet (#57) |
-| `PermissionsClient.GetDefaultAsync` | List Default Permissions for Tables | no | not live yet (#57) |
-| `PermissionsClient.AddDefaultAsync` | Add Default Permissions for Workbooks | no | not live yet (#57) |
-| `PermissionsClient.AddDefaultAsync` | Add Default Permissions for Data Sources | no | not live yet (#57) |
-| `PermissionsClient.AddDefaultAsync` | Add Default Permissions for Data Roles | no | not live yet (#57) |
-| `PermissionsClient.AddDefaultAsync` | Add Default Permissions for Flows | no | not live yet (#57) |
-| `PermissionsClient.AddDefaultAsync` | Add Default Permissions for Virtual Connections | no | not live yet (#57) |
-| `PermissionsClient.AddDefaultAsync` | Add Default Permissions for Databases | no | not live yet (#57) |
-| `PermissionsClient.AddDefaultAsync` | Add Default Permissions for Tables | no | not live yet (#57) |
-| `PermissionsClient.DeleteDefaultAsync` | Delete Default Permission for Workbooks | no | not live yet (#57) |
-| `PermissionsClient.DeleteDefaultAsync` | Delete Default Permission for Data Sources | no | not live yet (#57) |
-| `PermissionsClient.DeleteDefaultAsync` | Delete Default Permission for Data Roles | no | not live yet (#57) |
-| `PermissionsClient.DeleteDefaultAsync` | Delete Default Permission for Flows | no | not live yet (#57) |
-| `PermissionsClient.DeleteDefaultAsync` | Delete Default Permission for Virtual Connections | no | not live yet (#57) |
-| `PermissionsClient.DeleteDefaultAsync` | Delete Default Permission for Databases | no | not live yet (#57) |
-| `PermissionsClient.DeleteDefaultAsync` | Delete Default Permission for Tables | no | not live yet (#57) |
+| `PermissionsClient.GetDefaultAsync` | List Default Permissions for Workbooks | yes | `LiveAccessTests.EachKindOfDefaultPermissionIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted` |
+| `PermissionsClient.GetDefaultAsync` | List Default Permissions for Data Sources | yes | `LiveAccessTests.EachKindOfDefaultPermissionIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted` |
+| `PermissionsClient.GetDefaultAsync` | List Default Permissions for Data Roles | refused 405000 | `LiveAccessTests.EachKindOfDefaultPermissionIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted` |
+| `PermissionsClient.GetDefaultAsync` | List Default Permissions for Flows | yes | `LiveAccessTests.EachKindOfDefaultPermissionIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted` |
+| `PermissionsClient.GetDefaultAsync` | List Default Permissions for Virtual Connections | yes | `LiveAccessTests.EachKindOfDefaultPermissionIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted` |
+| `PermissionsClient.GetDefaultAsync` | List Default Permissions for Databases | yes | `LiveAccessTests.EachKindOfDefaultPermissionIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted` |
+| `PermissionsClient.GetDefaultAsync` | List Default Permissions for Tables | yes | `LiveAccessTests.EachKindOfDefaultPermissionIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted` |
+| `PermissionsClient.AddDefaultAsync` | Add Default Permissions for Workbooks | yes | `LiveAccessTests.EachKindOfDefaultPermissionIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted` |
+| `PermissionsClient.AddDefaultAsync` | Add Default Permissions for Data Sources | yes | `LiveAccessTests.EachKindOfDefaultPermissionIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted` |
+| `PermissionsClient.AddDefaultAsync` | Add Default Permissions for Data Roles | refused 405000 | `LiveAccessTests.EachKindOfDefaultPermissionIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted` |
+| `PermissionsClient.AddDefaultAsync` | Add Default Permissions for Flows | yes | `LiveAccessTests.EachKindOfDefaultPermissionIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted` |
+| `PermissionsClient.AddDefaultAsync` | Add Default Permissions for Virtual Connections | yes | `LiveAccessTests.EachKindOfDefaultPermissionIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted` |
+| `PermissionsClient.AddDefaultAsync` | Add Default Permissions for Databases | yes | `LiveAccessTests.EachKindOfDefaultPermissionIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted` |
+| `PermissionsClient.AddDefaultAsync` | Add Default Permissions for Tables | yes | `LiveAccessTests.EachKindOfDefaultPermissionIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted` |
+| `PermissionsClient.DeleteDefaultAsync` | Delete Default Permission for Workbooks | yes | `LiveAccessTests.EachKindOfDefaultPermissionIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted` |
+| `PermissionsClient.DeleteDefaultAsync` | Delete Default Permission for Data Sources | yes | `LiveAccessTests.EachKindOfDefaultPermissionIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted` |
+| `PermissionsClient.DeleteDefaultAsync` | Delete Default Permission for Data Roles | refused 404003 | `LiveAccessTests.EachKindOfDefaultPermissionIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted` |
+| `PermissionsClient.DeleteDefaultAsync` | Delete Default Permission for Flows | yes | `LiveAccessTests.EachKindOfDefaultPermissionIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted` |
+| `PermissionsClient.DeleteDefaultAsync` | Delete Default Permission for Virtual Connections | yes | `LiveAccessTests.EachKindOfDefaultPermissionIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted` |
+| `PermissionsClient.DeleteDefaultAsync` | Delete Default Permission for Databases | yes | `LiveAccessTests.EachKindOfDefaultPermissionIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted` |
+| `PermissionsClient.DeleteDefaultAsync` | Delete Default Permission for Tables | yes | `LiveAccessTests.EachKindOfDefaultPermissionIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted` |
 | `TagsClient.AddAsync` | Add Tags to Workbook | yes | `LiveContentTests.SamplesAreTaggedWithASpaceAndACommaOneAtATimeAndInABatchAndOneIsDeleted` |
 | `TagsClient.AddAsync` | Add Tags to View | no | not live yet (#57) |
 | `TagsClient.AddAsync` | Add Tags to Data Source | no | not live yet (#57) |
