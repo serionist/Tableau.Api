@@ -103,14 +103,14 @@ public sealed class LiveCoverageTests
     {
         var problems = Problems(Table(
             "| `ProjectsClient.ListAsync` | Query Projects | yes | `ProjectsTests.ListPageSortsByAStableOrderUnlessToldAndReadsTheProjects` |",
-            "| `ProjectsClient.DeleteAsync` | Delete Project | refused 403004 | `LiveAreaTests.AProjectIsMade`, `ServerOnlyAreaTests.AUserIsAddedUpdatedAndRemoved` |",
+            "| `ProjectsClient.DeleteAsync` | Delete Project | refused 403004 | `LiveAreaTests.AProjectIsMade`, `ServerOnlySessionTests.APasswordSignInImpersonatesAUser` |",
             "| `MetadataClient.QueryAsync<T>` | Metadata API query | yes |  |"));
 
         CollectionAssert.AreEquivalent(new[]
         {
             "line 7, ProjectsClient.ListAsync and Query Projects: ProjectsTests.ListPageSortsByAStableOrderUnlessToldAndReadsTheProjects is no Live site "
                 + "test, nor LiveSite or SuiteCleanup",
-            "line 8, ProjectsClient.DeleteAsync and Delete Project: ServerOnlyAreaTests.AUserIsAddedUpdatedAndRemoved is no Live site test, nor LiveSite "
+            "line 8, ProjectsClient.DeleteAsync and Delete Project: ServerOnlySessionTests.APasswordSignInImpersonatesAUser is no Live site test, nor LiveSite "
                 + "or SuiteCleanup",
             "line 9, MetadataClient.QueryAsync<T> and Metadata API query: a yes row names the tests that make the call",
         }, problems);

@@ -30,13 +30,13 @@ run: it stays checked by hand.
 | `SessionsClient.SignInAsync` | Sign In | no | a password: an automated run is given none, and `ServerOnlySessionTests` signs in with one by hand |
 | `SessionsClient.SignInAsync` | Sign In, impersonating a user | no | a password: an automated run is given none, and `ServerOnlySessionTests` signs in with one by hand |
 | `SessionsClient.SignInAsync` | Sign In with a personal access token | yes | `LiveSessionTests.ASessionSignedInByHandServesABoundClientAcrossItsSubClients` |
-| `SessionsClient.SignInAsync` | Sign In with a personal access token, impersonating a user | no | not live yet (#57) |
+| `SessionsClient.SignInAsync` | Sign In with a personal access token, impersonating a user | yes | `LiveDirectoryTests.ADirectoryUserIsAddedMadeAViewerImpersonatedByTheTokenAndRemoved` |
 | `SessionsClient.SignInAsync` | Sign In with a JWT | yes | `LiveConnectedAppTests.ASessionSignedInWithAMintedJwtServesABoundClientAndIsSignedOut` |
 | `SessionsClient.SignInAsync` | Sign In with a unified access token | no | Tableau Cloud only |
 | `SessionsClient.SwitchSiteAsync` | Switch Site | yes | `LiveSessionTests.SwitchSiteGivesASessionOnTheRunsSiteAndEndsTheFirst` |
 | `SessionsClient.SignOutAsync` | Sign Out | yes | `LiveSessionTests.ASessionSignedInByHandServesABoundClientAcrossItsSubClients`, `LiveConnectedAppTests.ASessionSignedInWithAMintedJwtServesABoundClientAndIsSignedOut` |
 | `TableauCredentials.PersonalAccessToken` | Sign In with a personal access token | yes | `LiveSessionTests.AClientSignsItselfInForACallAndSignsOutWhenDisposed`, `LiveAreaTests.AProjectIsMadeFoundByAFilterUpdatedAndDeletedInTheRunsProject` |
-| `TableauCredentials.PersonalAccessToken` | Sign In with a personal access token, impersonating a user | no | not live yet (#57) |
+| `TableauCredentials.PersonalAccessToken` | Sign In with a personal access token, impersonating a user | yes | `LiveDirectoryTests.ADirectoryUserIsAddedMadeAViewerImpersonatedByTheTokenAndRemoved` |
 | `TableauCredentials.ConnectedAppDirectTrust` | Sign In with a JWT | yes | `LiveConnectedAppTests.AClientWithTheConnectedAppSignsItselfInForAPageOfProjectsAndSignsOutWhenDisposed` |
 | `TableauCredentials.Jwt` | Sign In with a JWT | yes | `LiveConnectedAppTests.ASessionSignedInWithAMintedJwtServesABoundClientAndIsSignedOut` |
 | `TableauCredentials.UnifiedAccessToken` | Sign In with a unified access token | no | Tableau Cloud only |
@@ -58,18 +58,18 @@ run: it stays checked by hand.
 | `UsersClient.GetAsync` | Query User On Site | yes | `LiveAreaTests.UsersAreListedPageByPageAndTheSuitesOwnIsReadByIdAndByFilter` |
 | `UsersClient.ListAsync` | Get Users on Site | yes | `LiveAreaTests.UsersAreListedPageByPageAndTheSuitesOwnIsReadByIdAndByFilter` |
 | `UsersClient.ListPageAsync` | Get Users on Site | yes | `LiveAreaTests.UsersAreListedPageByPageAndTheSuitesOwnIsReadByIdAndByFilter` |
-| `UsersClient.AddAsync` | Add User to Site | no | not live yet (#57) |
-| `UsersClient.UpdateAsync` | Update User | no | not live yet (#57) |
-| `UsersClient.RemoveAsync` | Remove User from Site | no | not live yet (#57) |
+| `UsersClient.AddAsync` | Add User to Site | yes | `LiveDirectoryTests.ADirectoryUserIsAddedMadeAViewerImpersonatedByTheTokenAndRemoved` |
+| `UsersClient.UpdateAsync` | Update User | yes | `LiveDirectoryTests.ADirectoryUserIsAddedMadeAViewerImpersonatedByTheTokenAndRemoved` |
+| `UsersClient.RemoveAsync` | Remove User from Site | yes | `LiveDirectoryTests.ADirectoryUserIsAddedMadeAViewerImpersonatedByTheTokenAndRemoved` |
 | `UsersClient.ListGroupsAsync` | Get Groups for a User | yes | `LiveAreaTests.ALocalGroupIsMadeFoundRenamedGivenTheSuitesUserAndDeleted`, `LiveAreaTests.UsersAreListedPageByPageAndTheSuitesOwnIsReadByIdAndByFilter` |
 | `GroupsClient.ListAsync` | Query Groups | yes | `LiveAreaTests.ALocalGroupIsMadeFoundRenamedGivenTheSuitesUserAndDeleted` |
-| `GroupsClient.ListPageAsync` | Query Groups | no | not live yet (#57) |
+| `GroupsClient.ListPageAsync` | Query Groups | yes | `LiveDirectoryTests.ADirectoryGroupIsImportedWithItsMemberSynchronisedAndDeletedThenImportedAsAJobFoundAndDeleted` |
 | `GroupsClient.CreateAsync` | Create Group | yes | `LiveAreaTests.ALocalGroupIsMadeFoundRenamedGivenTheSuitesUserAndDeleted`, `LiveAreaTests.ACapabilityIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted` |
-| `GroupsClient.ImportFromActiveDirectoryAsync` | Create Group from Active Directory | no | not live yet (#57) |
-| `GroupsClient.ImportFromActiveDirectoryAsJobAsync` | Create Group from Active Directory | no | not live yet (#57) |
+| `GroupsClient.ImportFromActiveDirectoryAsync` | Create Group from Active Directory | yes | `LiveDirectoryTests.ADirectoryGroupIsImportedWithItsMemberSynchronisedAndDeletedThenImportedAsAJobFoundAndDeleted` |
+| `GroupsClient.ImportFromActiveDirectoryAsJobAsync` | Create Group from Active Directory | yes | `LiveDirectoryTests.ADirectoryGroupIsImportedWithItsMemberSynchronisedAndDeletedThenImportedAsAJobFoundAndDeleted` |
 | `GroupsClient.UpdateAsync` | Update Group | yes | `LiveAreaTests.ALocalGroupIsMadeFoundRenamedGivenTheSuitesUserAndDeleted` |
-| `GroupsClient.UpdateFromActiveDirectoryAsync` | Update Group from Active Directory | no | not live yet (#57) |
-| `GroupsClient.UpdateFromActiveDirectoryAsJobAsync` | Update Group from Active Directory | no | not live yet (#57) |
+| `GroupsClient.UpdateFromActiveDirectoryAsync` | Update Group from Active Directory | yes | `LiveDirectoryTests.ADirectoryGroupIsImportedWithItsMemberSynchronisedAndDeletedThenImportedAsAJobFoundAndDeleted` |
+| `GroupsClient.UpdateFromActiveDirectoryAsJobAsync` | Update Group from Active Directory | yes | `LiveDirectoryTests.ADirectoryGroupIsImportedWithItsMemberSynchronisedAndDeletedThenImportedAsAJobFoundAndDeleted` |
 | `GroupsClient.DeleteAsync` | Delete Group | yes | `LiveAreaTests.ALocalGroupIsMadeFoundRenamedGivenTheSuitesUserAndDeleted`, `LiveAreaTests.ACapabilityIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted` |
 | `GroupsClient.AddUserAsync` | Add User to Group | yes | `LiveAreaTests.ALocalGroupIsMadeFoundRenamedGivenTheSuitesUserAndDeleted` |
 | `GroupsClient.RemoveUserAsync` | Remove User from Group | yes | `LiveAreaTests.ALocalGroupIsMadeFoundRenamedGivenTheSuitesUserAndDeleted` |

@@ -199,6 +199,55 @@ public sealed class TableauSiteTests
     }
 
     [TestMethod]
+    public void AFailedResultComesBackWithEveryKnownValueInAnyCaseAsStars()
+    {
+        string[] known = ["Finance-Site", "invented-directory-group", "invented-live-secret"];
+        string Scrub(string text) => LiveSite.Scrubbed(text, known);
+        var result = new TestResult
+        {
+            Outcome = UnitTestOutcome.Failed,
+            TestFailureException = new ScrubbedFailure("Query Site (GET /api/3.25/sites/FINANCE-SITE) answered 404: Site 'finance-site' wasn't found.",
+                "   at Invented() in INVENTED-DIRECTORY-GROUP.cs:line 1"),
+            LogOutput = "imported Invented-Directory-Group",
+            LogError = "token invented-live-secret",
+            DebugTrace = "Finance-Site",
+            TestContextMessages = "a line holding FINANCE-site",
+        };
+
+        var scrubbed = SiteTestAttribute.Scrubbed(result, Scrub);
+
+        Assert.AreEqual(UnitTestOutcome.Failed, scrubbed.Outcome);
+        Assert.AreEqual("Query Site (GET /api/3.25/sites/***) answered 404: Site '***' wasn't found.", scrubbed.TestFailureException!.Message);
+        Assert.AreEqual("   at Invented() in ***.cs:line 1", scrubbed.TestFailureException.StackTrace);
+        Assert.AreEqual(("imported ***", "token ***", "***", "a line holding ***"),
+            (scrubbed.LogOutput, scrubbed.LogError, scrubbed.DebugTrace, scrubbed.TestContextMessages));
+        Assert.IsFalse(known.Any(value => scrubbed.TestFailureException.ToString().Contains(value, StringComparison.OrdinalIgnoreCase)));
+        var empty = SiteTestAttribute.Scrubbed(new TestResult { Outcome = UnitTestOutcome.Failed }, Scrub);
+        Assert.IsNull(empty.TestFailureException, "a result without a failure stays without one");
+        Assert.IsNull(empty.LogOutput);
+    }
+
+    [TestMethod]
+    public void AThrownFailuresOwnStackTraceIsScrubbed()
+    {
+        Exception thrown;
+        try
+        {
+            throw new InvalidOperationException("Site 'Finance-Site' wasn't found.");
+        }
+        catch (InvalidOperationException e)
+        {
+            thrown = e;
+        }
+
+        var scrubbed = SiteTestAttribute.Scrubbed(new TestResult { Outcome = UnitTestOutcome.Failed, TestFailureException = thrown },
+            text => LiveSite.Scrubbed(text, ["finance-site", nameof(AThrownFailuresOwnStackTraceIsScrubbed)]));
+
+        Assert.AreEqual("Site '***' wasn't found.", scrubbed.TestFailureException!.Message);
+        Assert.Contains("TableauSiteTests.***()", scrubbed.TestFailureException.StackTrace!, "the stack trace it was thrown with, scrubbed");
+    }
+
+    [TestMethod]
     public void AClassWithASiteTestRunsItsTestsOneAtATime()
     {
         Assert.AreEqual("T has a SiteTest and no [DoNotParallelize]: a site test runs one at a time", TableauSite.OrderProblem("T", true, false));

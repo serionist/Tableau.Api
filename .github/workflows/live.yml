@@ -7,6 +7,11 @@
 #   in for its own tests alone (LiveConnectedAppTests), since on Tableau Server 2025.1 a connected app's session can't
 #   call a method whose scope came in REST API 3.27. A token allows one session at a time: a maintainer's local run
 #   signs in with another token, so it and this run never sign each other out.
+# - The directory tests (LiveDirectoryTests) import a group and add a user from the server's Active Directory: the
+#   maintainers' technical accounts, enabled, with passwords nobody holds, named by TABLEAU_LIVE_AD_DOMAIN,
+#   TABLEAU_LIVE_AD_GROUP, TABLEAU_LIVE_AD_GROUP_MEMBER and TABLEAU_LIVE_AD_USER. Their names are never in the repo:
+#   secrets here, so GitHub masks their exact values, and the suite scrubs them, in any case, from every output and
+#   failed result. The token impersonates the user, with tsm authentication pat-impersonation enable on the server.
 # - Its job runs in the tableau-live environment, which holds the site's settings as secrets and deploys from main
 #   alone, and the workflow has no pull_request trigger: no pull request, and no fork, reaches them.
 # - The nightly run waits for the repository variable TABLEAU_LIVE_NIGHTLY to be true, so it stays off until the
@@ -78,6 +83,10 @@ jobs:
           TABLEAU_LIVE_SECRET_ID: ${{ secrets.TABLEAU_LIVE_SECRET_ID }}
           TABLEAU_LIVE_SECRET_VALUE: ${{ secrets.TABLEAU_LIVE_SECRET_VALUE }}
           TABLEAU_LIVE_USER: ${{ secrets.TABLEAU_LIVE_USER }}
+          TABLEAU_LIVE_AD_DOMAIN: ${{ secrets.TABLEAU_LIVE_AD_DOMAIN }}
+          TABLEAU_LIVE_AD_GROUP: ${{ secrets.TABLEAU_LIVE_AD_GROUP }}
+          TABLEAU_LIVE_AD_GROUP_MEMBER: ${{ secrets.TABLEAU_LIVE_AD_GROUP_MEMBER }}
+          TABLEAU_LIVE_AD_USER: ${{ secrets.TABLEAU_LIVE_AD_USER }}
         run: >-
           dotnet test --project tests/Tableau.Api.Tests/Tableau.Api.Tests.csproj --no-build -c Release
           --filter "TestCategory=Live"

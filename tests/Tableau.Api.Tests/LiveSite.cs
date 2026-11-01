@@ -82,13 +82,26 @@ internal static partial class LiveSite
     /// </summary>
     public static readonly string[] Scopes = ["tableau:content:read"];
 
-    /// <summary>The settings whose values name the site or the sign-in without being secrets.</summary>
+    /// <summary>The directory's domain, in the form Create Group's <c>domainName</c> takes.</summary>
+    public const string DirectoryDomain = "TABLEAU_LIVE_AD_DOMAIN";
+
+    /// <summary>The directory group, in the form Create Group's <c>name</c> takes.</summary>
+    public const string DirectoryGroup = "TABLEAU_LIVE_AD_GROUP";
+
+    /// <summary>The directory group's one member, as Tableau names an imported user.</summary>
+    public const string DirectoryGroupMember = "TABLEAU_LIVE_AD_GROUP_MEMBER";
+
+    /// <summary>The directory user on its own, as Add User to Site takes it.</summary>
+    public const string DirectoryUser = "TABLEAU_LIVE_AD_USER";
+
+    /// <summary>The settings whose values name the site, the sign-in or the directory's accounts without being secrets.</summary>
     private static readonly string[] _knownSettings =
     [
-        Site, "TABLEAU_LIVE_USER", "TABLEAU_LIVE_PAT_NAME", "TABLEAU_LIVE_CLIENT_ID", "TABLEAU_LIVE_SECRET_ID", "TABLEAU_SERVER_ONLY_SITE",
-        "TABLEAU_SERVER_ONLY_USER", "TABLEAU_SERVER_ONLY_AD_GROUP", "TABLEAU_SERVER_ONLY_AD_DOMAIN", "TABLEAU_SERVER_ONLY_NEW_USER",
+        Site, "TABLEAU_LIVE_USER", "TABLEAU_LIVE_PAT_NAME", "TABLEAU_LIVE_CLIENT_ID", "TABLEAU_LIVE_SECRET_ID", DirectoryDomain, DirectoryGroup,
+        DirectoryGroupMember, DirectoryUser, "TABLEAU_SERVER_ONLY_SITE", "TABLEAU_SERVER_ONLY_USER",
     ];
 
+    private static readonly ConcurrentDictionary<string, byte> _learned = new(StringComparer.OrdinalIgnoreCase);
     private static readonly ConcurrentDictionary<string, byte> _secrets = new(StringComparer.Ordinal);
     private static readonly SemaphoreSlim _projectLock = new(1, 1);
     private static readonly ConcurrentQueue<string> _fileHeaders = new();
@@ -125,13 +138,41 @@ internal static partial class LiveSite
     /// </summary>
     public static IReadOnlyCollection<string> Secrets => [.. _secrets.Keys];
 
-    /// <summary>The values of the settings that name the site, its server or the sign-in, set or not.</summary>
+    /// <summary>
+    /// The values of the settings that name the site, its server, the sign-in or the directory's accounts, set or not, and
+    /// each directory name Tableau answered that a test kept (<see cref="Learned"/>).
+    /// </summary>
     public static IReadOnlyCollection<string> Known =>
     [
         .. _knownSettings.Select(Environment.GetEnvironmentVariable).OfType<string>().Where(value => value.Length > 0),
         .. new[] { ServerUrl, "TABLEAU_SERVER_ONLY_SERVER_URL" }.Select(Environment.GetEnvironmentVariable)
             .Where(value => Uri.TryCreate(value, UriKind.Absolute, out _)).Select(value => new Uri(value!).Host),
+        .. _learned.Keys,
     ];
+
+    /// <summary>
+    /// Keeps a name Tableau answered for the directory's accounts, such as a group's display name or a domain in another
+    /// form, with the known values, so no output, fixture or failed result shows it; and returns it.
+    /// </summary>
+    public static string? Learned(string? value)
+    {
+        if (!string.IsNullOrEmpty(value) && value != "local") _learned.TryAdd(value, 0);
+        return value;
+    }
+
+    /// <summary>
+    /// The text with every known value and every live secret as <c>***</c>, case aside, since a server may echo a host, a
+    /// content URL or a directory name in another case, and the longest first, so no part of one is left.
+    /// </summary>
+    public static string Scrubbed(string text) => Scrubbed(text, Known.Concat(Secrets));
+
+    /// <summary>The text with each of the values as <c>***</c>, case aside, the longest first.</summary>
+    public static string Scrubbed(string text, IEnumerable<string> values)
+    {
+        foreach (var value in values.Where(value => value.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).OrderByDescending(value => value.Length))
+            text = text.Replace(value, "***", StringComparison.OrdinalIgnoreCase);
+        return text;
+    }
 
     /// <summary>The folder the recorder wrote to in this run, or null when it recorded nothing.</summary>
     public static string? Recorded => _recorded;
@@ -146,9 +187,13 @@ internal static partial class LiveSite
         Site = site ?? SiteContentUrl,
     };
 
-    /// <summary>The personal access token every content test signs in with, its secret kept for the log check.</summary>
-    public static TableauCredentials Credentials() =>
-        TableauCredentials.PersonalAccessToken(TableauSite.Setting("TABLEAU_LIVE_PAT_NAME"), Secret("TABLEAU_LIVE_PAT_SECRET"));
+    /// <summary>
+    /// The personal access token every content test signs in with, its secret kept for the log check; impersonating the
+    /// user given, which the token's server administrator may on a server with <c>tsm authentication pat-impersonation
+    /// enable</c>.
+    /// </summary>
+    public static TableauCredentials Credentials(string? impersonateUserId = null) =>
+        TableauCredentials.PersonalAccessToken(TableauSite.Setting("TABLEAU_LIVE_PAT_NAME"), Secret("TABLEAU_LIVE_PAT_SECRET"), impersonateUserId);
 
     /// <summary>
     /// The connected app's direct trust, asking for <see cref="Scopes"/>: the client mints its JWT at each sign-in. Its

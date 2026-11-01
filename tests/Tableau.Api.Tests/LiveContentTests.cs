@@ -263,7 +263,7 @@ public sealed partial class LiveContentTests
         }
         catch (TableauException e)
         {
-            outcome = Scrubbed($"refused: {e.Kind} {(int?)e.StatusCode} {e.ErrorCode} {e.Summary}: {Luids().Replace(e.Detail ?? "", "{id}")}");
+            outcome = LiveSite.Scrubbed($"refused: {e.Kind} {(int?)e.StatusCode} {e.ErrorCode} {e.Summary}: {Luids().Replace(e.Detail ?? "", "{id}")}");
         }
         Record($"{what}: {outcome}");
         return outcome;
@@ -381,18 +381,9 @@ public sealed partial class LiveContentTests
         await ClientFixtures.FailsAsync(TableauErrorKind.NotFound, () => client.Workbooks.GetAsync(second.Id));
     }
 
-    // A line for the test's output, which the PR quotes and CI's public log shows: shapes only.
-    private void Record(string line) => TestContext.WriteLine(Scrubbed(line));
-
-    // The text with every setting that names the site, its server or the sign-in, and every live secret, as ***: a
-    // refusal's detail can name the site or the user, and an assertion's message carries it into the log. Case aside,
-    // since a server may echo a host or a content URL in another case.
-    private static string Scrubbed(string text)
-    {
-        foreach (var value in LiveSite.Known.Concat(LiveSite.Secrets).Where(value => value.Length > 0).OrderByDescending(value => value.Length))
-            text = text.Replace(value, "***", StringComparison.OrdinalIgnoreCase);
-        return text;
-    }
+    // A line for the test's output, which the PR quotes and CI's public log shows: shapes only, every known value and
+    // secret as ***, since a refusal's detail can name the site or the user.
+    private void Record(string line) => TestContext.WriteLine(LiveSite.Scrubbed(line));
 
     private void RecordFiles()
     {

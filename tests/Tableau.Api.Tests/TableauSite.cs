@@ -127,7 +127,10 @@ internal static class TableauSite
 /// <summary>
 /// [TestMethod] for a test on a Tableau site: before the test runs, it checks the category's switch and the settings
 /// named, and ends the test inconclusive or failed as <see cref="TableauSite.Check"/> says. While the test runs, it is
-/// the one that calls in <see cref="LiveSite.Record"/>, which keeps how it ended too.
+/// the one that calls in <see cref="LiveSite.Record"/>, which keeps how it ended too. A result that didn't pass comes
+/// back with every known value and live secret as <c>***</c> in its message, its stack trace and its output
+/// (<see cref="Scrubbed"/>), since a failure's message carries Tableau's detail, which can name the site or a
+/// directory account, into the public log, where GitHub masks only a secret's exact value.
 /// </summary>
 [AttributeUsage(AttributeTargets.Method, Inherited = false)]
 internal sealed class SiteTestAttribute(
@@ -156,8 +159,35 @@ internal sealed class SiteTestAttribute(
         using (LiveSite.Record.As(name))
             results = await base.ExecuteAsync(testMethod);
         LiveSite.Record.Ended(name, results.All(result => result.Outcome == UnitTestOutcome.Passed));
-        return results;
+        return [.. results.Select(result => result.Outcome == UnitTestOutcome.Passed ? result : Scrubbed(result, LiveSite.Scrubbed))];
     }
+
+    /// <summary>
+    /// A copy of the result with <paramref name="scrub"/> applied to its failure's message and stack trace, and to its
+    /// output. A copy, since MSTest's <see cref="TestResult.TestFailureException"/> adds an exception to the one it holds.
+    /// </summary>
+    public static TestResult Scrubbed(TestResult result, Func<string, string> scrub)
+    {
+        string[] scrubbed = [nameof(TestResult.TestFailureException), nameof(TestResult.LogOutput), nameof(TestResult.LogError), nameof(TestResult.DebugTrace),
+            nameof(TestResult.TestContextMessages)];
+        var copy = new TestResult();
+        foreach (var property in typeof(TestResult).GetProperties().Where(property => property.CanRead && property.CanWrite && !scrubbed.Contains(property.Name)))
+            property.SetValue(copy, property.GetValue(result));
+        if (result.TestFailureException is { } failure)
+            copy.TestFailureException = new ScrubbedFailure(scrub(failure.Message), scrub(StackTraceOf(failure) ?? ""));
+        copy.LogOutput = result.LogOutput is { } output ? scrub(output) : null;
+        copy.LogError = result.LogError is { } error ? scrub(error) : null;
+        copy.DebugTrace = result.DebugTrace is { } trace ? scrub(trace) : null;
+        copy.TestContextMessages = result.TestContextMessages is { } messages ? scrub(messages) : null;
+        return copy;
+    }
+
+    // MSTest keeps a failed test's own stack trace beside the exception it reports, in StackTraceInformation.
+    private static string? StackTraceOf(Exception failure) =>
+        failure.GetType().GetProperty("StackTraceInformation")?.GetValue(failure) is { } information
+            && information.GetType().GetProperty("ErrorStackTrace")?.GetValue(information) is string stack
+            ? stack
+            : failure.StackTrace;
 
     /// <summary>The result a check ends the test with, or null when it runs.</summary>
     public static TestResult? Ended(SiteCheck check) => check.Outcome switch
@@ -194,6 +224,14 @@ internal enum LiveSignIn
     /// TABLEAU_LIVE_USER.
     /// </summary>
     ConnectedApp,
+}
+
+/// <summary>A site test's failure as it is reported, its message and stack trace scrubbed.</summary>
+internal sealed class ScrubbedFailure(string message, string stackTrace) : Exception(message)
+{
+    public override string StackTrace => stackTrace;
+
+    public override string ToString() => $"{Message}\n{StackTrace}";
 }
 
 internal enum SiteOutcome
