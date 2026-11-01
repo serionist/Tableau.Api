@@ -72,13 +72,19 @@ public sealed class PermissionsTests
             $"GET {permissions}", $"PUT {permissions}", $"DELETE {permissions}/groups/{AreaFixtures.GroupId}/Read/Allow",
             $"DELETE {permissions}/users/{AreaFixtures.OtherUserId}/Write/Deny",
         }, calls.Select(call => $"{call.Method} {call.Target}").ToArray());
-        // The reference's bodies name a database or a table beside its grantees; the other kinds' name none.
-        var asset = kind switch
+        // The reference's bodies name a workbook, a view, a data source, a flow, a database or a table beside its grantees;
+        // a project's mustn't, and a collection's and a virtual connection's don't.
+        var element = kind switch
         {
-            TableauContentKind.Database => $$"""{"database":{"id":"{{AreaFixtures.ItemId}}"},""",
-            TableauContentKind.Table => $$"""{"table":{"id":"{{AreaFixtures.ItemId}}"},""",
-            _ => "{",
+            TableauContentKind.Workbook => "workbook",
+            TableauContentKind.View => "view",
+            TableauContentKind.DataSource => "datasource",
+            TableauContentKind.Flow => "flow",
+            TableauContentKind.Database => "database",
+            TableauContentKind.Table => "table",
+            _ => null,
         };
+        var asset = element is null ? "{" : $$"""{"{{element}}":{"id":"{{AreaFixtures.ItemId}}"},""";
         Assert.AreEqual(AreaFixtures.Json(Rules.Replace("{\"permissions\":{", "{\"permissions\":" + asset, StringComparison.Ordinal)),
             AreaFixtures.Json(calls[1].BodyText));
         Assert.IsTrue(calls.All(call => call.Header("X-Tableau-Auth") == Fixtures.SessionToken));
@@ -173,7 +179,7 @@ public sealed class PermissionsTests
         ]);
 
         AreaFixtures.Sent(server, $"PUT {Site}/workbooks/{AreaFixtures.ItemId}/permissions", $$$"""
-            {"permissions":{"granteeCapabilities":[{"groupSet":{"id":"{{{AreaFixtures.GroupId}}}"},"capabilities":{"capability":[{"mode":"Allow","name":"InventedFutureCapability"}]}}]}}
+            {"permissions":{"workbook":{"id":"{{{AreaFixtures.ItemId}}}"},"granteeCapabilities":[{"groupSet":{"id":"{{{AreaFixtures.GroupId}}}"},"capabilities":{"capability":[{"mode":"Allow","name":"InventedFutureCapability"}]}}]}}
             """);
     }
 
@@ -232,6 +238,24 @@ public sealed class PermissionsTests
             () => client.Permissions.GetDefaultAsync("Finance", DefaultPermissionsKind.Workbooks))).ParamName);
         Assert.AreEqual("kind", (await AreaFixtures.RefusedAsync<ArgumentOutOfRangeException>(server,
             () => client.Permissions.GetDefaultAsync(AreaFixtures.ProjectId, (DefaultPermissionsKind)42))).ParamName);
+    }
+
+    [TestMethod]
+    public async Task AGroupSetsPermissionIsDeletedUnderGroupSets()
+    {
+        using var server = AreaFixtures.Server();
+        var path = $"{Site}/projects/{AreaFixtures.ProjectId}/permissions/groupSets/{AreaFixtures.GroupId}/Read/Deny";
+        var defaults = $"{Site}/projects/{AreaFixtures.ProjectId}/default-permissions/workbooks/groupSets/{AreaFixtures.GroupId}/Read/Deny";
+        server.Map("DELETE", path, FakeResponse.Empty(204));
+        server.Map("DELETE", defaults, FakeResponse.Empty(204));
+        await using var client = AreaFixtures.Client(server);
+        var set = PermissionGrantee.GroupSet(AreaFixtures.GroupId);
+
+        await client.Permissions.DeleteAsync(TableauContent.Project(AreaFixtures.ProjectId), set, CapabilityName.Read, CapabilityMode.Deny);
+        await client.Permissions.DeleteDefaultAsync(AreaFixtures.ProjectId, DefaultPermissionsKind.Workbooks, set, CapabilityName.Read, CapabilityMode.Deny);
+
+        CollectionAssert.AreEqual(new[] { $"DELETE {path}", $"DELETE {defaults}" },
+            AreaFixtures.Calls(server).Select(call => $"{call.Method} {call.Target}").ToArray());
     }
 
     [TestMethod]

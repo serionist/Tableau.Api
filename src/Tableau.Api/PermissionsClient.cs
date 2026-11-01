@@ -80,7 +80,13 @@ public class PermissionsClient
         var calls = Calls(content);
         var permissions = new Permissions
         {
-            // The reference's bodies name a database or a table asset beside its grantees, and no other kind.
+            // As the reference's bodies write them: a workbook's, a view's, a data source's, a flow's, a database's and a
+            // table's name it beside the grantees (a workbook's and a data source's "not required"); a project's mustn't,
+            // and a collection's and a virtual connection's don't.
+            Workbook = content.Kind == TableauContentKind.Workbook ? new Workbook { Id = content.Id } : null,
+            View = content.Kind == TableauContentKind.View ? new View { Id = content.Id } : null,
+            Datasource = content.Kind == TableauContentKind.DataSource ? new DataSource { Id = content.Id } : null,
+            Flow = content.Kind == TableauContentKind.Flow ? new Flow { Id = content.Id } : null,
             Database = content.Kind == TableauContentKind.Database ? new Database { Id = content.Id } : null,
             Table = content.Kind == TableauContentKind.Table ? new Table { Id = content.Id } : null,
             GranteeCapabilities = Rules(rules, nameof(rules)),
@@ -89,9 +95,9 @@ public class PermissionsClient
             static body => body.Permissions, "permissions", cancellationToken));
     }
 
-    /// <summary>Delete Permission: removes one capability, in one mode, that the content grants a user or a group.</summary>
+    /// <summary>Delete Permission: removes one capability, in one mode, that the content grants a user, a group or a group set.</summary>
     /// <param name="content">The content, such as <c>TableauContent.View(id)</c>.</param>
-    /// <param name="grantee">The user or group, such as <c>PermissionGrantee.Group(id)</c>.</param>
+    /// <param name="grantee">The user, group or group set, such as <c>PermissionGrantee.Group(id)</c>.</param>
     /// <param name="capability">The capability, such as <see cref="CapabilityName.Read"/>.</param>
     /// <param name="mode">The mode it is granted in: <see cref="CapabilityMode.Allow"/> or <see cref="CapabilityMode.Deny"/>.</param>
     /// <param name="cancellationToken">Cancels the call.</param>
@@ -151,7 +157,7 @@ public class PermissionsClient
     /// <summary>Delete Default Permission: removes one capability, in one mode, from a project's defaults for one kind of content.</summary>
     /// <param name="projectId">The project's LUID.</param>
     /// <param name="kind">Which kind of content's defaults.</param>
-    /// <param name="grantee">The user or group, such as <c>PermissionGrantee.User(id)</c>.</param>
+    /// <param name="grantee">The user, group or group set, such as <c>PermissionGrantee.User(id)</c>.</param>
     /// <param name="capability">The capability, such as <see cref="CapabilityName.Read"/>.</param>
     /// <param name="mode">The mode it is granted in: <see cref="CapabilityMode.Allow"/> or <see cref="CapabilityMode.Deny"/>.</param>
     /// <param name="cancellationToken">Cancels the call.</param>
@@ -270,46 +276,98 @@ public enum DefaultPermissionsKind
     Tables,
 }
 
-/// <summary>A user or a group whose permission a delete names, by its LUID: <c>PermissionGrantee.Group(id)</c>.</summary>
-/// <remarks>Two values are equal when they name the same user or group, its LUID compared case aside. The value is immutable.</remarks>
+/// <summary>What a <see cref="PermissionGrantee"/> is.</summary>
+public enum PermissionGranteeKind
+{
+    /// <summary>A user.</summary>
+    User,
+
+    /// <summary>A group.</summary>
+    Group,
+
+    /// <summary>A group set, a set of groups whose members all hold what it is granted (REST API 3.22).</summary>
+    GroupSet,
+}
+
+/// <summary>
+/// The user, group or group set whose permission a delete names, by its LUID: <c>PermissionGrantee.Group(id)</c>.
+/// </summary>
+/// <remarks>
+/// <para>
+/// A delete goes to <c>permissions/users/{id}</c>, <c>permissions/groups/{id}</c> or <c>permissions/groupSets/{id}</c>.
+/// The reference documents the first two; a group set's comes from Tableau's schema, whose rules name a group set beside
+/// users and groups, and Tableau's Python client, which deletes a group set's permission there. Group sets came in REST
+/// API 3.22 (Tableau Server 2024.2).
+/// </para>
+/// <para>
+/// Two values are equal when they name the same grantee: the same kind and LUID, the LUID's case aside. The value is
+/// immutable.
+/// </para>
+/// </remarks>
 public sealed class PermissionGrantee : IEquatable<PermissionGrantee>
 {
-    private PermissionGrantee(string id, bool isGroup)
+    private PermissionGrantee(PermissionGranteeKind kind, string id)
     {
+        Kind = kind;
         Id = id;
-        IsGroup = isGroup;
     }
 
-    /// <summary>The user's or the group's LUID.</summary>
+    /// <summary>Whether it is a user, a group or a group set.</summary>
+    public PermissionGranteeKind Kind { get; }
+
+    /// <summary>The user's, the group's or the group set's LUID.</summary>
     public string Id { get; }
 
-    /// <summary>Whether it is a group; a user otherwise.</summary>
-    public bool IsGroup { get; }
-
-    /// <summary>The path segment the delete calls name it under: <c>users</c> or <c>groups</c>.</summary>
-    internal string Segment => IsGroup ? "groups" : "users";
+    /// <summary>The path segment the delete calls name it under: <c>users</c>, <c>groups</c> or <c>groupSets</c>.</summary>
+    internal string Segment => Kind switch
+    {
+        PermissionGranteeKind.Group => "groups",
+        PermissionGranteeKind.GroupSet => "groupSets",
+        _ => "users",
+    };
 
     /// <summary>A user, by its LUID.</summary>
     /// <param name="id">The user's LUID.</param>
     /// <exception cref="ArgumentException"><paramref name="id"/> is no LUID.</exception>
-    public static PermissionGrantee User(string id) => new(RequestUri.Luid(id, nameof(id)), isGroup: false);
+    public static PermissionGrantee User(string id) => new(PermissionGranteeKind.User, RequestUri.Luid(id, nameof(id)));
 
     /// <summary>A group, by its LUID.</summary>
     /// <param name="id">The group's LUID.</param>
     /// <exception cref="ArgumentException"><paramref name="id"/> is no LUID.</exception>
-    public static PermissionGrantee Group(string id) => new(RequestUri.Luid(id, nameof(id)), isGroup: true);
+    public static PermissionGrantee Group(string id) => new(PermissionGranteeKind.Group, RequestUri.Luid(id, nameof(id)));
 
-    /// <summary>Whether <paramref name="other"/> names the same user or group.</summary>
+    /// <summary>A group set, by its LUID (REST API 3.22).</summary>
+    /// <param name="id">The group set's LUID.</param>
+    /// <exception cref="ArgumentException"><paramref name="id"/> is no LUID.</exception>
+    public static PermissionGrantee GroupSet(string id) => new(PermissionGranteeKind.GroupSet, RequestUri.Luid(id, nameof(id)));
+
+    /// <summary>Whether two values name the same grantee.</summary>
+    /// <param name="left">One value, or null.</param>
+    /// <param name="right">The other, or null.</param>
+    public static bool operator ==(PermissionGrantee? left, PermissionGrantee? right) => left is null ? right is null : left.Equals(right);
+
+    /// <summary>Whether two values name different grantees.</summary>
+    /// <param name="left">One value, or null.</param>
+    /// <param name="right">The other, or null.</param>
+    public static bool operator !=(PermissionGrantee? left, PermissionGrantee? right) => !(left == right);
+
+    /// <summary>Whether <paramref name="other"/> names the same grantee.</summary>
     /// <param name="other">The other value.</param>
     public bool Equals(PermissionGrantee? other) =>
-        other is not null && IsGroup == other.IsGroup && string.Equals(Id, other.Id, StringComparison.OrdinalIgnoreCase);
+        other is not null && Kind == other.Kind && string.Equals(Id, other.Id, StringComparison.OrdinalIgnoreCase);
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as PermissionGrantee);
 
     /// <inheritdoc/>
-    public override int GetHashCode() => HashCode.Combine(IsGroup, StringComparer.OrdinalIgnoreCase.GetHashCode(Id));
+    public override int GetHashCode() => HashCode.Combine(Kind, StringComparer.OrdinalIgnoreCase.GetHashCode(Id));
 
-    /// <summary>The kind and the LUID, such as <c>group 1f2f3e4e-...</c>.</summary>
-    public override string ToString() => $"{(IsGroup ? "group" : "user")} {Id}";
+    /// <summary>The kind and the LUID, such as <c>group 1f2f3e4e-...</c> or <c>group set 1f2f3e4e-...</c>.</summary>
+    public override string ToString() => Kind switch
+    {
+        PermissionGranteeKind.Group => $"group {Id}",
+        PermissionGranteeKind.GroupSet => $"group set {Id}",
+        _ => $"user {Id}",
+    };
 }
+

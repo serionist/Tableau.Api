@@ -21,11 +21,11 @@ public sealed class FavoritesTests
 
     public static IEnumerable<object[]> Kinds =>
     [
-        ["workbook", "workbooks", "1.0", "2.0"],
-        ["view", "views", "1.0", "2.0"],
-        ["datasource", "datasources", "2.3", "2.3"],
-        ["project", "projects", "3.1", "3.1"],
-        ["flow", "flows", "3.3", "3.3"],
+        ["workbook", "workbooks", "1.0", "2.0", "Workbook"],
+        ["view", "views", "1.0", "2.0", "View"],
+        ["datasource", "datasources", "2.3", "2.3", "Data Source"],
+        ["project", "projects", "3.1", "3.1", "Project"],
+        ["flow", "flows", "3.3", "3.3", "Flow"],
     ];
 
     /// <summary>The kinds favorites don't take, each made from a valid LUID.</summary>
@@ -72,7 +72,7 @@ public sealed class FavoritesTests
 
     [TestMethod]
     [DynamicData(nameof(Kinds))]
-    public async Task AddPutsTheLabelAndTheContentAndReadsTheFavorites(string kind, string segment, string addedFrom, string deletedFrom)
+    public async Task AddPutsTheLabelAndTheContentAndReadsTheFavorites(string kind, string segment, string addedFrom, string deletedFrom, string name)
     {
         using var server = AreaFixtures.Server();
         server.Map("PUT", Favorites, FakeResponse.Fixture(200, "favorites.json"));
@@ -91,6 +91,27 @@ public sealed class FavoritesTests
         Assert.AreEqual(Version.Parse(addedFrom), add.MinVersion);
         Assert.AreEqual(Version.Parse(deletedFrom), delete.MinVersion);
         Assert.IsTrue(add.Idempotent && delete.Idempotent);
+        // Through the client: each kind's own add and delete, refused below its own version.
+        await PermissionsTests.AssertGatedAsync(addedFrom, $"Add {name} to Favorites", client => client.Favorites.AddAsync(Fixtures.UserId, "x", content));
+        await PermissionsTests.AssertGatedAsync(deletedFrom, $"Delete {name} from Favorites", client => client.Favorites.RemoveAsync(Fixtures.UserId, content));
+    }
+
+    [TestMethod]
+    [DynamicData(nameof(Kinds))]
+    public async Task EachKindIsAddedAndDeletedByItsOwnCall(string kind, string segment, string addedFrom, string deletedFrom, string name)
+    {
+        using var server = AreaFixtures.Server();
+        server.Map("PUT", Favorites, FakeResponse.Error(404, "404000", "Not Found", "Invented: no such content."));
+        server.Map("DELETE", $"{Favorites}/{segment}/{AreaFixtures.ItemId}", FakeResponse.Error(404, "404000", "Not Found", "Invented: no such content."));
+        await using var client = AreaFixtures.Client(server);
+        var (content, _, _) = Target(kind, AreaFixtures.ItemId);
+
+        // The failure names the call that was made, which the versions alone can't tell apart for a workbook and a view.
+        var added = await ClientFixtures.FailsAsync(TableauErrorKind.NotFound, () => client.Favorites.AddAsync(Fixtures.UserId, "x", content));
+        var removed = await ClientFixtures.FailsAsync(TableauErrorKind.NotFound, () => client.Favorites.RemoveAsync(Fixtures.UserId, content));
+
+        Assert.StartsWith($"Add {name} to Favorites (PUT ", added.Message, addedFrom);
+        Assert.StartsWith($"Delete {name} from Favorites (DELETE ", removed.Message, deletedFrom);
     }
 
     [TestMethod]

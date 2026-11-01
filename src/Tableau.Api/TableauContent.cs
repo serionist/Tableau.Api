@@ -122,6 +122,16 @@ public sealed class TableauContent : IEquatable<TableauContent>
         return new(TableauContentKind.Column, RequestUri.Luid(columnId, nameof(columnId)), tableId);
     }
 
+    /// <summary>Whether two values name the same content.</summary>
+    /// <param name="left">One value, or null.</param>
+    /// <param name="right">The other, or null.</param>
+    public static bool operator ==(TableauContent? left, TableauContent? right) => left is null ? right is null : left.Equals(right);
+
+    /// <summary>Whether two values name different content.</summary>
+    /// <param name="left">One value, or null.</param>
+    /// <param name="right">The other, or null.</param>
+    public static bool operator !=(TableauContent? left, TableauContent? right) => !(left == right);
+
     /// <summary>Whether <paramref name="other"/> names the same content: the same kind and LUIDs, case aside.</summary>
     /// <param name="other">The other value.</param>
     public bool Equals(TableauContent? other) =>

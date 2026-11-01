@@ -22,6 +22,7 @@
     <type fullname="Tableau.Api.MetadataClient" />
     <type fullname="Tableau.Api.Page`1" />
     <type fullname="Tableau.Api.PermissionGrantee" />
+    <type fullname="Tableau.Api.PermissionGranteeKind" />
     <type fullname="Tableau.Api.PermissionsClient" />
     <type fullname="Tableau.Api.ProjectField" />
     <type fullname="Tableau.Api.ProjectListOptions" />

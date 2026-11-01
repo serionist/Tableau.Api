@@ -79,23 +79,46 @@ public sealed class TableauContentTests
     }
 
     [TestMethod]
-    public void AGranteeIsAUserOrAGroupByItsLuid()
+    public void AGranteeIsAUserAGroupOrAGroupSetByItsLuid()
     {
         var group = PermissionGrantee.Group(Id);
         var user = PermissionGrantee.User(Id);
+        var set = PermissionGrantee.GroupSet(Id);
 
-        Assert.IsTrue(group.IsGroup);
-        Assert.IsFalse(user.IsGroup);
-        Assert.AreEqual((Id, Id), (group.Id, user.Id));
+        Assert.AreEqual((PermissionGranteeKind.Group, PermissionGranteeKind.User, PermissionGranteeKind.GroupSet), (group.Kind, user.Kind, set.Kind));
+        Assert.AreEqual(("groups", "users", "groupSets"), (group.Segment, user.Segment, set.Segment));
+        Assert.AreEqual((Id, Id, Id), (group.Id, user.Id, set.Id));
         Assert.AreEqual(group, PermissionGrantee.Group(Id.ToUpperInvariant()));
         Assert.AreEqual(group.GetHashCode(), PermissionGrantee.Group(Id.ToUpperInvariant()).GetHashCode());
         Assert.IsTrue(group.Equals((object)PermissionGrantee.Group(Id)));
         Assert.AreNotEqual(group, user);
+        Assert.AreNotEqual(group, set);
         Assert.IsFalse(group.Equals(null));
         Assert.AreEqual($"group {Id}", group.ToString());
         Assert.AreEqual($"user {Id}", user.ToString());
+        Assert.AreEqual($"group set {Id}", set.ToString());
         Assert.AreEqual("id", Assert.ThrowsExactly<ArgumentException>(() => PermissionGrantee.User("ada")).ParamName);
         Assert.AreEqual("id", Assert.ThrowsExactly<ArgumentException>(() => PermissionGrantee.Group("Finance")).ParamName);
+        Assert.AreEqual("id", Assert.ThrowsExactly<ArgumentException>(() => PermissionGrantee.GroupSet("Analysts")).ParamName);
+    }
+
+    [TestMethod]
+    public void EqualityOperatorsCompareByValue()
+    {
+        TableauContent? none = null;
+        PermissionGrantee? nobody = null;
+
+        Assert.IsTrue(TableauContent.Workbook(Id) == TableauContent.Workbook(Id.ToUpperInvariant()));
+        Assert.IsFalse(TableauContent.Workbook(Id) != TableauContent.Workbook(Id.ToUpperInvariant()));
+        Assert.IsTrue(TableauContent.Workbook(Id) != TableauContent.View(Id));
+        Assert.IsTrue(TableauContent.Workbook(Id) != none);
+        Assert.IsTrue(none != TableauContent.Workbook(Id));
+        Assert.IsTrue(none == null);
+        Assert.IsTrue(PermissionGrantee.Group(Id) == PermissionGrantee.Group(Id.ToUpperInvariant()));
+        Assert.IsTrue(PermissionGrantee.Group(Id) != PermissionGrantee.GroupSet(Id));
+        Assert.IsTrue(PermissionGrantee.User(Id) != nobody);
+        Assert.IsTrue(nobody != PermissionGrantee.User(Id));
+        Assert.IsTrue(nobody == null);
     }
 
     [TestMethod]
