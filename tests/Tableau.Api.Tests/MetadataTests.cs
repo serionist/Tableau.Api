@@ -50,7 +50,9 @@ public sealed class MetadataTests
         var airlines = databases[0];
         Assert.AreEqual(("invented-airlines", DatabaseType.DatabaseServer, DatabaseContentPermissions.ManagedByOwner),
             (airlines.Name, airlines.Type, airlines.ContentPermissions));
-        Assert.AreEqual(("ada", "Finance", LocationType.Project), (airlines.Contact?.Name, airlines.Tags![0].Label, airlines.Location?.Type));
+        // Tableau Server 2025.1 sends PROJECT, where the schema's enumeration has Project: the value keeps the server's text.
+        Assert.AreEqual(("ada", "Finance", "PROJECT"), (airlines.Contact?.Name, airlines.Tags![0].Label, airlines.Location?.Type?.Value));
+        Assert.AreNotEqual(LocationType.Project, airlines.Location?.Type);
         Assert.IsEmpty(databases[1].Tags!);
     }
 
@@ -104,7 +106,12 @@ public sealed class MetadataTests
             CertificationNote = "Checked",
             Description = "Invented: ask the data team before changing it.",
             ContentPermissions = DatabaseContentPermissions.LockedToDatabase,
-            Contact = new User { Id = AreaFixtures.OtherUserId },
+            Contact = new User { Id = AreaFixtures.OtherUserId, Name = "ada" },
+            // Not the reference's: left out of the body, as a database read and changed with `with` holds them.
+            Id = AreaFixtures.ItemId,
+            Name = "invented-airlines",
+            HostName = "sql.invented.example",
+            Tags = [new Tag { Label = "Finance" }],
         });
         await client.Metadata.DeleteDatabaseAsync(AreaFixtures.ItemId);
 
@@ -128,7 +135,8 @@ public sealed class MetadataTests
         await using var client = AreaFixtures.Client(server);
 
         var got = await client.Metadata.GetTableAsync(AreaFixtures.ItemId);
-        var updated = await client.Metadata.UpdateTableAsync(AreaFixtures.ItemId, new Table { IsCertified = true, Description = "Invented cultures" });
+        var updated = await client.Metadata.UpdateTableAsync(AreaFixtures.ItemId,
+            new Table { IsCertified = true, Description = "Invented cultures", Name = "Culture", Schema = "invented", IsEmbedded = false });
         await client.Metadata.DeleteTableAsync(AreaFixtures.ItemId);
 
         var calls = AreaFixtures.Calls(server);
@@ -155,6 +163,37 @@ public sealed class MetadataTests
     }
 
     [TestMethod]
+    public async Task AnAnswerThatCountsMoreColumnsThanItHoldsFailsRatherThanStopShort()
+    {
+        using var server = AreaFixtures.Server();
+        server.Map("GET", $"{Site}/tables/{TableId}/columns", FakeResponse.Json(200, """
+            {"pagination":{"pageNumber":"1","pageSize":"1000","totalAvailable":"1500"},"columns":{"column":[{"id":"c1","name":"A"},{"id":"c2","name":"B"}]}}
+            """));
+        server.Map("GET", $"{Site}/tables/{AreaFixtures.ItemId}/columns", FakeResponse.Json(200, """
+            {"pagination":{"pageNumber":"1","pageSize":"1000","totalAvailable":"2"},"columns":{"column":[{"id":"c1","name":"A"},{"id":"c2","name":"B"}]}}
+            """));
+        await using var client = AreaFixtures.Client(server);
+
+        var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.InvalidResponse, () => AreaFixtures.AllAsync(client.Metadata.ListColumnsAsync(TableId)));
+        var whole = await AreaFixtures.AllAsync(client.Metadata.ListColumnsAsync(AreaFixtures.ItemId));
+
+        Assert.StartsWith("Query Columns in a Table answered 2 of the table's 1500 columns", thrown.Message);
+        Assert.HasCount(2, whole);
+    }
+
+    [TestMethod]
+    public async Task AContactWithoutItsLuidIsRefusedBeforeSending()
+    {
+        using var server = AreaFixtures.Server();
+        await using var client = AreaFixtures.Client(server);
+
+        Assert.AreEqual("changes", (await AreaFixtures.RefusedAsync<ArgumentException>(server,
+            () => client.Metadata.UpdateDatabaseAsync(AreaFixtures.ItemId, new Database { Contact = new User { Name = "ada" } }))).ParamName);
+        Assert.AreEqual("changes", (await AreaFixtures.RefusedAsync<ArgumentException>(server,
+            () => client.Metadata.UpdateTableAsync(AreaFixtures.ItemId, new Table { Contact = new User { Id = "ada" } }))).ParamName);
+    }
+
+    [TestMethod]
     public async Task AColumnIsUpdatedAndDeletedUnderItsTable()
     {
         using var server = AreaFixtures.Server();
@@ -164,7 +203,8 @@ public sealed class MetadataTests
         server.Map("GET", $"{Site}/tables/{AreaFixtures.ItemId}/columns", FakeResponse.Json(200, "{}"));
         await using var client = AreaFixtures.Client(server);
 
-        var updated = await client.Metadata.UpdateColumnAsync(TableId, ColumnId, new Column { Description = "Validated against invented maps" });
+        var updated = await client.Metadata.UpdateColumnAsync(TableId, ColumnId,
+            new Column { Description = "Validated against invented maps", Name = "AddressLine1", RemoteType = "WSTR", Nullable = true });
         await client.Metadata.DeleteColumnAsync(TableId, ColumnId);
         var none = await AreaFixtures.AllAsync(client.Metadata.ListColumnsAsync(AreaFixtures.ItemId));
 

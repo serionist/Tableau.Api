@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -27,8 +28,13 @@ namespace Tableau.Api;
 /// until a server administrator runs <c>tsm maintenance metadata-services enable</c>; Tableau Cloud needs Data
 /// Management. Its JSON is read through the <see cref="JsonTypeInfo{T}"/> you give, such as one from a
 /// <see cref="System.Text.Json.Serialization.JsonSerializerContext"/> of your own, so no reflection reads it and the
-/// query works under native AOT. An answer that carries <c>errors</c>, a warning that its data is partial among them,
-/// throws <see cref="TableauException"/>.
+/// query works under native AOT.
+/// </para>
+/// <para>
+/// An answer's <c>errors</c> entry that Tableau marks a warning (<c>extensions.severity</c> <c>WARNING</c>), such as
+/// <c>BACKFILL_RUNNING</c>, <c>NODE_LIMIT_EXCEEDED</c> or <c>TIME_LIMIT_EXCEEDED</c>, comes with data that may be
+/// partial: the client logs it at Warning and returns the data. Any other entry fails the call as a
+/// <see cref="TableauException"/>, the warnings beside it named too.
 /// </para>
 /// </remarks>
 public class MetadataClient
@@ -100,19 +106,28 @@ public class MetadataClient
     /// <summary>
     /// Update Database: changes the members of <paramref name="changes"/> that are set, of those the reference lists
     /// (<see cref="Database.IsCertified"/>, <see cref="Database.CertificationNote"/>, <see cref="Database.Description"/>,
-    /// <see cref="Database.ContentPermissions"/> and <see cref="Database.Contact"/>'s id), and leaves the others.
+    /// <see cref="Database.ContentPermissions"/> and <see cref="Database.Contact"/>'s id), and leaves the others. Only
+    /// those are sent, so a database read with <see cref="GetDatabaseAsync"/> and changed with <c>with</c> sends nothing else.
     /// </summary>
     /// <param name="id">The database's LUID.</param>
     /// <param name="changes">What to change: set only those members, such as <c>new Database { Description = "..." }</c>.</param>
     /// <param name="cancellationToken">Cancels the call.</param>
     /// <returns>The database as Tableau holds it now.</returns>
-    /// <exception cref="ArgumentException"><paramref name="id"/> is no LUID.</exception>
+    /// <exception cref="ArgumentException"><paramref name="id"/> is no LUID, or the contact's id is none.</exception>
     /// <exception cref="TableauException">The call failed; <see cref="TableauException.Kind"/> says how.</exception>
     public virtual Task<Database> UpdateDatabaseAsync(string id, Database changes, CancellationToken cancellationToken = default)
     {
         RequestUri.Luid(id, nameof(id));
         ArgumentNullException.ThrowIfNull(changes);
-        return Pipeline.SendAsync(Endpoints.UpdateDatabase, new TableauRequest([id], Body: new TsRequest { Database = changes }),
+        var sent = new Database
+        {
+            IsCertified = changes.IsCertified,
+            CertificationNote = changes.CertificationNote,
+            Description = changes.Description,
+            ContentPermissions = changes.ContentPermissions,
+            Contact = Contact(changes.Contact, nameof(changes)),
+        };
+        return Pipeline.SendAsync(Endpoints.UpdateDatabase, new TableauRequest([id], Body: new TsRequest { Database = sent }),
             static body => body.Database, "database", cancellationToken);
     }
 
@@ -167,19 +182,26 @@ public class MetadataClient
     /// <summary>
     /// Update Table: changes the members of <paramref name="changes"/> that are set, of those the reference lists
     /// (<see cref="Table.IsCertified"/>, <see cref="Table.CertificationNote"/>, <see cref="Table.Description"/> and
-    /// <see cref="Table.Contact"/>'s id), and leaves the others.
+    /// <see cref="Table.Contact"/>'s id), and leaves the others. Only those are sent.
     /// </summary>
     /// <param name="id">The table's LUID.</param>
     /// <param name="changes">What to change: set only those members, such as <c>new Table { IsCertified = true }</c>.</param>
     /// <param name="cancellationToken">Cancels the call.</param>
     /// <returns>The table as Tableau holds it now.</returns>
-    /// <exception cref="ArgumentException"><paramref name="id"/> is no LUID.</exception>
+    /// <exception cref="ArgumentException"><paramref name="id"/> is no LUID, or the contact's id is none.</exception>
     /// <exception cref="TableauException">The call failed; <see cref="TableauException.Kind"/> says how.</exception>
     public virtual Task<Table> UpdateTableAsync(string id, Table changes, CancellationToken cancellationToken = default)
     {
         RequestUri.Luid(id, nameof(id));
         ArgumentNullException.ThrowIfNull(changes);
-        return Pipeline.SendAsync(Endpoints.UpdateTable, new TableauRequest([id], Body: new TsRequest { Table = changes }),
+        var sent = new Table
+        {
+            IsCertified = changes.IsCertified,
+            CertificationNote = changes.CertificationNote,
+            Description = changes.Description,
+            Contact = Contact(changes.Contact, nameof(changes)),
+        };
+        return Pipeline.SendAsync(Endpoints.UpdateTable, new TableauRequest([id], Body: new TsRequest { Table = sent }),
             static body => body.Table, "table", cancellationToken);
     }
 
@@ -195,16 +217,33 @@ public class MetadataClient
     /// Query Columns in a Table: the table's columns, in Tableau's order, from one call that asks for 1,000, the most a
     /// page holds: Tableau Server 2025.1 refuses every page of a table's columns after the first.
     /// </summary>
+    /// <remarks>
+    /// A table of more than 1,000 columns can't be read whole this way. Tableau Server 2025.1 answers with no pagination,
+    /// so a list of exactly 1,000 may stop short without a word; an answer whose pagination counts more columns than it
+    /// holds fails as <see cref="TableauErrorKind.InvalidResponse"/>. The Metadata API, through <see cref="ListNodesAsync"/>,
+    /// pages a table's columns by cursor.
+    /// </remarks>
     /// <param name="tableId">The table's LUID.</param>
     /// <param name="cancellationToken">Stops the list, and cancels its call.</param>
     /// <returns>The columns, as you read them.</returns>
     /// <exception cref="ArgumentException"><paramref name="tableId"/> is no LUID, which the first read throws.</exception>
-    /// <exception cref="TableauException">The call failed; <see cref="TableauException.Kind"/> says how.</exception>
+    /// <exception cref="TableauException">
+    /// The call failed; <see cref="TableauException.Kind"/> says how, <see cref="TableauErrorKind.InvalidResponse"/> when
+    /// its pagination counts more columns than it holds.
+    /// </exception>
     public virtual async IAsyncEnumerable<Column> ListColumnsAsync(string tableId, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         RequestUri.Luid(tableId, nameof(tableId));
         var body = await Pipeline.SendAsync(Endpoints.QueryColumns, new TableauRequest([tableId], _allColumns), static body => body, "a body",
             cancellationToken).ConfigureAwait(false);
+        var held = body.Columns?.Count ?? 0;
+        if (body.Pagination?.TotalAvailable is { } total && total > held)
+        {
+            throw new TableauException(TableauErrorKind.InvalidResponse, string.Create(CultureInfo.InvariantCulture,
+                $"{Endpoints.QueryColumns.Name} answered {held} of the table's {total} columns, and Tableau refuses a page after the first, ")
+                + "so the rest can't be read through the REST API; the Metadata API pages them by cursor.")
+            { Method = Endpoints.QueryColumns.Method };
+        }
         foreach (var column in body.Columns ?? [])
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -212,10 +251,10 @@ public class MetadataClient
         }
     }
 
-    /// <summary>Update Column: the column's description, the one member the reference lets it change.</summary>
+    /// <summary>Update Column: the column's description, the one member the reference lets it change, and the one sent.</summary>
     /// <param name="tableId">The LUID of the column's table.</param>
     /// <param name="columnId">The column's LUID.</param>
-    /// <param name="changes">What to change: <c>new Column { Description = "..." }</c>.</param>
+    /// <param name="changes">What to change: <c>new Column { Description = "..." }</c>; its other members aren't sent.</param>
     /// <param name="cancellationToken">Cancels the call.</param>
     /// <returns>The column as Tableau holds it now.</returns>
     /// <exception cref="ArgumentException"><paramref name="tableId"/> or <paramref name="columnId"/> is no LUID.</exception>
@@ -225,7 +264,8 @@ public class MetadataClient
         RequestUri.Luid(tableId, nameof(tableId));
         RequestUri.Luid(columnId, nameof(columnId));
         ArgumentNullException.ThrowIfNull(changes);
-        return Pipeline.SendAsync(Endpoints.UpdateColumn, new TableauRequest([tableId, columnId], Body: new TsRequest { Column = changes }),
+        return Pipeline.SendAsync(Endpoints.UpdateColumn,
+            new TableauRequest([tableId, columnId], Body: new TsRequest { Column = new Column { Description = changes.Description } }),
             static body => body.Column, "column", cancellationToken);
     }
 
@@ -241,13 +281,15 @@ public class MetadataClient
 
     /// <summary>
     /// Add Data Quality Warning: a warning on a database, a table, a column (REST API 3.16), a data source, a flow or a
-    /// virtual connection. An asset holds one warning, so this is sent once: a second fails.
+    /// virtual connection. Sent once, never again after a failure: a second would add a second warning, or, up to Tableau
+    /// Server 2024.2 and Tableau Cloud February 2024, where an asset held one warning, fail.
     /// </summary>
     /// <param name="content">The asset, such as <c>TableauContent.Table(id)</c>.</param>
     /// <param name="warning">
     /// The warning: its <see cref="DataQualityWarning.Type"/>, such as <c>WARNING</c>, <c>DEPRECATED</c>, <c>STALE</c> or
     /// <c>MAINTENANCE</c>, and as you choose <see cref="DataQualityWarning.Message"/>, <see cref="DataQualityWarning.IsSevere"/>
-    /// and <see cref="DataQualityWarning.IsActive"/>; nothing else of it is sent.
+    /// and <see cref="DataQualityWarning.IsActive"/>, which Tableau takes as true, the warning shown, when it is left null;
+    /// nothing else of it is sent.
     /// </param>
     /// <param name="cancellationToken">Cancels the call.</param>
     /// <returns>The warning as Tableau made it, with its id.</returns>
@@ -270,7 +312,8 @@ public class MetadataClient
     /// <param name="changes">
     /// The warning: its <see cref="DataQualityWarning.Type"/>, which the reference requires, and as you choose
     /// <see cref="DataQualityWarning.Message"/>, <see cref="DataQualityWarning.IsSevere"/> and
-    /// <see cref="DataQualityWarning.IsActive"/>; nothing else of it is sent.
+    /// <see cref="DataQualityWarning.IsActive"/>. Left null, <see cref="DataQualityWarning.IsActive"/> is not kept as it was:
+    /// Tableau sets it true, and the warning shows. Nothing else of it is sent.
     /// </param>
     /// <param name="cancellationToken">Cancels the call.</param>
     /// <returns>The warning as Tableau holds it now.</returns>
@@ -332,18 +375,20 @@ public class MetadataClient
     /// <param name="query">The GraphQL query, such as <c>{ databases { id name } }</c>.</param>
     /// <param name="variables">The query's variables, or null for none.</param>
     /// <param name="cancellationToken">Cancels the call.</param>
-    /// <returns>The answer's <c>data</c>, which outlives the call.</returns>
+    /// <returns>The answer's <c>data</c>, which outlives the call; it may be partial when the answer carried warnings, which are logged.</returns>
     /// <exception cref="ArgumentException"><paramref name="query"/> is empty.</exception>
     /// <exception cref="TableauException">
-    /// The call failed, or its answer carried <c>errors</c>: <see cref="TableauException.ErrorCode"/> is the first's code,
-    /// such as <c>NODE_LIMIT_EXCEEDED</c>, and <see cref="TableauException.Summary"/> its message;
-    /// <see cref="TableauErrorKind.RateLimited"/> for <c>RATE_EXCEEDED</c>.
+    /// The call failed, or its answer carried an <c>errors</c> entry that is no warning:
+    /// <see cref="TableauException.ErrorCode"/> is the first entry's code, such as <c>FEATURE_DISABLED</c>,
+    /// <see cref="TableauException.Summary"/> its message and <see cref="TableauException.Detail"/> the others';
+    /// <see cref="TableauErrorKind.RateLimited"/> for <c>RATE_EXCEEDED</c>, whatever the answer's status.
     /// </exception>
     public virtual Task<JsonElement> QueryAsync(string query, JsonObject? variables = null, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(query);
-        return Pipeline.SendForJsonAsync(Endpoints.MetadataQuery, new TableauRequest(Json: TableauGraphQL.Body(query, variables)),
-            static (bytes, path) => TableauGraphQL.Read(Endpoints.MetadataQuery, bytes, path, static data => data.Clone()), cancellationToken);
+        var pipeline = Pipeline;
+        return pipeline.SendForJsonAsync(Endpoints.MetadataQuery, new TableauRequest(Json: TableauGraphQL.Body(query, variables)),
+            answer => TableauGraphQL.Read(pipeline, Endpoints.MetadataQuery, answer, static data => data.Clone()), cancellationToken);
     }
 
     /// <summary>
@@ -355,18 +400,20 @@ public class MetadataClient
     /// <param name="variables">The query's variables, or null for none.</param>
     /// <param name="resultType">How <c>data</c> reads.</param>
     /// <param name="cancellationToken">Cancels the call.</param>
-    /// <returns>The answer's <c>data</c>.</returns>
+    /// <returns>The answer's <c>data</c>; it may be partial when the answer carried warnings, which are logged.</returns>
     /// <exception cref="ArgumentException"><paramref name="query"/> is empty.</exception>
     /// <exception cref="TableauException">
-    /// The call failed, its answer carried <c>errors</c>, as <see cref="QueryAsync(string, JsonObject?, CancellationToken)"/>
-    /// says, or its <c>data</c> doesn't read as <typeparamref name="T"/> (<see cref="TableauErrorKind.InvalidResponse"/>).
+    /// The call failed, its answer carried an <c>errors</c> entry that is no warning, as
+    /// <see cref="QueryAsync(string, JsonObject?, CancellationToken)"/> says, or its <c>data</c> doesn't read as
+    /// <typeparamref name="T"/> (<see cref="TableauErrorKind.InvalidResponse"/>).
     /// </exception>
     public virtual Task<T> QueryAsync<T>(string query, JsonObject? variables, JsonTypeInfo<T> resultType, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(query);
         ArgumentNullException.ThrowIfNull(resultType);
-        return Pipeline.SendForJsonAsync(Endpoints.MetadataQuery, new TableauRequest(Json: TableauGraphQL.Body(query, variables)),
-            (bytes, path) => TableauGraphQL.Read(Endpoints.MetadataQuery, bytes, path,
+        var pipeline = Pipeline;
+        return pipeline.SendForJsonAsync(Endpoints.MetadataQuery, new TableauRequest(Json: TableauGraphQL.Body(query, variables)),
+            answer => TableauGraphQL.Read(pipeline, Endpoints.MetadataQuery, answer,
                 data => data.Deserialize(resultType) ?? throw new InvalidDataException("its data reads as null.")), cancellationToken);
     }
 
@@ -394,8 +441,9 @@ public class MetadataClient
     /// <returns>The page: its nodes, empty, never null, when it has none, and where the next starts.</returns>
     /// <exception cref="ArgumentException"><paramref name="query"/> or <paramref name="connection"/> is empty, or the page size is outside 1 to 1,000.</exception>
     /// <exception cref="TableauException">
-    /// The call failed, its answer carried <c>errors</c>, or it holds no such connection, or the connection lacks its nodes
-    /// or its <c>pageInfo</c> (<see cref="TableauErrorKind.InvalidResponse"/>).
+    /// The call failed, its answer carried an <c>errors</c> entry that is no warning, or it holds no such connection, or the
+    /// connection lacks its nodes, its <c>pageInfo</c>, or, when more pages follow, its <c>endCursor</c>
+    /// (<see cref="TableauErrorKind.InvalidResponse"/>).
     /// </exception>
     public virtual Task<CursorPage<T>> QueryPageAsync<T>(string query, string connection, JsonTypeInfo<T> nodeType, string? after = null,
         JsonObject? variables = null, int pageSize = 100, CancellationToken cancellationToken = default)
@@ -408,8 +456,9 @@ public class MetadataClient
         if (pageSize is < 1 or > MostNodes)
             throw new ArgumentOutOfRangeException(nameof(pageSize), pageSize, $"A page holds 1 to {MostNodes} nodes, the Metadata API's most.");
         var body = TableauGraphQL.Body(query, TableauGraphQL.PageVariables(variables, pageSize, after));
-        return Pipeline.SendForJsonAsync(Endpoints.MetadataQuery, new TableauRequest(Json: body),
-            (bytes, path) => TableauGraphQL.Read(Endpoints.MetadataQuery, bytes, path, data => TableauGraphQL.Page(data, connection, nodeType)),
+        var pipeline = Pipeline;
+        return pipeline.SendForJsonAsync(Endpoints.MetadataQuery, new TableauRequest(Json: body),
+            answer => TableauGraphQL.Read(pipeline, Endpoints.MetadataQuery, answer, data => TableauGraphQL.Page(data, connection, nodeType)),
             cancellationToken);
     }
 
@@ -450,6 +499,10 @@ public class MetadataClient
         TableauContentKind.VirtualConnection => "virtualconnection",
         _ => throw content.Refused("A data quality warning takes", WarnedTakes, nameof(content)),
     };
+
+    // An asset's contact as the reference's update bodies write it: the user by its LUID alone.
+    private static User? Contact(User? contact, string parameter) =>
+        contact is null ? null : new User { Id = RequestUri.Luid(contact.Id, parameter) };
 
     // A warning as the reference's bodies write it: its type, required, and its message, severity and state.
     private static DataQualityWarning Sent(DataQualityWarning warning, string parameter)

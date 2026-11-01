@@ -5,7 +5,7 @@ public enum TableauErrorKind
 {
     /// <summary>
     /// Tableau answered with an error the other kinds don't name, such as 400 or 403, or a 5xx once the retries ran out, or
-    /// a Metadata API answer that carries GraphQL <c>errors</c>, whose first code is <see cref="TableauException.ErrorCode"/>;
+    /// a Metadata API answer whose GraphQL <c>errors</c> hold one that is no warning, the first code its <see cref="TableauException.ErrorCode"/>;
     /// or the request never got a whole answer: the connection failed or broke off, the server's certificate was refused,
     /// or a handler of the caller's threw (<see cref="System.Exception.InnerException"/>).
     /// </summary>

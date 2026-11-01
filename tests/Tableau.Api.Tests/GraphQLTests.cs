@@ -153,6 +153,7 @@ public sealed class GraphQLTests
     [DataRow("""{"data":{"databasesConnection":{"pageInfo":{"hasNextPage":false}}}}""", "has no nodes")]
     [DataRow("""{"data":{"databasesConnection":{"nodes":[]}}}""", "has no pageInfo with hasNextPage")]
     [DataRow("""{"data":{"databasesConnection":{"nodes":[],"pageInfo":{"hasNextPage":"no"}}}}""", "has no pageInfo with hasNextPage")]
+    [DataRow("""{"data":{"databasesConnection":{"nodes":[],"pageInfo":{"hasNextPage":true}}}}""", "has no endCursor, so the next page can't be asked for: the query asks for pageInfo { hasNextPage endCursor }")]
     [DataRow("""{"data":{"databasesConnection":{"nodes":[{"id":1}],"pageInfo":{"hasNextPage":false}}}}""", "data it couldn't read")]
     [DataRow("""{"errors":"none","data":{"databasesConnection":{"nodes":[{"id":1}],"pageInfo":{"hasNextPage":false}}}}""", "data it couldn't read")]
     public async Task AnAnswerThatIsntAConnectionPageIsAnInvalidResponse(string body, string what)
@@ -183,7 +184,7 @@ public sealed class GraphQLTests
     }
 
     [TestMethod]
-    [DataRow("""{"data":{"c":{"nodes":[],"pageInfo":{"hasNextPage":true}}}}""", "with no cursor")]
+    [DataRow("""{"data":{"c":{"nodes":[],"pageInfo":{"hasNextPage":true,"endCursor":null}}}}""", "with no cursor")]
     [DataRow("""{"data":{"c":{"nodes":[],"pageInfo":{"hasNextPage":true,"endCursor":"same"}}}}""", "with a cursor it gave before")]
     public async Task APageThatSaysMoreFollowWithoutANewCursorEndsTheList(string body, string what)
     {
@@ -219,14 +220,48 @@ public sealed class GraphQLTests
     {
         using var server = AreaFixtures.Server();
         server.Map("POST", Endpoint, FakeResponse.Json(400, """
-            {"errors":[{"message":"Invalid Syntax : offending token '<EOF>'","extensions":{"code":"INVALID_ARGUMENT"}}]}
-            """));
+            {"errors":[{"message":"Invalid Syntax : offending token '<EOF>'","extensions":{"code":"INVALID_ARGUMENT"}},{"message":"Invented: a second."}]}
+            """).WithHeader("X-Request-Id", "invented-request-400"));
         await using var client = AreaFixtures.Client(server);
 
         var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.Http, () => client.Metadata.QueryAsync("{ databases"));
 
-        Assert.AreEqual(("INVALID_ARGUMENT", "Invalid Syntax : offending token '<EOF>'"), (thrown.ErrorCode, thrown.Summary));
+        // As a 200's errors read: the first's code and message, the others' messages.
+        Assert.AreEqual(("INVALID_ARGUMENT", "Invalid Syntax : offending token '<EOF>'", "Invented: a second."), (thrown.ErrorCode, thrown.Summary, thrown.Detail));
+        Assert.AreEqual("invented-request-400", thrown.RequestId);
         Assert.DoesNotContain("metadata-services", thrown.Message);
+    }
+
+    [TestMethod]
+    [DataRow(200)]
+    [DataRow(400)]
+    [DataRow(503)]
+    public async Task RateExceededIsRateLimitedWhateverTheStatus(int status)
+    {
+        using var server = AreaFixtures.Server();
+        server.Map("POST", Endpoint, FakeResponse.Json(status, """
+            {"errors":[{"message":"The rate of API requests exceeded what's allowed.","extensions":{"severity":"ERROR","code":"RATE_EXCEEDED"}}]}
+            """).WithHeader("X-Request-Id", "invented-request-rate"));
+        await using var client = AreaFixtures.Client(server);
+
+        var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.RateLimited, () => client.Metadata.QueryAsync("{ databases { id } }"));
+
+        Assert.AreEqual(("RATE_EXCEEDED", status), (thrown.ErrorCode, (int?)thrown.StatusCode));
+        Assert.AreEqual("invented-request-rate", thrown.RequestId);
+    }
+
+    [TestMethod]
+    public async Task AnotherEndpointsErrorsNamingRateExceededStayHttp()
+    {
+        using var server = AreaFixtures.Server();
+        server.Map("GET", $"{AreaFixtures.SitePath}/databases/{AreaFixtures.ItemId}", FakeResponse.Json(400, """
+            {"errors":[{"message":"Invented.","extensions":{"code":"RATE_EXCEEDED"}}]}
+            """));
+        await using var client = AreaFixtures.Client(server);
+
+        var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.Http, () => client.Metadata.GetDatabaseAsync(AreaFixtures.ItemId));
+
+        Assert.AreEqual("RATE_EXCEEDED", thrown.ErrorCode);
     }
 
     [TestMethod]
@@ -271,14 +306,88 @@ public sealed class GraphQLTests
         server.Map("POST", Endpoint, FakeResponse.Json(200, GraphQL("databases-page-1.json")));
         await using var client = AreaFixtures.Client(server);
         using var cancel = new CancellationTokenSource();
+        var read = 0;
 
         await Assert.ThrowsAsync<OperationCanceledException>(async () =>
         {
             await foreach (var node in client.Metadata.ListNodesAsync(Paged, "databasesConnection", GraphQLJson.Default.DatabaseNode,
                                cancellationToken: cancel.Token))
+            {
+                read++;
                 await cancel.CancelAsync();
+            }
         });
+
+        // The page holds two nodes: the second is never read.
+        Assert.AreEqual(1, read);
         Assert.HasCount(1, AreaFixtures.Calls(server));
+    }
+
+    [TestMethod]
+    public async Task AnAnswerWhoseErrorsAreAllWarningsReturnsItsDataAndLogsEachAtWarning()
+    {
+        using var server = AreaFixtures.Server();
+        server.Map("POST", Endpoint, FakeResponse.Json(200, """
+            {"data":{"databasesConnection":{"nodes":[{"id":"d1","name":"Partial"}],"pageInfo":{"hasNextPage":false,"endCursor":"c1"},"totalCount":1}},
+             "errors":[{"message":"Still creating the Metadata API Store. Results from the query may be incomplete at this time.","extensions":{"severity":"WARNING","code":"BACKFILL_RUNNING"}},
+                       {"message":"Invented: a second warning.","extensions":{"severity":"warning","code":"TIME_LIMIT_EXCEEDED"}}]}
+            """));
+        var log = new RecordingLogger();
+        await using var client = Logged(server, log);
+
+        var data = await client.Metadata.QueryAsync(Paged, null, GraphQLJson.Default.DatabasesData);
+        var nodes = await AreaFixtures.AllAsync(client.Metadata.ListNodesAsync(Paged, "databasesConnection", GraphQLJson.Default.DatabaseNode));
+
+        Assert.AreEqual("Partial", data.DatabasesConnection.Nodes.Single().Name);
+        Assert.AreEqual("Partial", nodes.Single().Name);
+        var warnings = Partial(log);
+        Assert.HasCount(4, warnings, string.Join("\n", warnings));
+        Assert.Contains("POST /api/metadata/graphql answered with a warning, and its data, which may be partial, is returned: BACKFILL_RUNNING: "
+            + "Still creating the Metadata API Store.", warnings[0]);
+        Assert.Contains("TIME_LIMIT_EXCEEDED: Invented: a second warning.", warnings[1]);
+    }
+
+    [TestMethod]
+    public async Task AWarningBesideAnErrorFailsTheCallAndLogsNoWarning()
+    {
+        using var server = AreaFixtures.Server();
+        server.Map("POST", Endpoint, FakeResponse.Json(200, """
+            {"data":{"databasesConnection":null},
+             "errors":[{"message":"Still creating the Metadata API Store.","extensions":{"severity":"WARNING","code":"BACKFILL_RUNNING"}},
+                       {"message":"Invented: an error.","extensions":{"severity":"ERROR","code":"INVALID_ARGUMENT"}}]}
+            """));
+        var log = new RecordingLogger();
+        await using var client = Logged(server, log);
+
+        var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.Http, () => client.Metadata.QueryAsync(Paged));
+
+        Assert.AreEqual(("BACKFILL_RUNNING", "Invented: an error."), (thrown.ErrorCode, thrown.Detail));
+        Assert.Contains("BACKFILL_RUNNING: Still creating the Metadata API Store.; INVALID_ARGUMENT: Invented: an error.", thrown.Message);
+        Assert.IsEmpty(Partial(log));
+    }
+
+    [TestMethod]
+    public async Task AnErrorWithoutASeverityFailsTheCall()
+    {
+        using var server = AreaFixtures.Server();
+        server.Map("POST", Endpoint, FakeResponse.Json(200, """{"data":{},"errors":[{"message":"Invented: no extensions."}]}"""));
+        await using var client = AreaFixtures.Client(server);
+
+        var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.Http, () => client.Metadata.QueryAsync("{ databases { id } }"));
+
+        Assert.AreEqual((null, "Invented: no extensions."), (thrown.ErrorCode, thrown.Summary));
+    }
+
+    // The warnings of answers whose data may be partial, apart from the fake server's plain http one.
+    private static List<string> Partial(RecordingLogger log) =>
+        [.. log.At(Microsoft.Extensions.Logging.LogLevel.Warning).Where(line => line.Contains("answered with a warning", StringComparison.Ordinal))];
+
+    // A client of the fake server whose log is its own, so its lines are this test's alone.
+    private static TableauClient Logged(FakeTableauServer server, RecordingLogger log)
+    {
+        var options = SessionFixtures.Options(server);
+        options.Deployment = TableauDeployment.Server;
+        return TableauClient.CreateWithClock(options, SessionFixtures.Pat(), log.Factory, null);
     }
 
     private static string GraphQL(string file) => File.ReadAllText(Path.Combine(ModelFixtures.Folder, "GraphQL", file));

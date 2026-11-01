@@ -49,6 +49,13 @@ internal readonly record struct TableauRequest(
     }
 }
 
+/// <summary>A success's whole answer, for a call whose JSON is its own, such as a Metadata API query.</summary>
+/// <param name="Bytes">The body.</param>
+/// <param name="Path">The request's path, as a message names it.</param>
+/// <param name="StatusCode">The answer's status.</param>
+/// <param name="RequestId">The id the server gave the request, in <c>X-Request-Id</c>, or null.</param>
+internal readonly record struct JsonAnswer(byte[] Bytes, string Path, HttpStatusCode StatusCode, string? RequestId);
+
 /// <summary>
 /// The one path every REST call of the 2.0 client takes: the gates, the session, the request URI, the headers,
 /// redirects, the transfer timeout, errors and the answer's JSON or file. It sends through the client's chain, whose
@@ -130,15 +137,23 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
     /// </summary>
     /// <param name="endpoint">The call's descriptor.</param>
     /// <param name="request">What it sends, its body in <see cref="TableauRequest.Json"/>.</param>
-    /// <param name="read">What the call returns, from the answer's bytes and the request's path as a message names it.</param>
+    /// <param name="read">What the call returns, from the whole answer.</param>
     /// <param name="cancellationToken">The caller's token.</param>
-    public async Task<T> SendForJsonAsync<T>(Endpoint endpoint, TableauRequest request, Func<byte[], string, T> read,
+    public async Task<T> SendForJsonAsync<T>(Endpoint endpoint, TableauRequest request, Func<JsonAnswer, T> read,
         CancellationToken cancellationToken)
     {
         var version = await GatesAsync(endpoint, cancellationToken).ConfigureAwait(false);
         return await CallAsync(endpoint, version, request, async (response, path, token) =>
-            read(await response.Content.ReadAsByteArrayAsync(token).ConfigureAwait(false), path), cancellationToken).ConfigureAwait(false);
+            read(new JsonAnswer(await response.Content.ReadAsByteArrayAsync(token).ConfigureAwait(false), path, response.StatusCode, RequestId(response))),
+            cancellationToken).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// Logs, at Warning, an entry of a Metadata API answer's <c>errors</c> that Tableau marks a warning: the call returns
+    /// its data, which may be partial.
+    /// </summary>
+    internal void Warned(Endpoint endpoint, string path, string? code, string? message) =>
+        TableauLog.PartialAnswer(state.Logger, state.DisplayName, endpoint.Method, path, code ?? "(no code)", message ?? "");
 
     // One call: its session, then its request, sent once more in a new session when the server refused the first with a
     // 401, for a call whose body can be sent again. A sign-in's failure is the call's, logged where it happened.
@@ -534,13 +549,15 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
         // The chain kept at most the body's first 64 KB; this reads no more, whatever sent it.
         var (bytes, length) = await ReadSomeAsync(response.Content, TableauResilienceHandler.ErrorBodyRead, cancellationToken)
             .ConfigureAwait(false);
-        var (code, summary, detail) = TableauError(bytes, length);
+        var (code, summary, detail, rateExceeded) = TableauError(bytes, length);
         var status = response.StatusCode;
         var kind = status switch
         {
             HttpStatusCode.Unauthorized => TableauErrorKind.Authentication,
             HttpStatusCode.NotFound => TableauErrorKind.NotFound,
             HttpStatusCode.TooManyRequests => TableauErrorKind.RateLimited,
+            // The Metadata API's rate limit, as its errors name it in an answer of any status.
+            _ when rateExceeded && endpoint == Endpoints.MetadataQuery => TableauErrorKind.RateLimited,
             _ => TableauErrorKind.Http,
         };
         var retryAfter = TableauResilience.RetryAfter(response.Headers.RetryAfter, state.TimeProvider)
@@ -563,16 +580,20 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
             Detail = detail,
             Method = endpoint.Method,
             RequestPath = path,
-            RequestId = response.Headers.TryGetValues("X-Request-Id", out var ids) ? ids.FirstOrDefault() : null,
+            RequestId = RequestId(response),
             RetryAfter = retryAfter,
             ResponseBody = length == 0 || !endpoint.KeepsBody ? null : Kept(bytes, length),
         };
     }
 
+    // The id the server, or a proxy before it, gave the request.
+    private static string? RequestId(HttpResponseMessage response) =>
+        response.Headers.TryGetValues("X-Request-Id", out var ids) ? ids.FirstOrDefault() : null;
+
     // Tableau's error JSON: {"error":{"code":"404004","summary":...,"detail":...}}, the code a string or a number; the
     // resource-versioned endpoints under api/- answer {"httpErrorCode":404,"message":...}; GraphQL's
-    // {"errors":[{"message":...,"extensions":{"code":...}}]}.
-    private static (string? Code, string? Summary, string? Detail) TableauError(byte[] bytes, int length)
+    // {"errors":[{"message":...,"extensions":{"code":...}}]}, read as a 200's are, and whether one is RATE_EXCEEDED.
+    private static (string? Code, string? Summary, string? Detail, bool RateExceeded) TableauError(byte[] bytes, int length)
     {
         try
         {
@@ -580,10 +601,13 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
             var root = document.RootElement;
             if (root.ValueKind != JsonValueKind.Object) return default;
             if (root.TryGetProperty("error", out var error) && error.ValueKind == JsonValueKind.Object)
-                return (Text(error, "code"), Text(error, "summary"), Text(error, "detail"));
-            if (TableauGraphQL.Errors(root) is [var first, ..])
-                return (first.Code, first.Message, null);
-            return (Text(root, "httpErrorCode"), Text(root, "message"), null);
+                return (Text(error, "code"), Text(error, "summary"), Text(error, "detail"), false);
+            if (TableauGraphQL.Errors(root) is { Count: > 0 } errors)
+            {
+                var described = TableauGraphQL.Describe(errors);
+                return (described.Code, described.Summary, described.Detail, described.RateLimited);
+            }
+            return (Text(root, "httpErrorCode"), Text(root, "message"), null, false);
         }
         catch (Exception e) when (e is JsonException or InvalidOperationException)
         {

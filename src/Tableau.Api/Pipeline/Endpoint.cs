@@ -476,7 +476,8 @@ internal static class Endpoints
         "{version}/sites/{siteId}/tables/{tableId:luid}/columns/{id:luid}", 3, 5, idempotent: true);
 
     // Data quality warnings (REST API 3.5; on a column, 3.16), by the content's type and LUID or by the warning's own
-    // LUID. Adding one is sent once: an asset holds one warning, and a second add fails.
+    // LUID. Adding one is sent once: a second add makes a second warning, or, up to Tableau Server 2024.2 and Tableau
+    // Cloud February 2024, where an asset held one, fails.
 
     /// <summary>Add Data Quality Warning (REST API 3.5).</summary>
     public static readonly Endpoint AddDataQualityWarning = Write("Add Data Quality Warning", HttpMethod.Post, WarningsOfContent, 3, 5,

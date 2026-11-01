@@ -173,19 +173,19 @@
       "file": "tag-batch-request.json",
       "body": "request",
       "call": "PUT /api/{version}/sites/{site-id}/tags:batchCreate, and DELETE /api/{version}/sites/{site-id}/tags:BatchDelete",
-      "source": "synthetic, from the reference's Batch Add Tags and Batch Delete Tags requests: the content by its id alone"
+      "source": "synthetic, from the reference's Batch Add Tags and Batch Delete Tags requests: the content by its id alone, and a label with a space in double quotes, as the client sends it so Tableau keeps it one tag"
     },
     {
       "file": "databases-page.json",
       "body": "response",
       "call": "GET /api/{version}/sites/{site-id}/databases?pageSize=2&pageNumber=1",
-      "source": "synthetic, from the reference's Query Databases response; the live server sent the same shape, its pagination beside the list, not in it as the reference's example has it, and an empty tag list as {\"tag\":[]}"
+      "source": "synthetic, from the reference's Query Databases response; the live server sent the same shape, its pagination beside the list, not in it as the reference's example has it, an empty tag list as {\"tag\":[]}, and a location's type as PROJECT, where the schema's enumeration has Project (a read-only probe on 2026-11-01: 14 databases and 79 tables with a location, each PROJECT)"
     },
     {
       "file": "database.json",
       "body": "response",
       "call": "GET and PUT /api/{version}/sites/{site-id}/databases/{database-id}",
-      "source": "synthetic, from the reference's Query Database and Update Database responses; the live server sent the same shape"
+      "source": "synthetic, from the reference's Query Database and Update Database responses; the live server sent the same shape, a location's type as PROJECT"
     },
     {
       "file": "tables-page.json",
