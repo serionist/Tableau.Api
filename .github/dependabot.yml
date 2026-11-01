@@ -1,8 +1,9 @@
 # Dependabot version updates, weekly on Monday: the NuGet packages (one version each, in Directory.Packages.props, for
 # the projects of Tableau.Api.slnx), the local tools in .config/dotnet-tools.json, the actions the workflows pin by SHA, and the
 # .NET SDK in global.json. Minor and patch updates come grouped, one PR a week for each ecosystem; a major comes on a
-# PR of its own. Each is a PR like any other, and CI must pass: a minor or patch update then merges itself
-# (dependabot-auto-merge.yml), and a major waits for a maintainer. Security updates come as soon as an advisory is
+# PR of its own. Each is a PR like any other, and CI must pass: an update then merges itself
+# (dependabot-auto-merge.yml), but for a major update of a package the library ships with, which waits for a
+# maintainer. Security updates come as soon as an advisory is
 # published, whatever the schedule (they are on in the repository's settings); the cooldown holds version updates
 # only.
 #

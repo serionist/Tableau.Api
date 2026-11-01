@@ -1,7 +1,10 @@
-# Dependabot's minor and patch updates merge themselves once the required checks pass. This job only turns on GitHub's
-# auto-merge when Dependabot opens or updates a PR; GitHub then waits for CI and PR text, the checks the main ruleset
-# requires, and squash-merges. A major update waits for a maintainer: it is where a dependency changes what the library
-# does, or what its users must run.
+# Dependabot's updates merge themselves once the required checks pass. This job only turns on GitHub's auto-merge when
+# Dependabot opens or updates a PR; GitHub then waits for CI and PR text, the checks the main ruleset requires, and
+# squash-merges. A minor or patch update merges itself, the .NET SDK's included; so does a major one of a test's, a
+# tool's or an action's package. A major update of a package the library ships with waits for a maintainer: it changes
+# what every app that uses Tableau.Api must reference. Those are the packages in the library's own lock file,
+# src/Tableau.Api/packages.lock.json on the PR's base branch, directly or through another package, read from the base
+# branch through the API so nothing of the PR's is read. The SDK's majors never come: dependabot.yml ignores them.
 #
 # Auto-merge waits only for the checks a ruleset requires. With none, GitHub merges at once, before CI has run, so the
 # job turns auto-merge on only where a ruleset on the PR's base branch requires CI, and fails otherwise.
@@ -53,13 +56,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      # An SDK bump in global.json raises the SDK every developer needs, and CI installs the newest 10.0 SDK either
-      # way, so a maintainer merges it.
-      - name: Turn on auto-merge for a minor or patch update
-        if: >-
-          steps.metadata.outputs.package-ecosystem != 'dotnet-sdk' &&
-          (steps.metadata.outputs.update-type == 'version-update:semver-minor' ||
-          steps.metadata.outputs.update-type == 'version-update:semver-patch')
+      - name: Turn on auto-merge, but for a major update of the library's own dependencies
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
@@ -69,6 +66,28 @@ jobs:
           UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
           UPDATED: ${{ steps.metadata.outputs.updated-dependencies-json }}
         run: |
+          case "$UPDATE_TYPE" in
+            version-update:semver-minor | version-update:semver-patch) ;;
+            version-update:semver-major)
+              # NuGet ids ignore case, so both sides are compared in lower case. A lock file that can't be read holds
+              # the update for a maintainer rather than merging it unchecked.
+              if ! shipped=$(gh api "repos/$GITHUB_REPOSITORY/contents/src/Tableau.Api/packages.lock.json?ref=$BASE_REF" \
+                -H "Accept: application/vnd.github.raw" | jq -c '[.dependencies[] | keys[] | ascii_downcase] | unique'); then
+                echo "::warning::The library's lock file on $BASE_REF couldn't be read, so this major update waits for a maintainer."
+                exit 0
+              fi
+              held=$(jq -r --argjson shipped "$shipped" \
+                '[.[].dependencyName | select(ascii_downcase as $name | $shipped | index($name))] | join(", ")' <<<"$UPDATED")
+              if [ -n "$held" ]; then
+                echo "::notice::$held: a major update of a package the library ships with waits for a maintainer."
+                exit 0
+              fi
+              ;;
+            *)
+              echo "::notice::Dependabot gave no update type ('$UPDATE_TYPE'), so this update waits for a maintainer."
+              exit 0
+              ;;
+          esac
           required=$(gh api "repos/$GITHUB_REPOSITORY/rules/branches/$BASE_REF" \
             --jq '[.[] | select(.type == "required_status_checks") | .parameters.required_status_checks[].context]')
           if ! jq -e 'any(.[]; . == "CI")' <<<"$required" >/dev/null; then
