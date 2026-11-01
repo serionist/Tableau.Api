@@ -1,0 +1,29 @@
+{
+  "connections": {
+    "connection": [
+      {
+        "datasource": {
+          "id": "9a8b7c6d-0001-4e5f-8a9b-0c1d2e3f4a5b",
+          "name": "Invented sales"
+        },
+        "id": "3c4d5e6f-0001-4a7b-8c9d-0e1f2a3b4c5d",
+        "type": "sqlserver",
+        "embedPassword": true,
+        "serverAddress": "sql.invented.example",
+        "serverPort": "1433",
+        "userName": "reader",
+        "queryTaggingEnabled": false,
+        "authenticationType": "auth-user-pass",
+        "useOAuthManagedKeychain": false
+      },
+      {
+        "id": "3c4d5e6f-0002-4a7b-8c9d-0e1f2a3b4c5d",
+        "type": "hyper",
+        "embedPassword": false,
+        "serverAddress": "localhost",
+        "userName": "",
+        "queryTaggingEnabled": false
+      }
+    ]
+  }
+}

@@ -2,6 +2,18 @@
 <!-- https://learn.microsoft.com/dotnet/fundamentals/package-validation/diagnostic-ids -->
 <Suppressions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
   <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:Tableau.Api.Enums.Orientation</Target>
+    <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
+    <Right>build/lib/net10.0/Tableau.Api.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:Tableau.Api.Enums.TableauImageWidth</Target>
+    <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
+    <Right>build/lib/net10.0/Tableau.Api.dll</Right>
+  </Suppression>
+  <Suppression>
     <DiagnosticId>CP0002</DiagnosticId>
     <Target>M:Tableau.Api.TableauApiClient.AddDataQualityWarning(Tableau.Api.Models.TableauSession,Tableau.Api.Enums.MetadataContentType,System.String,Tableau.Api.Enums.DataQualityWarningType,System.String,System.Nullable{System.Boolean},System.Nullable{System.Boolean},System.Nullable{System.Threading.CancellationToken})</Target>
     <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
@@ -129,6 +141,12 @@
   </Suppression>
   <Suppression>
     <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Tableau.Api.TableauApiClient.DeleteDataSource(Tableau.Api.Models.TableauSession,System.String,System.Nullable{System.Threading.CancellationToken})</Target>
+    <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
+    <Right>build/lib/net10.0/Tableau.Api.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
     <Target>M:Tableau.Api.TableauApiClient.DeleteDataSourceFromFavorites(Tableau.Api.Models.TableauSession,System.String,System.String,System.Nullable{System.Threading.CancellationToken})</Target>
     <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
     <Right>build/lib/net10.0/Tableau.Api.dll</Right>
@@ -249,6 +267,12 @@
   </Suppression>
   <Suppression>
     <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Tableau.Api.TableauApiClient.DeleteWorkbook(Tableau.Api.Models.TableauSession,System.String,System.Nullable{System.Threading.CancellationToken})</Target>
+    <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
+    <Right>build/lib/net10.0/Tableau.Api.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
     <Target>M:Tableau.Api.TableauApiClient.DeleteWorkbookFromFavorites(Tableau.Api.Models.TableauSession,System.String,System.String,System.Nullable{System.Threading.CancellationToken})</Target>
     <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
     <Right>build/lib/net10.0/Tableau.Api.dll</Right>
@@ -268,6 +292,30 @@
   <Suppression>
     <DiagnosticId>CP0002</DiagnosticId>
     <Target>M:Tableau.Api.TableauApiClient.DownloadDataSource(Tableau.Api.Models.TableauSession,System.String,System.Boolean,System.Nullable{System.Threading.CancellationToken})</Target>
+    <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
+    <Right>build/lib/net10.0/Tableau.Api.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Tableau.Api.TableauApiClient.DownloadDataSourceRevision(Tableau.Api.Models.TableauSession,System.String,System.Int32,System.Boolean,System.Nullable{System.Threading.CancellationToken})</Target>
+    <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
+    <Right>build/lib/net10.0/Tableau.Api.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Tableau.Api.TableauApiClient.DownloadWorkbook(Tableau.Api.Models.TableauSession,System.String,System.Boolean,System.Nullable{System.Threading.CancellationToken})</Target>
+    <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
+    <Right>build/lib/net10.0/Tableau.Api.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Tableau.Api.TableauApiClient.DownloadWorkbookRevision(Tableau.Api.Models.TableauSession,System.String,System.Int32,System.Boolean,System.Nullable{System.Threading.CancellationToken})</Target>
+    <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
+    <Right>build/lib/net10.0/Tableau.Api.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Tableau.Api.TableauApiClient.GetDataSourceRevisions(Tableau.Api.Models.TableauSession,System.String,System.Int32,System.Int32,System.Nullable{System.Threading.CancellationToken})</Target>
     <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
     <Right>build/lib/net10.0/Tableau.Api.dll</Right>
   </Suppression>
@@ -297,6 +345,12 @@
   </Suppression>
   <Suppression>
     <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Tableau.Api.TableauApiClient.GetWorkbookRevisions(Tableau.Api.Models.TableauSession,System.String,System.Int32,System.Int32,System.Nullable{System.Threading.CancellationToken})</Target>
+    <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
+    <Right>build/lib/net10.0/Tableau.Api.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
     <Target>M:Tableau.Api.TableauApiClient.QueryColumnsInTable(Tableau.Api.Models.TableauSession,System.String,System.Nullable{System.Threading.CancellationToken})</Target>
     <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
     <Right>build/lib/net10.0/Tableau.Api.dll</Right>
@@ -315,7 +369,25 @@
   </Suppression>
   <Suppression>
     <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Tableau.Api.TableauApiClient.QueryDataSource(Tableau.Api.Models.TableauSession,System.String,System.Nullable{System.Threading.CancellationToken})</Target>
+    <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
+    <Right>build/lib/net10.0/Tableau.Api.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Tableau.Api.TableauApiClient.QueryDataSourceConnections(Tableau.Api.Models.TableauSession,System.String,System.Nullable{System.Threading.CancellationToken})</Target>
+    <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
+    <Right>build/lib/net10.0/Tableau.Api.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
     <Target>M:Tableau.Api.TableauApiClient.QueryDataSourcePermissions(Tableau.Api.Models.TableauSession,System.String,System.Nullable{System.Threading.CancellationToken})</Target>
+    <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
+    <Right>build/lib/net10.0/Tableau.Api.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Tableau.Api.TableauApiClient.QueryDataSources(Tableau.Api.Models.TableauSession,System.Int32,System.Int32,System.String,System.String,System.String,System.Nullable{System.Threading.CancellationToken})</Target>
     <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
     <Right>build/lib/net10.0/Tableau.Api.dll</Right>
   </Suppression>
@@ -387,7 +459,85 @@
   </Suppression>
   <Suppression>
     <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Tableau.Api.TableauApiClient.QueryViewData(Tableau.Api.Models.TableauSession,System.String,System.Nullable{System.Threading.CancellationToken},System.ValueTuple{System.String,System.String}[])</Target>
+    <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
+    <Right>build/lib/net10.0/Tableau.Api.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Tableau.Api.TableauApiClient.QueryViewImage(Tableau.Api.Models.TableauSession,System.String,Tableau.Api.Enums.TableauImageWidth,System.Nullable{System.Threading.CancellationToken},System.ValueTuple{System.String,System.String}[])</Target>
+    <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
+    <Right>build/lib/net10.0/Tableau.Api.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Tableau.Api.TableauApiClient.QueryViewPDF(Tableau.Api.Models.TableauSession,System.String,System.Nullable{System.Threading.CancellationToken},Tableau.Api.Enums.PageType,Tableau.Api.Enums.Orientation,System.ValueTuple{System.String,System.String}[])</Target>
+    <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
+    <Right>build/lib/net10.0/Tableau.Api.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Tableau.Api.TableauApiClient.QueryViewPreviewImage(Tableau.Api.Models.TableauSession,System.String,System.String,System.Nullable{System.Threading.CancellationToken})</Target>
+    <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
+    <Right>build/lib/net10.0/Tableau.Api.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Tableau.Api.TableauApiClient.QueryViewsForSite(Tableau.Api.Models.TableauSession,System.Int32,System.Int32,System.Nullable{System.Boolean},System.String,System.String,System.String,System.Nullable{System.Threading.CancellationToken})</Target>
+    <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
+    <Right>build/lib/net10.0/Tableau.Api.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Tableau.Api.TableauApiClient.QueryViewsForWorkbook(Tableau.Api.Models.TableauSession,System.String,System.Boolean,System.Nullable{System.Threading.CancellationToken})</Target>
+    <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
+    <Right>build/lib/net10.0/Tableau.Api.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Tableau.Api.TableauApiClient.QueryWorkbook(Tableau.Api.Models.TableauSession,System.String,System.Nullable{System.Threading.CancellationToken})</Target>
+    <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
+    <Right>build/lib/net10.0/Tableau.Api.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Tableau.Api.TableauApiClient.QueryWorkbookConnections(Tableau.Api.Models.TableauSession,System.String,System.Nullable{System.Threading.CancellationToken})</Target>
+    <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
+    <Right>build/lib/net10.0/Tableau.Api.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Tableau.Api.TableauApiClient.QueryWorkbookPDF(Tableau.Api.Models.TableauSession,System.String,Tableau.Api.Enums.PageOrientation,Tableau.Api.Enums.PageType,System.Nullable{System.Threading.CancellationToken})</Target>
+    <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
+    <Right>build/lib/net10.0/Tableau.Api.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
     <Target>M:Tableau.Api.TableauApiClient.QueryWorkbookPermissions(Tableau.Api.Models.TableauSession,System.String,System.Nullable{System.Threading.CancellationToken})</Target>
+    <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
+    <Right>build/lib/net10.0/Tableau.Api.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Tableau.Api.TableauApiClient.QueryWorkbookPreviewImage(Tableau.Api.Models.TableauSession,System.String,System.Nullable{System.Threading.CancellationToken})</Target>
+    <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
+    <Right>build/lib/net10.0/Tableau.Api.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Tableau.Api.TableauApiClient.QueryWorkbooksForSite(Tableau.Api.Models.TableauSession,System.Int32,System.Int32,System.String,System.String,System.String,System.Nullable{System.Threading.CancellationToken})</Target>
+    <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
+    <Right>build/lib/net10.0/Tableau.Api.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Tableau.Api.TableauApiClient.QueryWorkbooksForUser(Tableau.Api.Models.TableauSession,System.String,System.Boolean,System.Int32,System.Int32,System.Nullable{System.Threading.CancellationToken})</Target>
+    <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
+    <Right>build/lib/net10.0/Tableau.Api.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Tableau.Api.TableauApiClient.RemoveDataSourceRevision(Tableau.Api.Models.TableauSession,System.String,System.Int32,System.Nullable{System.Threading.CancellationToken})</Target>
     <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
     <Right>build/lib/net10.0/Tableau.Api.dll</Right>
   </Suppression>
@@ -400,6 +550,12 @@
   <Suppression>
     <DiagnosticId>CP0002</DiagnosticId>
     <Target>M:Tableau.Api.TableauApiClient.RemoveUserFromSite(Tableau.Api.Models.TableauSession,System.String,System.Nullable{System.Threading.CancellationToken})</Target>
+    <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
+    <Right>build/lib/net10.0/Tableau.Api.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Tableau.Api.TableauApiClient.RemoveWorkbookRevision(Tableau.Api.Models.TableauSession,System.String,System.Int32,System.Nullable{System.Threading.CancellationToken})</Target>
     <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
     <Right>build/lib/net10.0/Tableau.Api.dll</Right>
   </Suppression>
@@ -459,6 +615,18 @@
   </Suppression>
   <Suppression>
     <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Tableau.Api.TableauApiClient.UpdateDataSourceConnection(Tableau.Api.Models.TableauSession,System.String,System.String,System.String,System.String,System.String,System.String,System.Nullable{System.Threading.CancellationToken})</Target>
+    <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
+    <Right>build/lib/net10.0/Tableau.Api.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Tableau.Api.TableauApiClient.UpdateDataSourceNow(Tableau.Api.Models.TableauSession,System.String,System.Nullable{System.Threading.CancellationToken})</Target>
+    <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
+    <Right>build/lib/net10.0/Tableau.Api.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
     <Target>M:Tableau.Api.TableauApiClient.UpdateGroup(Tableau.Api.Models.TableauSession,System.String,System.String,System.Nullable{System.Threading.CancellationToken})</Target>
     <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
     <Right>build/lib/net10.0/Tableau.Api.dll</Right>
@@ -508,6 +676,18 @@
   <Suppression>
     <DiagnosticId>CP0002</DiagnosticId>
     <Target>M:Tableau.Api.TableauApiClient.UpdateWorkbook(Tableau.Api.Models.TableauSession,System.String,System.Nullable{System.Boolean},System.String,System.String,System.Nullable{System.Threading.CancellationToken})</Target>
+    <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
+    <Right>build/lib/net10.0/Tableau.Api.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Tableau.Api.TableauApiClient.UpdateWorkbookConnection(Tableau.Api.Models.TableauSession,System.String,System.String,System.String,System.Int32,System.String,System.String,System.Nullable{System.Threading.CancellationToken})</Target>
+    <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
+    <Right>build/lib/net10.0/Tableau.Api.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Tableau.Api.TableauApiClient.UpdateWorkbookNow(Tableau.Api.Models.TableauSession,System.String,System.Nullable{System.Threading.CancellationToken})</Target>
     <Left>1.2.5/lib/netstandard2.0/Tableau.Api.dll</Left>
     <Right>build/lib/net10.0/Tableau.Api.dll</Right>
   </Suppression>

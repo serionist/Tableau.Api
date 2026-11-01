@@ -26,6 +26,13 @@ namespace Tableau.Api;
 /// <para>
 /// Delete Tag names the tag in its path, unquoted, as Tableau stores it and <see cref="AddAsync"/> returns it.
 /// </para>
+/// <para>
+/// A batch names each content by its type and LUID: <c>Database</c>, <c>Table</c>, <c>Column</c>, <c>Datasource</c>,
+/// <c>Workbook</c> or <c>Flow</c>, as the reference's Batch Add Tags answer writes them in the schema's
+/// <c>contentType</c>, and as Tableau's Python client sends them. The reference's request names a content by its LUID
+/// alone, which Tableau Server 2025.1 refuses (409004). Batch Delete Tags is the reference's DELETE with that body, which
+/// the same server took.
+/// </para>
 /// </remarks>
 public class TagsClient
 {
@@ -128,7 +135,9 @@ public class TagsClient
         _ => throw content.Refused("Tags take", TakesOne, nameof(content)),
     };
 
-    // The batch's body as the reference writes it: the tags by their labels, the content by its LUID alone.
+    // The batch's body: the tags by their labels, each content by its type and LUID. The reference's request names the
+    // content by its LUID alone, which Tableau Server 2025.1 refuses as a content type not allowed (409004); the types
+    // are the ones the reference's answer writes and Tableau's Python client sends.
     private static TsRequest Batch(IEnumerable<string> tags, IEnumerable<TableauContent> contents)
     {
         var labels = Labels(tags, nameof(tags));
@@ -137,10 +146,17 @@ public class TagsClient
         foreach (var content in contents)
         {
             if (content is null) throw new ArgumentException("A content is null.", nameof(contents));
-            if (content.Kind is not (TableauContentKind.Database or TableauContentKind.Table or TableauContentKind.Column
-                or TableauContentKind.DataSource or TableauContentKind.Workbook or TableauContentKind.Flow))
-                throw content.Refused("A batch of tags takes", TakesBatch, nameof(contents));
-            ids.Add(new ContentTypeAndId { Id = content.Id });
+            var type = content.Kind switch
+            {
+                TableauContentKind.Database => "Database",
+                TableauContentKind.Table => "Table",
+                TableauContentKind.Column => "Column",
+                TableauContentKind.DataSource => "Datasource",
+                TableauContentKind.Workbook => "Workbook",
+                TableauContentKind.Flow => "Flow",
+                _ => throw content.Refused("A batch of tags takes", TakesBatch, nameof(contents)),
+            };
+            ids.Add(new ContentTypeAndId { ContentType = type, Id = content.Id });
         }
         if (ids.Count == 0) throw new ArgumentException("A batch takes one content at least.", nameof(contents));
         return new TsRequest { TagBatch = new TagBatch { Tags = labels, Contents = ids } };

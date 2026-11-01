@@ -1,0 +1,73 @@
+{
+  "pagination": {
+    "pageNumber": "1",
+    "pageSize": "2",
+    "totalAvailable": "3"
+  },
+  "workbooks": {
+    "workbook": [
+      {
+        "project": {
+          "id": "22222222-3333-4444-8555-666666666666",
+          "name": "Finance"
+        },
+        "location": {
+          "id": "22222222-3333-4444-8555-666666666666",
+          "type": "Project",
+          "name": "Finance"
+        },
+        "owner": {
+          "id": "7c1d2e3f-4a5b-4c6d-8e9f-0a1b2c3d4e5f",
+          "name": "ada"
+        },
+        "tags": {
+          "tag": [
+            {
+              "label": "Yearly Sales"
+            }
+          ]
+        },
+        "dataAccelerationConfig": {},
+        "id": "66666666-7777-4888-8999-aaaaaaaaaaaa",
+        "name": "Quarterly",
+        "description": "Invented: the quarter's numbers.",
+        "contentUrl": "Quarterly",
+        "webpageUrl": "https://tableau.example.com/#/site/finance/workbooks/101",
+        "showTabs": "true",
+        "size": "1",
+        "createdAt": "2026-09-01T08:00:00Z",
+        "updatedAt": "2026-10-01T08:00:00Z",
+        "encryptExtracts": "false",
+        "defaultViewId": "44444444-5555-4666-8777-888888888888"
+      },
+      {
+        "project": {
+          "id": "22222222-3333-4444-8555-666666666666",
+          "name": "Finance"
+        },
+        "location": {
+          "id": "22222222-3333-4444-8555-666666666666",
+          "type": "Project",
+          "name": "Finance"
+        },
+        "owner": {
+          "id": "7c1d2e3f-4a5b-4c6d-8e9f-0a1b2c3d4e5f",
+          "name": "ada"
+        },
+        "tags": {},
+        "dataAccelerationConfig": {},
+        "id": "77777777-8888-4999-8aaa-bbbbbbbbbbbb",
+        "name": "R&D C++ #1 100%",
+        "description": "",
+        "contentUrl": "RDC1100",
+        "webpageUrl": "https://tableau.example.com/#/site/finance/workbooks/102",
+        "showTabs": "false",
+        "size": "3",
+        "createdAt": "2026-09-02T08:00:00Z",
+        "updatedAt": "2026-10-02T08:00:00Z",
+        "encryptExtracts": "false",
+        "defaultViewId": "88888888-9999-4aaa-8bbb-cccccccccccc"
+      }
+    ]
+  }
+}

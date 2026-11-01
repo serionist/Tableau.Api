@@ -13,7 +13,8 @@ CI (`ci.yml`, the Native AOT job) does two things:
    handler that answers from the fixtures, its version negotiated, an error read, a call retried after a 503 and a
    download saved to a file; a sign-in for a call that needs a session, a connected app's JWT minted, a bound client,
    and the sign-out on dispose; a list read page by page with a filter and a sort; a project's permissions listed and
-   added; a Metadata API query read through the app's own `JsonTypeInfo<T>`, and a connection paged by its cursor; and
+   added; a view's image exported through `ExportOptions` with a view filter, and a workbook downloaded without its
+   extract and saved; a Metadata API query read through the app's own `JsonTypeInfo<T>`, and a connection paged by its cursor; and
    the client from DI, its options bound from configuration, its primary handler
    configured, a handler of the caller's in its chain, and bad options refused at start-up. Reflection-based JSON is off
    in the binary, so a converter that reached for it fails there.

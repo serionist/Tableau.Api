@@ -15,6 +15,8 @@
 // - a list read through its sub-client, page by page until the total, with a filter escaped and the stable sort on the
 //   wire;
 // - a project's permissions listed and added, over a TableauContent;
+// - a view's image exported through ExportOptions, its view filter sent as vf_, and a workbook downloaded without its
+//   extract through its sub-client and saved;
 // - a Metadata API query, its data read through the caller's own source-generated JsonTypeInfo, and a connection read
 //   page by page by its cursor, from the GraphQL fixtures;
 // - the client from DI, its options bound from configuration by the binder's source generator, its primary handler
@@ -170,6 +172,35 @@ try
                 && granted.Project?.Name == "Quarterly reports"
                 && FixtureHandler.Sent[^1] == "PUT /api/3.25/sites/0f4b9e1c-3a52-4d6e-9c8b-1a2b3c4d5e6f/projects/33333333-4444-4555-8666-777777777777/permissions invented-session-token");
 
+            await using (var image = await signing.Views.DownloadImageAsync(FixtureHandler.ViewId, new ExportOptions
+            {
+                Resolution = ImageResolution.High,
+                MaxAge = 60,
+                Filters = new Dictionary<string, string> { ["Région"] = "Nord, Sud" },
+            }))
+            {
+                using var read = new MemoryStream();
+                await image.Content.CopyToAsync(read);
+                Check("a view's image exports through ExportOptions, its filter as vf_ and escaped, and streams its PNG",
+                    image.Kind == TableauFileKind.Png && read.ToArray().SequenceEqual(FixtureHandler.Png)
+                    && FixtureHandler.Queries[^1] == "?resolution=high&maxAge=60&vf_R%C3%A9gion=Nord%2C%20Sud");
+            }
+            await using (var workbook = await signing.Workbooks.DownloadAsync(FixtureHandler.WorkbookId, includeExtract: false))
+            {
+                var file = Path.Combine(Path.GetTempPath(), $"Tableau.Api.Aot-{Guid.NewGuid():N}.twbx");
+                try
+                {
+                    await workbook.SaveToFileAsync(file);
+                    Check("a workbook downloads through its sub-client without its extract, and saves to a file",
+                        workbook is { FileName: "Superstore.twbx", Kind: TableauFileKind.PackagedWorkbook }
+                        && File.ReadAllBytes(file).SequenceEqual(FixtureHandler.Workbook) && FixtureHandler.Queries[^1] == "?includeExtract=False");
+                }
+                finally
+                {
+                    File.Delete(file);
+                }
+            }
+
             const string Databases = "query($first: Int, $after: String) { databasesConnection(first: $first, after: $after) { nodes { id name } "
                 + "pageInfo { hasNextPage endCursor } totalCount } }";
             var data = await signing.Metadata.QueryAsync(Databases, null, AotJson.Default.AotDatabasesData);
@@ -293,6 +324,16 @@ internal sealed class FixtureHandler : HttpMessageHandler
     /// <summary>The workbook's bytes: a zip's signature, then a pattern.</summary>
     public static byte[] Workbook { get; } = [(byte)'P', (byte)'K', 3, 4, .. Enumerable.Range(0, 1020).Select(i => (byte)(i % 251))];
 
+    /// <summary>A view's image: a PNG's signature, then a pattern.</summary>
+    public static byte[] Png { get; } = [0x89, (byte)'P', (byte)'N', (byte)'G', 0x0D, 0x0A, 0x1A, 0x0A, .. Enumerable.Range(0, 504).Select(i => (byte)(i % 13))];
+
+    /// <summary>The invented view the app exports, and the workbook it downloads.</summary>
+    public const string ViewId = "44444444-5555-4666-8777-888888888888";
+
+    public const string WorkbookId = "66666666-7777-4888-8999-aaaaaaaaaaaa";
+
+    private const string Site = "/api/3.25/sites/0f4b9e1c-3a52-4d6e-9c8b-1a2b3c4d5e6f";
+
     public static HttpResponseMessage Answer(HttpRequestMessage request)
     {
         var path = request.RequestUri!.AbsolutePath;
@@ -331,7 +372,13 @@ internal sealed class FixtureHandler : HttpMessageHandler
             return Json(request, HttpStatusCode.OK,
                 Fixture(request.RequestUri.Query.Contains("pageNumber=1", StringComparison.Ordinal) ? "projects-page.json" : "projects-last-page.json"));
         }
-        if (path == "/api/3.25/workbooks/w1/content")
+        if (path == $"{Site}/views/{ViewId}/image")
+        {
+            var image = new ByteArrayContent(Png);
+            image.Headers.TryAddWithoutValidation("Content-Type", "image/png");
+            return new HttpResponseMessage(HttpStatusCode.OK) { RequestMessage = request, Content = image };
+        }
+        if (path is "/api/3.25/workbooks/w1/content" || path == $"{Site}/workbooks/{WorkbookId}/content")
         {
             var file = new ByteArrayContent(Workbook);
             file.Headers.TryAddWithoutValidation("Content-Type", "application/octet-stream");

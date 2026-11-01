@@ -173,7 +173,7 @@
       "file": "tag-batch-request.json",
       "body": "request",
       "call": "PUT /api/{version}/sites/{site-id}/tags:batchCreate, and DELETE /api/{version}/sites/{site-id}/tags:BatchDelete",
-      "source": "synthetic, from the reference's Batch Add Tags and Batch Delete Tags requests: the content by its id alone, and a label with a space in double quotes, as the client sends it so Tableau keeps it one tag"
+      "source": "synthetic, from the reference's Batch Add Tags and Batch Delete Tags requests, with each content's type, which Tableau Server 2025.1 asked for (409004 without it), as the reference's Batch Add Tags answer writes it and Tableau's Python client sends it; and a label with a space in double quotes, as the client sends it so Tableau keeps it one tag"
     },
     {
       "file": "databases-page.json",
@@ -222,6 +222,60 @@
       "body": "response",
       "call": "GET /api/{version}/sites/{site-id}/dataQualityWarnings/{content-type}/{content-id}",
       "source": "synthetic, from the reference's Query Data Quality Warning by Content response; the live server sent an empty list as {}"
+    },
+    {
+      "file": "workbooks-page.json",
+      "body": "response",
+      "call": "GET /api/{version}/sites/{site-id}/workbooks, and GET /api/{version}/sites/{site-id}/users/{user-id}/workbooks",
+      "source": "synthetic, from the reference's Query Workbooks for Site response; the live server sent a workbook's location type as Project, the schema's own, where a catalog asset's comes as PROJECT"
+    },
+    {
+      "file": "views-page.json",
+      "body": "response",
+      "call": "GET /api/{version}/sites/{site-id}/views, and GET /api/{version}/sites/{site-id}/workbooks/{workbook-id}/views without its pagination",
+      "source": "synthetic, from the reference's Query Views for Site response, with usage statistics"
+    },
+    {
+      "file": "view.json",
+      "body": "response",
+      "call": "GET /api/{version}/sites/{site-id}/views/{view-id}",
+      "source": "synthetic, from the reference's Get View response, with usage statistics"
+    },
+    {
+      "file": "datasources-page.json",
+      "body": "response",
+      "call": "GET /api/{version}/sites/{site-id}/datasources",
+      "source": "synthetic, from the reference's Query Data Sources response"
+    },
+    {
+      "file": "datasource.json",
+      "body": "response",
+      "call": "GET /api/{version}/sites/{site-id}/datasources/{datasource-id}, and PUT to the same path",
+      "source": "synthetic, from the reference's Query Data Source response"
+    },
+    {
+      "file": "connections.json",
+      "body": "response",
+      "call": "GET /api/{version}/sites/{site-id}/workbooks/{workbook-id}/connections, and the same of a data source",
+      "source": "synthetic, from the reference's Query Workbook Connections response"
+    },
+    {
+      "file": "connection.json",
+      "body": "response",
+      "call": "PUT /api/{version}/sites/{site-id}/workbooks/{workbook-id}/connections/{connection-id}, and the same of a data source",
+      "source": "synthetic, from the reference's Update Workbook Connection response"
+    },
+    {
+      "file": "revisions-page.json",
+      "body": "response",
+      "call": "GET /api/{version}/sites/{site-id}/workbooks/{workbook-id}/revisions, and the same of a data source",
+      "source": "synthetic, from the reference's Get Data Source Revisions response, whose attributes the schema's revision has; the live server sent a workbook's and a data source's so, sizeInBytes a number"
+    },
+    {
+      "file": "refresh-job.json",
+      "body": "response",
+      "call": "POST /api/{version}/sites/{site-id}/workbooks/{workbook-id}/refresh, and the same of a data source",
+      "source": "synthetic, from the reference's Update Workbook Now response"
     }
   ]
 }

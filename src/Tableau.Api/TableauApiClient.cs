@@ -98,12 +98,6 @@ public partial class TableauApiClient
                 throw new ArgumentNullException(a.Item1, $"Argument {a.Item1} cannot be null");
     }
 
-    private void checkEmptyArrays(params (string, Array)[] arguments)
-    {
-        foreach (var a in arguments)
-            if (a.Item2.Length == 0)
-                throw new ArgumentOutOfRangeException(a.Item1, $"Argument array '{a.Item1}' cannot be empty");
-    }
     private void checkParametersBetween(params (string name, int value, int min, int max)[] arguments)
     {
         foreach (var (name, value, min, max) in arguments)
@@ -141,7 +135,7 @@ public partial class TableauApiClient
             url.Append(i == 0 ? '?' : '&');
             UriEscaping.AppendQueryPart(url, urlParams[i].Item1 ?? "");
             url.Append('=');
-            appendQueryValue(url, urlParams[i].Item1, urlParams[i].Item2);
+            if (urlParams[i].Item2 != null) UriEscaping.AppendQueryPart(url, urlParams[i].Item2);
         }
         var uri = new Uri(url.ToString());
         // Uri may rewrite a path after it is escaped, so the path it would send is checked against the one written.
@@ -150,25 +144,6 @@ public partial class TableauApiClient
                 $"The request path '{path}' would be sent as '{uri.AbsolutePath}' by this platform's URI parsing, so it "
                 + "is not sent. A value or the base URL's path holds characters that it rewrites.");
         return uri;
-    }
-
-    // A filter or sort expression keeps its separators, : and ,, and the parts between them are escaped.
-    private static void appendQueryValue(StringBuilder url, string key, string value)
-    {
-        if (value == null) return;
-        if (key != "filter" && key != "sort")
-        {
-            UriEscaping.AppendQueryPart(url, value);
-            return;
-        }
-        var start = 0;
-        for (var i = 0; i <= value.Length; i++)
-        {
-            if (i < value.Length && value[i] != ':' && value[i] != ',') continue;
-            UriEscaping.AppendQueryPart(url, value.Substring(start, i - start));
-            if (i < value.Length) url.Append(value[i]);
-            start = i + 1;
-        }
     }
 
     private async Task<TableauRequestException> buildException(HttpResponseMessage resp)

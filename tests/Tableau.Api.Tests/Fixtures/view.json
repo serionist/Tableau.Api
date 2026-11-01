@@ -1,0 +1,23 @@
+{
+  "view": {
+    "workbook": {
+      "id": "66666666-7777-4888-8999-aaaaaaaaaaaa"
+    },
+    "owner": {
+      "id": "7c1d2e3f-4a5b-4c6d-8e9f-0a1b2c3d4e5f"
+    },
+    "project": {
+      "id": "22222222-3333-4444-8555-666666666666"
+    },
+    "tags": {},
+    "usage": {
+      "totalViewCount": "42"
+    },
+    "id": "55555555-6666-4777-8888-999999999999",
+    "name": "Costs by region",
+    "contentUrl": "Quarterly/sheets/Costsbyregion",
+    "createdAt": "2026-09-01T08:00:00Z",
+    "updatedAt": "2026-10-01T08:00:00Z",
+    "viewUrlName": "Costsbyregion"
+  }
+}

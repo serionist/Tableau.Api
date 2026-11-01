@@ -21,13 +21,13 @@ public sealed partial class LogTests
         using var server = FakeTableauServer.Start();
         var log = new RecordingLogger();
         var client = new TableauApiClient(server.BaseUrl, log, Fixtures.ApiVersion);
-        server.Map("GET", ApiPath + "/sites/" + Fixtures.SiteId + "/datasources",
+        server.Map("GET", ApiPath + "/sites/" + Fixtures.SiteId + "/subscriptions",
             FakeResponse.Redirect(302, "https://tableau.example.com/next"));
         var session = Fixtures.Session();
 
-        await Assert.ThrowsExactlyAsync<TableauRequestException>(() => client.QueryDataSources(session));
-        await Assert.ThrowsExactlyAsync<TableauRequestException>(() => client.QueryDataSource(session, "d1"));
-        await Assert.ThrowsExactlyAsync<TableauRequestException>(() => client.DeleteDataSource(session, "d1"));
+        await Assert.ThrowsExactlyAsync<TableauRequestException>(() => client.QuerySubscriptions(session));
+        await Assert.ThrowsExactlyAsync<TableauRequestException>(() => client.QuerySubscription(session, "s1"));
+        await Assert.ThrowsExactlyAsync<TableauRequestException>(() => client.DeleteSubscription(session, "s1"));
 
         Assert.IsGreaterThanOrEqualTo(6, log.Lines.Count, "the calls logged too little to check");
         Assert.IsEmpty(log.LinesHolding(Fixtures.Secrets).ToList());

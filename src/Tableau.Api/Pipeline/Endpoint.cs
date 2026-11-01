@@ -516,6 +516,148 @@ internal static class Endpoints
     public static readonly Endpoint MetadataQuery = new("Metadata API query", HttpMethod.Post, "metadata/graphql", new Version(3, 5),
         TableauDeployments.Both, Idempotent: true, TransferKind.None);
 
+    // Workbooks. An update sets what it is given, so twice sets it once; a delete twice leaves it deleted. Update Workbook
+    // Now starts an extract refresh, a job, so it is sent once: a second would queue a second refresh. A file comes as a
+    // download, whose attempt the handler leaves on the wire.
+
+    /// <summary>Query Workbooks for Site (REST API 2.3).</summary>
+    public static readonly Endpoint QueryWorkbooksForSite = Read("Query Workbooks for Site", "{version}/sites/{siteId}/workbooks", 2, 3);
+
+    /// <summary>Get Workbook (REST API 2.0).</summary>
+    public static readonly Endpoint GetWorkbook = Read("Get Workbook", "{version}/sites/{siteId}/workbooks/{id:luid}", 2, 0);
+
+    /// <summary>Query Workbooks for User (REST API 1.0).</summary>
+    public static readonly Endpoint QueryWorkbooksForUser = Read("Query Workbooks for User", "{version}/sites/{siteId}/users/{userId:luid}/workbooks", 1, 0);
+
+    /// <summary>Query Workbook Connections (REST API 2.0).</summary>
+    public static readonly Endpoint QueryWorkbookConnections = Read("Query Workbook Connections", "{version}/sites/{siteId}/workbooks/{id:luid}/connections",
+        2, 0);
+
+    /// <summary>Update Workbook (REST API 2.0).</summary>
+    public static readonly Endpoint UpdateWorkbook = Write("Update Workbook", HttpMethod.Put, "{version}/sites/{siteId}/workbooks/{id:luid}", 2, 0,
+        idempotent: true);
+
+    /// <summary>Update Workbook Connection (REST API 2.0).</summary>
+    public static readonly Endpoint UpdateWorkbookConnection = Write("Update Workbook Connection", HttpMethod.Put, WorkbookConnection, 2, 0,
+        idempotent: true);
+
+    /// <summary>Update Workbook Connection with an authentication type, which the reference adds in REST API 3.27.</summary>
+    public static readonly Endpoint UpdateWorkbookConnectionAuthentication = Write("Update Workbook Connection with an authentication type",
+        HttpMethod.Put, WorkbookConnection, 3, 27, idempotent: true);
+
+    /// <summary>Update Workbook Now (REST API 2.8): an extract refresh, sent once.</summary>
+    public static readonly Endpoint UpdateWorkbookNow = Write("Update Workbook Now", HttpMethod.Post, "{version}/sites/{siteId}/workbooks/{id:luid}/refresh",
+        2, 8, idempotent: false);
+
+    /// <summary>Delete Workbook (REST API 2.0).</summary>
+    public static readonly Endpoint DeleteWorkbook = Write("Delete Workbook", HttpMethod.Delete, "{version}/sites/{siteId}/workbooks/{id:luid}", 2, 0,
+        idempotent: true);
+
+    /// <summary>Download Workbook (REST API 2.0): a .twb or a .twbx.</summary>
+    public static readonly Endpoint DownloadWorkbook = Download("Download Workbook", "{version}/sites/{siteId}/workbooks/{id:luid}/content", 2, 0);
+
+    /// <summary>Query Workbook Preview Image (REST API 1.0): a PNG.</summary>
+    public static readonly Endpoint QueryWorkbookPreviewImage = Download("Query Workbook Preview Image",
+        "{version}/sites/{siteId}/workbooks/{id:luid}/previewImage", 1, 0);
+
+    /// <summary>Download Workbook PDF (REST API 3.4), with a page type, an orientation and a maximum age.</summary>
+    public static readonly Endpoint DownloadWorkbookPdf = Download("Download Workbook PDF", WorkbookPdf, 3, 4);
+
+    /// <summary>
+    /// Download Workbook PDF with view filters, from REST API 3.24. The reference gives two versions: the method's page
+    /// says 3.23 beside "Tableau Cloud December 2024 / Tableau Server 2024.3", but Tableau Server 2024.3 is 3.24 in its
+    /// versions table and its list of changes puts the filters in 3.24, as it does Get Custom View PDF, whose page
+    /// carries the same note. 3.24, so Tableau Server 2024.2, which would ignore the filters and answer an unfiltered
+    /// PDF, is refused before sending.
+    /// </summary>
+    public static readonly Endpoint DownloadWorkbookPdfFiltered = Download("Download Workbook PDF with view filters", WorkbookPdf, 3, 24);
+
+    /// <summary>Download Workbook PDF at a width and a height, which the reference gives from REST API 3.26.</summary>
+    public static readonly Endpoint DownloadWorkbookPdfSized = Download("Download Workbook PDF at a size", WorkbookPdf, 3, 26);
+
+    /// <summary>
+    /// A workbook's revisions (REST API 2.3). Remove Workbook Revision's page says 2.0, but the reference's list of changes
+    /// brings it in 2.3 with the other revision calls, and a revision to remove comes from Get Workbook Revisions, 2.3's.
+    /// </summary>
+    public static readonly RevisionCalls WorkbookRevisions = Revisions("Workbook", "workbooks", 2, 3);
+
+    // Views: a view is read and exported, each export a download; the reference's paths for a view's preview image name
+    // its workbook too.
+
+    /// <summary>Query Views for Site (REST API 2.2).</summary>
+    public static readonly Endpoint QueryViewsForSite = Read("Query Views for Site", "{version}/sites/{siteId}/views", 2, 2);
+
+    /// <summary>Get View (REST API 3.0).</summary>
+    public static readonly Endpoint GetView = Read("Get View", "{version}/sites/{siteId}/views/{id:luid}", 3, 0);
+
+    /// <summary>Query Views for Workbook (REST API 1.0).</summary>
+    public static readonly Endpoint QueryViewsForWorkbook = Read("Query Views for Workbook", "{version}/sites/{siteId}/workbooks/{workbookId:luid}/views", 1, 0);
+
+    /// <summary>Query View Data (REST API 2.8): CSV.</summary>
+    public static readonly Endpoint QueryViewData = Download("Query View Data", "{version}/sites/{siteId}/views/{id:luid}/data", 2, 8);
+
+    /// <summary>Query View Image (REST API 2.5): a PNG, with a resolution and a maximum age.</summary>
+    public static readonly Endpoint QueryViewImage = Download("Query View Image", ViewImage, 2, 5);
+
+    /// <summary>
+    /// Query View Image at a width and a height, from REST API 3.24. The method's page says 3.23 beside "Tableau Cloud
+    /// December 2024 / Server 2024.3", but Tableau Server 2024.3 is 3.24 and the reference's list of changes puts the size
+    /// in 3.24, as for a workbook's PDF filters. 3.24, so a server that would ignore the size is refused before sending.
+    /// </summary>
+    public static readonly Endpoint QueryViewImageSized = Download("Query View Image at a size", ViewImage, 3, 24);
+
+    /// <summary>
+    /// Query View PDF (REST API 2.8). Its width and height have no version of their own, on the method's page or in the
+    /// list of changes, so they take the call's.
+    /// </summary>
+    public static readonly Endpoint QueryViewPdf = Download("Query View PDF", "{version}/sites/{siteId}/views/{id:luid}/pdf", 2, 8);
+
+    /// <summary>Download View Crosstab Excel (REST API 3.9): an .xlsx.</summary>
+    public static readonly Endpoint DownloadViewCrosstabExcel = Download("Download View Crosstab Excel",
+        "{version}/sites/{siteId}/views/{id:luid}/crosstab/excel", 3, 9);
+
+    /// <summary>Query View Preview Image (REST API 1.0): a PNG, by the view's workbook and the view.</summary>
+    public static readonly Endpoint QueryViewPreviewImage = Download("Query View Preview Image",
+        "{version}/sites/{siteId}/workbooks/{workbookId:luid}/views/{id:luid}/previewImage", 1, 0);
+
+    // Published data sources, as workbooks: Update Data Source Now, an extract refresh, is sent once.
+
+    /// <summary>Query Data Sources (REST API 1.0).</summary>
+    public static readonly Endpoint QueryDataSources = Read("Query Data Sources", "{version}/sites/{siteId}/datasources", 1, 0);
+
+    /// <summary>Query Data Source (REST API 1.0).</summary>
+    public static readonly Endpoint QueryDataSource = Read("Query Data Source", "{version}/sites/{siteId}/datasources/{id:luid}", 1, 0);
+
+    /// <summary>Query Data Source Connections (REST API 2.3).</summary>
+    public static readonly Endpoint QueryDataSourceConnections = Read("Query Data Source Connections",
+        "{version}/sites/{siteId}/datasources/{id:luid}/connections", 2, 3);
+
+    /// <summary>Update Data Source (REST API 2.0).</summary>
+    public static readonly Endpoint UpdateDataSource = Write("Update Data Source", HttpMethod.Put, "{version}/sites/{siteId}/datasources/{id:luid}", 2, 0,
+        idempotent: true);
+
+    /// <summary>Update Data Source Connection (REST API 2.3).</summary>
+    public static readonly Endpoint UpdateDataSourceConnection = Write("Update Data Source Connection", HttpMethod.Put, DataSourceConnection, 2, 3,
+        idempotent: true);
+
+    /// <summary>Update Data Source Connection with an authentication type, which the reference adds in REST API 3.27.</summary>
+    public static readonly Endpoint UpdateDataSourceConnectionAuthentication = Write("Update Data Source Connection with an authentication type",
+        HttpMethod.Put, DataSourceConnection, 3, 27, idempotent: true);
+
+    /// <summary>Update Data Source Now (REST API 2.8): an extract refresh, sent once.</summary>
+    public static readonly Endpoint UpdateDataSourceNow = Write("Update Data Source Now", HttpMethod.Post,
+        "{version}/sites/{siteId}/datasources/{id:luid}/refresh", 2, 8, idempotent: false);
+
+    /// <summary>Delete Data Source (REST API 2.0).</summary>
+    public static readonly Endpoint DeleteDataSource = Write("Delete Data Source", HttpMethod.Delete, "{version}/sites/{siteId}/datasources/{id:luid}",
+        2, 0, idempotent: true);
+
+    /// <summary>Download Data Source (REST API 2.0): a .tds or a .tdsx.</summary>
+    public static readonly Endpoint DownloadDataSource = Download("Download Data Source", "{version}/sites/{siteId}/datasources/{id:luid}/content", 2, 0);
+
+    /// <summary>A published data source's revisions (REST API 2.3).</summary>
+    public static readonly RevisionCalls DataSourceRevisions = Revisions("Data Source", "datasources", 2, 3);
+
     /// <summary>Every descriptor, for the tests that hold each to the rules.</summary>
     public static IReadOnlyList<Endpoint> All { get; } =
     [
@@ -542,9 +684,21 @@ internal static class Endpoints
         AddDataQualityWarning, AddColumnDataQualityWarning, UpdateDataQualityWarning, QueryDataQualityWarnings,
         QueryColumnDataQualityWarnings, DeleteDataQualityWarning, DeleteDataQualityWarnings, DeleteColumnDataQualityWarnings,
         MetadataQuery,
+        QueryWorkbooksForSite, GetWorkbook, QueryWorkbooksForUser, QueryWorkbookConnections, UpdateWorkbook, UpdateWorkbookConnection,
+        UpdateWorkbookConnectionAuthentication, UpdateWorkbookNow, DeleteWorkbook, DownloadWorkbook, QueryWorkbookPreviewImage, DownloadWorkbookPdf, DownloadWorkbookPdfFiltered,
+        DownloadWorkbookPdfSized, .. WorkbookRevisions.All,
+        QueryViewsForSite, GetView, QueryViewsForWorkbook, QueryViewData, QueryViewImage, QueryViewImageSized, QueryViewPdf,
+        DownloadViewCrosstabExcel, QueryViewPreviewImage,
+        QueryDataSources, QueryDataSource, QueryDataSourceConnections, UpdateDataSource, UpdateDataSourceConnection,
+        UpdateDataSourceConnectionAuthentication, UpdateDataSourceNow,
+        DeleteDataSource, DownloadDataSource, .. DataSourceRevisions.All,
     ];
 
     private const string WarningsOfContent = "{version}/sites/{siteId}/dataQualityWarnings/{contentType}/{contentId:luid}";
+    private const string WorkbookPdf = "{version}/sites/{siteId}/workbooks/{id:luid}/pdf";
+    private const string ViewImage = "{version}/sites/{siteId}/views/{id:luid}/image";
+    private const string WorkbookConnection = "{version}/sites/{siteId}/workbooks/{id:luid}/connections/{connectionId:luid}";
+    private const string DataSourceConnection = "{version}/sites/{siteId}/datasources/{id:luid}/connections/{connectionId:luid}";
 
     /// <summary>Whether a descriptor is a Sign In's, whose body holds credentials.</summary>
     public static bool IsSignIn(Endpoint endpoint) => endpoint.Template == SignInTemplate;
@@ -562,6 +716,20 @@ internal static class Endpoints
     private static Endpoint Write(string name, HttpMethod method, string template, int major, int minor, bool idempotent,
         TableauDeployments deployments = TableauDeployments.Both) =>
         new(name, method, template, new Version(major, minor), deployments, idempotent, TransferKind.None);
+
+    // A GET in a session whose answer is a file, safe to send again until its content has begun.
+    private static Endpoint Download(string name, string template, int major, int minor) =>
+        new(name, HttpMethod.Get, template, new Version(major, minor), TableauDeployments.Both, Idempotent: true, TransferKind.Download);
+
+    // A kind of content's revisions: {revision} is the revision's number.
+    private static RevisionCalls Revisions(string content, string segment, int major, int minor)
+    {
+        var revisions = $"{{version}}/sites/{{siteId}}/{segment}/{{id:luid}}/revisions";
+        return new RevisionCalls(
+            Read($"Get {content} Revisions", revisions, major, minor),
+            Download($"Download {content} Revision", revisions + "/{revision}/content", major, minor),
+            Write($"Remove {content} Revision", HttpMethod.Delete, revisions + "/{revision}", major, minor, idempotent: true));
+    }
 
     private static Endpoint AddFavorite(string name, int major, int minor) =>
         Write(name, HttpMethod.Put, "{version}/sites/{siteId}/favorites/{userId:luid}", major, minor, idempotent: true);
@@ -609,6 +777,16 @@ internal sealed record PermissionCalls(Endpoint List, Endpoint Add, Endpoint Del
 {
     /// <summary>The three, for <see cref="Endpoints.All"/>.</summary>
     public IReadOnlyList<Endpoint> All => [List, Add, Delete];
+}
+
+/// <summary>The calls of one kind of content's revisions: list them, download one, remove one.</summary>
+/// <param name="List">The list's descriptor, a GET of a page of revisions.</param>
+/// <param name="Download">The download's descriptor, of one revision's file.</param>
+/// <param name="Remove">The remove's descriptor, of one revision.</param>
+internal sealed record RevisionCalls(Endpoint List, Endpoint Download, Endpoint Remove)
+{
+    /// <summary>The three, for <see cref="Endpoints.All"/>.</summary>
+    public IReadOnlyList<Endpoint> All => [List, Download, Remove];
 }
 
 /// <summary>The calls of one kind of content's tags: add tags, delete one.</summary>

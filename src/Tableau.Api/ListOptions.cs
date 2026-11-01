@@ -66,6 +66,71 @@ public sealed record TableListOptions
     public int PageSize { get; init; } = 100;
 }
 
+/// <summary>What <see cref="WorkbooksClient.ListAsync"/> and <see cref="WorkbooksClient.ListPageAsync"/> ask for.</summary>
+public sealed record WorkbookListOptions
+{
+    /// <summary>Which workbooks, over <see cref="WorkbookField"/>'s fields; null for all the user can see.</summary>
+    public TableauFilter? Filter { get; init; }
+
+    /// <summary>
+    /// Their order, over <see cref="WorkbookField"/>'s fields; null for the oldest first, then by name, an order that
+    /// doesn't change from page to page. A sort given is followed by those two fields where it doesn't name them, to break
+    /// its ties.
+    /// </summary>
+    public TableauSort? Sort { get; init; }
+
+    /// <summary>How many workbooks a page holds: 1 to 1,000, 100 by default.</summary>
+    public int PageSize { get; init; } = 100;
+}
+
+/// <summary>What <see cref="ViewsClient.ListAsync"/> and <see cref="ViewsClient.ListPageAsync"/> ask for.</summary>
+public sealed record ViewListOptions
+{
+    /// <summary>Which views, over <see cref="ViewField"/>'s fields; null for all the user can see.</summary>
+    public TableauFilter? Filter { get; init; }
+
+    /// <summary>
+    /// Their order, over <see cref="ViewField"/>'s fields; null for the oldest first, then by their workbook's name and
+    /// their own, an order that doesn't change from page to page. A sort given is followed by those three fields where it
+    /// doesn't name them, to break its ties.
+    /// </summary>
+    public TableauSort? Sort { get; init; }
+
+    /// <summary>How many views a page holds: 1 to 1,000, 100 by default.</summary>
+    public int PageSize { get; init; } = 100;
+
+    /// <summary>Whether each view comes with its usage, how often it was seen; false by default.</summary>
+    public bool IncludeUsageStatistics { get; init; }
+}
+
+/// <summary>What <see cref="DataSourcesClient.ListAsync"/> and <see cref="DataSourcesClient.ListPageAsync"/> ask for.</summary>
+public sealed record DataSourceListOptions
+{
+    /// <summary>Which published data sources, over <see cref="DataSourceField"/>'s fields; null for all the user can see.</summary>
+    public TableauFilter? Filter { get; init; }
+
+    /// <summary>
+    /// Their order, over <see cref="DataSourceField"/>'s fields; null for the oldest first, then by name, an order that
+    /// doesn't change from page to page. A sort given is followed by those two fields where it doesn't name them, to break
+    /// its ties.
+    /// </summary>
+    public TableauSort? Sort { get; init; }
+
+    /// <summary>How many data sources a page holds: 1 to 1,000, 100 by default.</summary>
+    public int PageSize { get; init; } = 100;
+}
+
+/// <summary>
+/// What the revision lists of <see cref="WorkbooksClient"/> and <see cref="DataSourcesClient"/> ask for, such as
+/// <see cref="WorkbooksClient.ListRevisionsAsync"/>.
+/// </summary>
+/// <remarks>A page size alone: Tableau's reference lists no filter or sort for a revision list.</remarks>
+public sealed record RevisionListOptions
+{
+    /// <summary>How many revisions a page holds: 1 to 1,000, 100 by default.</summary>
+    public int PageSize { get; init; } = 100;
+}
+
 /// <summary>What <see cref="SitesClient.ListAsync"/> and <see cref="SitesClient.ListPageAsync"/> ask for.</summary>
 /// <remarks>
 /// No filter or sort: Tableau Server 2025.1 refuses the one filter Tableau's reference lists for Query Sites, on the
