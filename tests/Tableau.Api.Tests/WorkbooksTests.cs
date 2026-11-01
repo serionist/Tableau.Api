@@ -30,17 +30,19 @@ public sealed class WorkbooksTests
         ["2.0", "Update Workbook", (Func<TableauClient, Task>)(client => client.Workbooks.UpdateAsync(Id, new WorkbookUpdate()))],
         ["2.0", "Update Workbook Connection",
             (Func<TableauClient, Task>)(client => client.Workbooks.UpdateConnectionAsync(Id, ConnectionId, new ConnectionUpdate()))],
+        ["3.27", "Update Workbook Connection with an authentication type", (Func<TableauClient, Task>)(client =>
+            client.Workbooks.UpdateConnectionAsync(Id, ConnectionId, new ConnectionUpdate { AuthenticationType = "auth-user-pass" }))],
         ["2.8", "Update Workbook Now", (Func<TableauClient, Task>)(client => client.Workbooks.RunExtractRefreshAsync(Id))],
         ["2.0", "Delete Workbook", (Func<TableauClient, Task>)(client => client.Workbooks.DeleteAsync(Id))],
         ["2.0", "Download Workbook", (Func<TableauClient, Task>)(client => client.Workbooks.DownloadAsync(Id))],
         ["3.4", "Download Workbook PDF", (Func<TableauClient, Task>)(client => client.Workbooks.DownloadPdfAsync(Id))],
-        ["3.23", "Download Workbook PDF with view filters", (Func<TableauClient, Task>)(client => client.Workbooks.DownloadPdfAsync(Id,
+        ["3.24", "Download Workbook PDF with view filters", (Func<TableauClient, Task>)(client => client.Workbooks.DownloadPdfAsync(Id,
             new ExportOptions { Filters = new Dictionary<string, string> { ["Region"] = "West" } }))],
         ["3.26", "Download Workbook PDF at a size", (Func<TableauClient, Task>)(client => client.Workbooks.DownloadPdfAsync(Id,
             new ExportOptions { Width = 800, Height = 600, Filters = new Dictionary<string, string> { ["Region"] = "West" } }))],
         ["2.3", "Get Workbook Revisions", (Func<TableauClient, Task>)(client => client.Workbooks.ListRevisionsPageAsync(Id, 1))],
         ["2.3", "Download Workbook Revision", (Func<TableauClient, Task>)(client => client.Workbooks.DownloadRevisionAsync(Id, 2))],
-        ["2.0", "Remove Workbook Revision", (Func<TableauClient, Task>)(client => client.Workbooks.RemoveRevisionAsync(Id, 2))],
+        ["2.3", "Remove Workbook Revision", (Func<TableauClient, Task>)(client => client.Workbooks.RemoveRevisionAsync(Id, 2))],
     ];
 
     [TestMethod]
@@ -185,19 +187,22 @@ public sealed class WorkbooksTests
         {
             ServerAddress = "sql2.invented.example",
             ServerPort = 1434,
-            AuthenticationType = "auth-user-pass",
             UserName = "writer",
             Password = Fixtures.ConnectionPassword,
             EmbedPassword = true,
         };
         var updated = await client.Workbooks.UpdateConnectionAsync(Id, ConnectionId, changes);
         var onlyAddress = await client.Workbooks.UpdateConnectionAsync(Id, ConnectionId, new ConnectionUpdate { ServerAddress = "sql3.invented.example" });
+        // An authentication type is REST API 3.27's, above the client's 3.25: refused before anything is sent.
+        var refused = await ClientFixtures.FailsAsync(TableauErrorKind.UnsupportedApiVersion,
+            () => client.Workbooks.UpdateConnectionAsync(Id, ConnectionId, changes with { AuthenticationType = "auth-user-pass" }));
 
         var calls = AreaFixtures.Calls(server);
+        Assert.HasCount(3, calls);
         Assert.AreEqual($"GET {Workbook}/connections", $"{calls[0].Method} {calls[0].Target}");
         Assert.AreEqual($"PUT {Workbook}/connections/{ConnectionId}", $"{calls[1].Method} {calls[1].Target}");
         Assert.AreEqual(AreaFixtures.Json($$"""
-            {"connection":{"authenticationType":"auth-user-pass","embedPassword":true,"password":"{{Fixtures.ConnectionPassword}}",
+            {"connection":{"embedPassword":true,"password":"{{Fixtures.ConnectionPassword}}",
             "serverAddress":"sql2.invented.example","serverPort":1434,"userName":"writer"} }
             """), AreaFixtures.Json(calls[1].BodyText));
         Assert.AreEqual(AreaFixtures.Json("""{"connection":{"serverAddress":"sql3.invented.example"}}"""), AreaFixtures.Json(calls[2].BodyText));
@@ -205,9 +210,30 @@ public sealed class WorkbooksTests
         Assert.AreEqual(("sqlserver", 1433L, "Invented sales"), (connections[0].Type, connections[0].ServerPort, connections[0].Datasource?.Name));
         Assert.AreEqual(("sql2.invented.example", 1434L), (updated.ServerAddress, updated.ServerPort));
         Assert.IsNotNull(onlyAddress);
+        Assert.Contains("Update Workbook Connection with an authentication type needs REST API 3.27", refused.Message);
         Assert.DoesNotContain(Fixtures.ConnectionPassword, changes.ToString());
         Assert.Contains("Password = ***", changes.ToString());
         Assert.Contains("Password = ,", new ConnectionUpdate { UserName = "reader" }.ToString());
+    }
+
+    [TestMethod]
+    public async Task AConnectionsAuthenticationTypeIsSentFromRestApi327()
+    {
+        using var server = AreaFixtures.Server();
+        server.Map("POST", "/api/3.27/auth/signin", SessionFixtures.SignedIn());
+        var workbook = $"/api/3.27/sites/{Fixtures.SiteId}/workbooks/{Id}/connections/{ConnectionId}";
+        var dataSource = $"/api/3.27/sites/{Fixtures.SiteId}/datasources/{Id}/connections/{ConnectionId}";
+        server.Map("PUT", workbook, FakeResponse.Fixture(200, "connection.json"));
+        server.Map("PUT", dataSource, FakeResponse.Fixture(200, "connection.json"));
+        await using var client = SessionFixtures.Client(SessionFixtures.Options(server, "3.27"), SessionFixtures.Pat());
+
+        await client.Workbooks.UpdateConnectionAsync(Id, ConnectionId, new ConnectionUpdate { AuthenticationType = "auth-user-pass", UserName = "writer" });
+        await client.DataSources.UpdateConnectionAsync(Id, ConnectionId, new ConnectionUpdate { AuthenticationType = "oauth" });
+
+        var puts = server.Requests.Where(request => request.Method == "PUT").ToList();
+        CollectionAssert.AreEqual(new[] { workbook, dataSource }, puts.Select(request => request.Target).ToArray());
+        Assert.AreEqual(AreaFixtures.Json("""{"connection":{"authenticationType":"auth-user-pass","userName":"writer"}}"""), AreaFixtures.Json(puts[0].BodyText));
+        Assert.AreEqual(AreaFixtures.Json("""{"connection":{"authenticationType":"oauth"}}"""), AreaFixtures.Json(puts[1].BodyText));
     }
 
     [TestMethod]
@@ -305,12 +331,12 @@ public sealed class WorkbooksTests
             MaxAge = 5,
             Width = 800,
             Height = 600,
-            Filters = new Dictionary<string, string> { ["Region"] = "West,East", ["vf_Year"] = "2026" },
+            Filters = new Dictionary<string, string> { ["Region"] = "West,East", ["vf_Year"] = "2026,2025" },
         });
 
         var call = server.Requests.Single(request => request.Method == "GET");
         Assert.AreEqual($"/api/3.26/sites/{Fixtures.SiteId}/workbooks/{Id}/pdf?type=A4&orientation=Landscape&maxAge=5&vizWidth=800&vizHeight=600"
-            + "&vf_Region=West%2CEast&vf_Year=2026", call.Target);
+            + "&vf_Region=West%2CEast&vf_Year=2026%2C2025", call.Target);
         Assert.AreEqual(TableauFileKind.Pdf, pdf.Kind);
     }
 

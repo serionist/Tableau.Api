@@ -111,8 +111,9 @@ public sealed record ConnectionUpdate
     public int? ServerPort { get; init; }
 
     /// <summary>
-    /// How the connection signs in, from REST API 3.27, such as <c>auth-user-pass</c>, <c>oauth</c> or
-    /// <c>auth-keypair</c>, or a connector's own value, as the connection's XML names it.
+    /// How the connection signs in, such as <c>auth-user-pass</c>, <c>oauth</c> or <c>auth-keypair</c>, or a connector's
+    /// own value, as the connection's XML names it: from REST API 3.27, below which an update that sets it is refused
+    /// before anything is sent.
     /// </summary>
     public string? AuthenticationType { get; init; }
 

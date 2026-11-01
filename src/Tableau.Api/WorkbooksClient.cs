@@ -160,10 +160,14 @@ public class WorkbooksClient
     /// <param name="cancellationToken">Cancels the call.</param>
     /// <returns>The connection as Tableau holds it now.</returns>
     /// <exception cref="ArgumentException"><paramref name="id"/> or <paramref name="connectionId"/> is no LUID.</exception>
-    /// <exception cref="TableauException">The call failed; <see cref="TableauException.Kind"/> says how.</exception>
+    /// <exception cref="TableauException">
+    /// The call failed; <see cref="TableauException.Kind"/> says how, <see cref="TableauErrorKind.UnsupportedApiVersion"/>
+    /// for an authentication type below REST API 3.27, before anything is sent.
+    /// </exception>
     public virtual Task<Connection> UpdateConnectionAsync(string id, string connectionId, ConnectionUpdate changes,
         CancellationToken cancellationToken = default) =>
-        TableauContentCalls.UpdateConnectionAsync(Pipeline, Endpoints.UpdateWorkbookConnection, id, connectionId, changes, cancellationToken);
+        TableauContentCalls.UpdateConnectionAsync(Pipeline, Endpoints.UpdateWorkbookConnection, Endpoints.UpdateWorkbookConnectionAuthentication, id,
+            connectionId, changes, cancellationToken);
 
     /// <summary>
     /// Update Workbook Now: refreshes the workbook's extracts, as a job, at once and outside any schedule. Sent once, never
@@ -213,7 +217,7 @@ public class WorkbooksClient
     /// </summary>
     /// <param name="id">The workbook's LUID.</param>
     /// <param name="options">
-    /// Its <see cref="ExportOptions.Filters"/> (from REST API 3.23), <see cref="ExportOptions.MaxAge"/>,
+    /// Its <see cref="ExportOptions.Filters"/> (from REST API 3.24), <see cref="ExportOptions.MaxAge"/>,
     /// <see cref="ExportOptions.Width"/> and <see cref="ExportOptions.Height"/> (from 3.26),
     /// <see cref="ExportOptions.PageType"/> and <see cref="ExportOptions.Orientation"/>; null for Tableau's defaults,
     /// Legal and portrait.
@@ -226,7 +230,7 @@ public class WorkbooksClient
     /// </exception>
     /// <exception cref="TableauException">
     /// The call failed; <see cref="TableauException.Kind"/> says how, <see cref="TableauErrorKind.UnsupportedApiVersion"/>
-    /// for filters below REST API 3.23 or a size below 3.26, before anything is sent.
+    /// for filters below REST API 3.24 or a size below 3.26, before anything is sent.
     /// </exception>
     public virtual Task<TableauDownload> DownloadPdfAsync(string id, ExportOptions? options = null, CancellationToken cancellationToken = default)
     {
@@ -272,17 +276,19 @@ public class WorkbooksClient
         TableauContentCalls.RevisionPageAsync(Pipeline, Endpoints.WorkbookRevisions, id, pageNumber, options, cancellationToken);
 
     /// <summary>
-    /// Download Workbook Revision: an earlier revision's file, with its extracts; the current revision is
-    /// <see cref="DownloadAsync"/>'s, which Tableau doesn't serve here.
+    /// Download Workbook Revision: an earlier revision's file; the current revision is <see cref="DownloadAsync"/>'s,
+    /// which Tableau doesn't serve here, refusing it with 400057.
     /// </summary>
     /// <param name="id">The workbook's LUID.</param>
     /// <param name="revision">The revision's number, from 1, as <see cref="ListRevisionsAsync"/> gives it.</param>
+    /// <param name="includeExtract">False to leave the revision's extracts out, for a smaller file; true, the default, keeps them.</param>
     /// <param name="cancellationToken">Cancels the call, and stops reading the file.</param>
     /// <returns>The file: dispose it once read or saved.</returns>
     /// <exception cref="ArgumentException"><paramref name="id"/> is no LUID, or <paramref name="revision"/> is below 1.</exception>
     /// <exception cref="TableauException">The call failed; <see cref="TableauException.Kind"/> says how.</exception>
-    public virtual Task<TableauDownload> DownloadRevisionAsync(string id, int revision, CancellationToken cancellationToken = default) =>
-        TableauContentCalls.DownloadRevisionAsync(Pipeline, Endpoints.WorkbookRevisions, id, revision, cancellationToken);
+    public virtual Task<TableauDownload> DownloadRevisionAsync(string id, int revision, bool includeExtract = true,
+        CancellationToken cancellationToken = default) =>
+        TableauContentCalls.DownloadRevisionAsync(Pipeline, Endpoints.WorkbookRevisions, id, revision, includeExtract, cancellationToken);
 
     /// <summary>
     /// Remove Workbook Revision: removes one revision's file for good; the list then shows it deleted. The first revision

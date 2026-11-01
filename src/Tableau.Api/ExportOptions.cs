@@ -14,10 +14,10 @@ namespace Tableau.Api;
 /// <list type="table">
 /// <listheader><term>Export</term><description>Takes</description></listheader>
 /// <item><term><see cref="ViewsClient.DownloadDataAsync"/>, CSV</term><description><see cref="Filters"/> alone</description></item>
-/// <item><term><see cref="ViewsClient.DownloadImageAsync"/>, PNG</term><description><see cref="Filters"/>, <see cref="MaxAge"/>, <see cref="Resolution"/>, <see cref="Width"/> and <see cref="Height"/></description></item>
+/// <item><term><see cref="ViewsClient.DownloadImageAsync"/>, PNG</term><description><see cref="Filters"/>, <see cref="MaxAge"/>, <see cref="Resolution"/>, <see cref="Width"/> and <see cref="Height"/> (REST API 3.24)</description></item>
 /// <item><term><see cref="ViewsClient.DownloadPdfAsync"/></term><description><see cref="Filters"/>, <see cref="MaxAge"/>, <see cref="Width"/> and <see cref="Height"/>, <see cref="PageType"/>, <see cref="Orientation"/></description></item>
 /// <item><term><see cref="ViewsClient.DownloadCrosstabAsync"/>, .xlsx</term><description><see cref="Filters"/>, <see cref="MaxAge"/></description></item>
-/// <item><term><see cref="WorkbooksClient.DownloadPdfAsync"/></term><description><see cref="Filters"/> (REST API 3.23), <see cref="MaxAge"/>, <see cref="Width"/> and <see cref="Height"/> (3.26), <see cref="PageType"/>, <see cref="Orientation"/></description></item>
+/// <item><term><see cref="WorkbooksClient.DownloadPdfAsync"/></term><description><see cref="Filters"/> (REST API 3.24), <see cref="MaxAge"/>, <see cref="Width"/> and <see cref="Height"/> (3.26), <see cref="PageType"/>, <see cref="Orientation"/></description></item>
 /// </list>
 /// <para>
 /// An option below its version, such as a workbook PDF's size on REST API 3.25, is refused with
@@ -32,10 +32,22 @@ public sealed record ExportOptions
     /// holds only the marks whose field has that value. Every export takes them.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Write a name and its value as the view's data holds them, case included, not URL-encoded: the client escapes both.
-    /// A name that starts with <c>vf_</c> is sent as it is; a workbook parameter is <c>Parameters.</c> and its name. A
-    /// value of several, comma-separated, such as <c>West,East</c>, keeps any of them; a date is <c>yyyy-mm-dd hh:mm:ss</c>.
-    /// An empty dictionary sends no filter.
+    /// A name that starts with <c>vf_</c> is sent as it is. A date is <c>yyyy-mm-dd hh:mm:ss</c>. An empty dictionary
+    /// sends no filter.
+    /// </para>
+    /// <para>
+    /// A value of several, comma-separated, such as <c>2025,2026</c>, keeps any of them. With more than one field,
+    /// Tableau's reference links the values by position: <c>Year</c> <c>2025,2026</c> and <c>Region</c> <c>West,East</c>
+    /// keep 2025 in the west and 2026 in the east, so every field must hold as many values, and filters that don't are
+    /// refused before anything is sent. A comma a value holds as data is written <c>\,</c>, and a backslash <c>\\</c>, as
+    /// Tableau's Python client found the server reads them; the reference names neither.
+    /// </para>
+    /// <para>
+    /// A workbook parameter is <c>Parameters.</c> and its name, such as <c>Parameters.Top N</c>, sent as
+    /// <c>vf_Parameters.Top N</c>, as Tableau's Python client sends one; the reference doesn't document parameters.
+    /// </para>
     /// </remarks>
     public IReadOnlyDictionary<string, string>? Filters { get; init; }
 
@@ -50,7 +62,8 @@ public sealed record ExportOptions
 
     /// <summary>
     /// The width the view is drawn at, in pixels, which with <see cref="Height"/> sets the export's resolution and aspect
-    /// ratio; the two go together. A view's image and PDF take it, and a workbook's PDF from REST API 3.26.
+    /// ratio; the two go together. A view's image takes it from REST API 3.24, a view's PDF, and a workbook's PDF from
+    /// REST API 3.26.
     /// </summary>
     public int? Width { get; init; }
 
@@ -186,12 +199,34 @@ internal static class ExportQuery
             query.Add(new("vizWidth", Number(width)));
             query.Add(new("vizHeight", Number(height)));
         }
+        int? values = null;
         foreach (var (name, value) in options.Filters ?? new Dictionary<string, string>())
         {
             if (value is null) throw new ArgumentException($"The view filter '{name}' has no value.", parameter);
+            // Tableau links the values of several fields by position, and its reference asks every field for as many.
+            var count = ValueCount(value);
+            if (values is { } first && first != count)
+            {
+                throw new ArgumentException(string.Create(CultureInfo.InvariantCulture,
+                    $"The view filters hold {first} and {count} values: with more than one field, Tableau links their values by position, ")
+                    + "so every field must hold as many.", parameter);
+            }
+            values = count;
             query.Add(new(FilterName(name, parameter), value));
         }
         return query;
+    }
+
+    // How many comma-separated values a view filter holds; an escaped comma, \,, is one value's data.
+    private static int ValueCount(string value)
+    {
+        var count = 1;
+        for (var i = 0; i < value.Length; i++)
+        {
+            if (value[i] == '\\') i++;
+            else if (value[i] == ',') count++;
+        }
+        return count;
     }
 
     /// <summary>

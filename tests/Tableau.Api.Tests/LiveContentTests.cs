@@ -92,7 +92,7 @@ public sealed partial class LiveContentTests
         var head = (int)(revisions[^1].RevisionNumber ?? 1);
         var downloadedRevision = await OutcomeAsync("a workbook's current revision downloaded", async () =>
         {
-            await using var file = await client.Workbooks.DownloadRevisionAsync(sample.Id!, head);
+            await using var file = await client.Workbooks.DownloadRevisionAsync(sample.Id!, head, includeExtract: false);
             return $"{file.Kind}, {await LengthAsync(file)} bytes";
         });
         var removedRevision = await OutcomeAsync("a workbook's only revision removed", async () =>
@@ -210,11 +210,18 @@ public sealed partial class LiveContentTests
             var job = await client.DataSources.RunExtractRefreshAsync(listed.Id!);
             return $"job {job.Type?.Value} {job.Mode?.Value}";
         });
+        // A batch names a data source Datasource, the least obvious of the types: tagged and untagged in one.
+        var content = TableauContent.DataSource(listed.Id!);
+        await client.Tags.AddBatchAsync(_labels, [content]);
+        var tagged = (await client.DataSources.GetAsync(listed.Id!)).Tags?.Select(tag => tag.Label ?? "").ToArray() ?? [];
+        await client.Tags.DeleteBatchAsync(_labels, [content]);
+        var untagged = (await client.DataSources.GetAsync(listed.Id!)).Tags?.Select(tag => tag.Label ?? "").ToArray() ?? [];
         await client.DataSources.DeleteAsync(listed.Id!);
 
         Record($"a data source's location type: {dataSource.Location?.Type?.Value ?? "(none)"}; its connections {connections.Count}, "
             + $"its revisions {revisions.Count}; its download {withoutExtract} bytes without its extract, {whole} with it; its connection "
             + $"updated with a port answered {connection.Type ?? "(no type)"}, port {connection.ServerPort?.ToString(CultureInfo.InvariantCulture) ?? "(none)"}");
+        Record($"a data source after the batch add: [{string.Join(" | ", tagged)}], after the batch delete: [{string.Join(" | ", untagged)}]");
         Assert.AreEqual((listed.Id, project), (dataSource.Id, dataSource.Project?.Id));
         Assert.HasCount(1, page.Items);
         Assert.IsNotEmpty(connections);
@@ -226,6 +233,9 @@ public sealed partial class LiveContentTests
         Assert.Contains(" 400057 ", downloadedRevision);
         Assert.Contains(" 403055 ", removedRevision);
         Assert.IsTrue(refresh.StartsWith("job RefreshExtract", StringComparison.Ordinal) || refresh.Contains(" 403180 ", StringComparison.Ordinal), refresh);
+        foreach (var label in _labels)
+            Assert.AreEqual(1, tagged.Count(tag => tag == label), $"the batch tagged the data source with '{label}' once: [{string.Join(" | ", tagged)}]");
+        Assert.IsFalse(untagged.Intersect(_labels).Any(), $"the batch took the labels off the data source: [{string.Join(" | ", untagged)}]");
         await ClientFixtures.FailsAsync(TableauErrorKind.NotFound, () => client.DataSources.GetAsync(listed.Id!));
         RecordFiles();
     }
@@ -240,7 +250,7 @@ public sealed partial class LiveContentTests
         }
         catch (TableauException e)
         {
-            outcome = $"refused: {e.Kind} {(int?)e.StatusCode} {e.ErrorCode} {e.Summary}: {Luids().Replace(e.Detail ?? "", "{id}")}";
+            outcome = Scrubbed($"refused: {e.Kind} {(int?)e.StatusCode} {e.ErrorCode} {e.Summary}: {Luids().Replace(e.Detail ?? "", "{id}")}");
         }
         Record($"{what}: {outcome}");
         return outcome;
@@ -358,8 +368,17 @@ public sealed partial class LiveContentTests
         await ClientFixtures.FailsAsync(TableauErrorKind.NotFound, () => client.Workbooks.GetAsync(second.Id));
     }
 
-    // A line for the test's output, which the PR quotes: shapes only, no host, site, name or LUID.
-    private void Record(string line) => TestContext.WriteLine(line);
+    // A line for the test's output, which the PR quotes and CI's public log shows: shapes only.
+    private void Record(string line) => TestContext.WriteLine(Scrubbed(line));
+
+    // The text with every setting that names the site, its server or the sign-in, and every live secret, as ***: a
+    // refusal's detail can name the site or the user, and an assertion's message carries it into the log.
+    private static string Scrubbed(string text)
+    {
+        foreach (var value in LiveSite.Known.Concat(LiveSite.Secrets).Where(value => value.Length > 0).OrderByDescending(value => value.Length))
+            text = text.Replace(value, "***", StringComparison.Ordinal);
+        return text;
+    }
 
     private void RecordFiles()
     {

@@ -127,7 +127,7 @@ What this repo's history already paid for:
 | `AppendToFileUpload` POSTed a new upload instead of PUTting to `fileUploads/{id}` | `b5edc7b` | Method and path from the REST API reference |
 | `SwitchSite` sent the site's id where the API takes its content URL | `60e39fd` | `site.contentUrl`, as `SessionsClient.SwitchSiteAsync` sends it |
 | `QueryViewPreviewImage` and `UpdateGroup` left an id out of their path; each fix added a parameter, a public API break | `56a69c4`, `faf9c4a` | Every id the reference's path names is a parameter |
-| View filters lost their `vf_` prefix: the condition was inverted | `2d2c50f` (PDF), `315da09` (image), `ada1595` (crosstab) | A name gets `vf_` unless it has it; `QueryViewData` still strips it (#2) |
+| View filters lost their `vf_` prefix: the condition was inverted | `2d2c50f` (PDF), `315da09` (image), `ada1595` (crosstab) | A name gets `vf_` unless it has it: 2.0's `ExportQuery` adds it on every export, and sends a name that starts `vf_` as it is |
 
 ## Look up APIs before coding against them
 

@@ -22,17 +22,20 @@ public sealed class ExportTests : IDisposable
     private const string WorkbookId = "66666666-7777-4888-8999-aaaaaaaaaaaa";
     private const int FirstChunk = 64 * 1024;
 
-    /// <summary>The filters every export sends, and how they go on the wire: names and values escaped, a vf_ name as it is.</summary>
+    /// <summary>
+    /// The filters every export sends, one value each, a comma held as data escaped as <c>\,</c>, and how they go on the
+    /// wire: names and values escaped, a vf_ name as it is.
+    /// </summary>
     private static readonly Dictionary<string, string> _filters = new()
     {
         ["R&D"] = "C++ #1 100%",
-        ["Région"] = "Côte: Nord, Sud",
+        ["Région"] = @"Côte: Nord\, Sud",
         ["vf_Year"] = "2026",
         ["Parameters.Top N"] = "10",
         ["a=b&c"] = "d",
     };
 
-    private const string Filtered = "vf_R%26D=C%2B%2B%20%231%20100%25&vf_R%C3%A9gion=C%C3%B4te%3A%20Nord%2C%20Sud&vf_Year=2026"
+    private const string Filtered = "vf_R%26D=C%2B%2B%20%231%20100%25&vf_R%C3%A9gion=C%C3%B4te%3A%20Nord%5C%2C%20Sud&vf_Year=2026"
         + "&vf_Parameters.Top%20N=10&vf_a%3Db%26c=d";
 
     private readonly CancellationTokenSource _end = new();
@@ -61,6 +64,9 @@ public sealed class ExportTests : IDisposable
         Row("Download Workbook PDF", $"/workbooks/{Id}/pdf", "application/pdf", null, TableauFileKind.Pdf, client => client.Workbooks.DownloadPdfAsync(Id)),
         Row("Download Workbook Revision", $"/workbooks/{Id}/revisions/3/content", "application/xml",
             "name=\"tableau_workbook\"; filename=\"Superstore.twb\"", TableauFileKind.Workbook, client => client.Workbooks.DownloadRevisionAsync(Id, 3)),
+        Row("Download Workbook Revision, without its extract", $"/workbooks/{Id}/revisions/3/content?includeExtract=False", "application/octet-stream",
+            "name=\"tableau_workbook\"; filename=\"Superstore.twbx\"", TableauFileKind.PackagedWorkbook,
+            client => client.Workbooks.DownloadRevisionAsync(Id, 3, includeExtract: false)),
         Row("Query View Data", $"/views/{Id}/data", "text/csv; charset=utf-8", null, TableauFileKind.Csv, client => client.Views.DownloadDataAsync(Id)),
         Row("Query View Image", $"/views/{Id}/image", "image/png", null, TableauFileKind.Png, client => client.Views.DownloadImageAsync(Id)),
         Row("Query View PDF", $"/views/{Id}/pdf", "application/pdf", null, TableauFileKind.Pdf, client => client.Views.DownloadPdfAsync(Id)),
@@ -239,6 +245,7 @@ public sealed class ExportTests : IDisposable
     [DataRow("a filter that names no field", "A view filter names no field")]
     [DataRow("a filter that is the prefix alone", "A view filter names no field")]
     [DataRow("a filter with no value", "The view filter 'Region' has no value")]
+    [DataRow("filters of unequal counts", "The view filters hold 2 and 1 values")]
     public async Task AnOptionOutOfRangeIsRefusedBeforeSending(string what, string message)
     {
         var options = what switch
@@ -252,6 +259,10 @@ public sealed class ExportTests : IDisposable
             "a resolution that names none" => new ExportOptions { Resolution = (ImageResolution)5 },
             "a filter that names no field" => new ExportOptions { Filters = new Dictionary<string, string> { [""] = "West" } },
             "a filter with no value" => new ExportOptions { Filters = new Dictionary<string, string> { ["Region"] = null! } },
+            "filters of unequal counts" => new ExportOptions
+            {
+                Filters = new Dictionary<string, string> { ["Year"] = "2025,2026", ["Region"] = @"Nord\, Sud" },
+            },
             _ => new ExportOptions { Filters = new Dictionary<string, string> { ["vf_"] = "West" } },
         };
         using var server = AreaFixtures.Server();

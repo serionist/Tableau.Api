@@ -130,10 +130,14 @@ public class DataSourcesClient
     /// <param name="cancellationToken">Cancels the call.</param>
     /// <returns>The connection as Tableau holds it now.</returns>
     /// <exception cref="ArgumentException"><paramref name="id"/> or <paramref name="connectionId"/> is no LUID.</exception>
-    /// <exception cref="TableauException">The call failed; <see cref="TableauException.Kind"/> says how.</exception>
+    /// <exception cref="TableauException">
+    /// The call failed; <see cref="TableauException.Kind"/> says how, <see cref="TableauErrorKind.UnsupportedApiVersion"/>
+    /// for an authentication type below REST API 3.27, before anything is sent.
+    /// </exception>
     public virtual Task<Connection> UpdateConnectionAsync(string id, string connectionId, ConnectionUpdate changes,
         CancellationToken cancellationToken = default) =>
-        TableauContentCalls.UpdateConnectionAsync(Pipeline, Endpoints.UpdateDataSourceConnection, id, connectionId, changes, cancellationToken);
+        TableauContentCalls.UpdateConnectionAsync(Pipeline, Endpoints.UpdateDataSourceConnection, Endpoints.UpdateDataSourceConnectionAuthentication,
+            id, connectionId, changes, cancellationToken);
 
     /// <summary>
     /// Update Data Source Now: refreshes the data source's extract, as a job, at once and outside any schedule; a full
@@ -213,7 +217,7 @@ public class DataSourcesClient
     /// <exception cref="ArgumentException"><paramref name="id"/> is no LUID, or <paramref name="revision"/> is below 1.</exception>
     /// <exception cref="TableauException">The call failed; <see cref="TableauException.Kind"/> says how.</exception>
     public virtual Task<TableauDownload> DownloadRevisionAsync(string id, int revision, CancellationToken cancellationToken = default) =>
-        TableauContentCalls.DownloadRevisionAsync(Pipeline, Endpoints.DataSourceRevisions, id, revision, cancellationToken);
+        TableauContentCalls.DownloadRevisionAsync(Pipeline, Endpoints.DataSourceRevisions, id, revision, includeExtract: true, cancellationToken);
 
     /// <summary>
     /// Remove Data Source Revision: removes one revision's file for good; the list then shows it deleted. The first

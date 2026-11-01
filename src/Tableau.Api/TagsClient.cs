@@ -27,9 +27,11 @@ namespace Tableau.Api;
 /// Delete Tag names the tag in its path, unquoted, as Tableau stores it and <see cref="AddAsync"/> returns it.
 /// </para>
 /// <para>
-/// A batch names each content by its type and LUID, such as <c>Workbook</c>, as Tableau's Python client does: the
-/// reference's body names it by its LUID alone, which Tableau Server 2025.1 refuses. Batch Delete Tags is the reference's
-/// DELETE with that body, which the same server took.
+/// A batch names each content by its type and LUID: <c>Database</c>, <c>Table</c>, <c>Column</c>, <c>Datasource</c>,
+/// <c>Workbook</c> or <c>Flow</c>, as the reference's Batch Add Tags answer writes them in the schema's
+/// <c>contentType</c>, and as Tableau's Python client sends them. The reference's request names a content by its LUID
+/// alone, which Tableau Server 2025.1 refuses (409004). Batch Delete Tags is the reference's DELETE with that body, which
+/// the same server took.
 /// </para>
 /// </remarks>
 public class TagsClient
@@ -133,9 +135,9 @@ public class TagsClient
         _ => throw content.Refused("Tags take", TakesOne, nameof(content)),
     };
 
-    // The batch's body: the tags by their labels, each content by its type and LUID. The reference's body names the content
-    // by its LUID alone, which Tableau Server 2025.1 refuses as a content type not allowed (409004); it takes the type as
-    // Tableau's Python client writes it.
+    // The batch's body: the tags by their labels, each content by its type and LUID. The reference's request names the
+    // content by its LUID alone, which Tableau Server 2025.1 refuses as a content type not allowed (409004); the types
+    // are the ones the reference's answer writes and Tableau's Python client sends.
     private static TsRequest Batch(IEnumerable<string> tags, IEnumerable<TableauContent> contents)
     {
         var labels = Labels(tags, nameof(tags));

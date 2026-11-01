@@ -29,10 +29,11 @@ internal static class TableauContentCalls
             Revisions, static body => body.Revisions, cancellationToken);
     }
 
-    /// <summary>One revision's file.</summary>
+    /// <summary>One revision's file, its extract left out when asked.</summary>
     public static Task<TableauDownload> DownloadRevisionAsync(TableauPipeline pipeline, RevisionCalls calls, string id, int revision,
-        CancellationToken cancellationToken) =>
-        pipeline.DownloadAsync(calls.Download, new TableauRequest([RequestUri.Luid(id, nameof(id)), Number(revision)]), cancellationToken);
+        bool includeExtract, CancellationToken cancellationToken) =>
+        pipeline.DownloadAsync(calls.Download,
+            new TableauRequest([RequestUri.Luid(id, nameof(id)), Number(revision)], includeExtract ? null : _withoutExtract), cancellationToken);
 
     /// <summary>One revision removed.</summary>
     public static Task RemoveRevisionAsync(TableauPipeline pipeline, RevisionCalls calls, string id, int revision, CancellationToken cancellationToken) =>
@@ -50,15 +51,20 @@ internal static class TableauContentCalls
         }
     }
 
-    /// <summary>One of the content's connections updated, with the members of <paramref name="changes"/> that are set.</summary>
-    public static Task<Connection> UpdateConnectionAsync(TableauPipeline pipeline, Endpoint endpoint, string id, string connectionId,
-        ConnectionUpdate changes, CancellationToken cancellationToken)
+    /// <summary>
+    /// One of the content's connections updated, with the members of <paramref name="changes"/> that are set: through
+    /// <paramref name="withAuthentication"/>, REST API 3.27's, when they set an authentication type, so an older server
+    /// refuses it before anything is sent.
+    /// </summary>
+    public static Task<Connection> UpdateConnectionAsync(TableauPipeline pipeline, Endpoint endpoint, Endpoint withAuthentication, string id,
+        string connectionId, ConnectionUpdate changes, CancellationToken cancellationToken)
     {
         RequestUri.Luid(id, nameof(id));
         RequestUri.Luid(connectionId, nameof(connectionId));
         ArgumentNullException.ThrowIfNull(changes);
-        return pipeline.SendAsync(endpoint, new TableauRequest([id, connectionId], Body: new TsRequest { Connection = changes.Sent() }),
-            static body => body.Connection, "connection", cancellationToken);
+        return pipeline.SendAsync(changes.AuthenticationType is null ? endpoint : withAuthentication,
+            new TableauRequest([id, connectionId], Body: new TsRequest { Connection = changes.Sent() }), static body => body.Connection, "connection",
+            cancellationToken);
     }
 
     /// <summary>

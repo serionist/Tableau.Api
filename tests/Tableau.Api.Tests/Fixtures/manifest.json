@@ -173,7 +173,7 @@
       "file": "tag-batch-request.json",
       "body": "request",
       "call": "PUT /api/{version}/sites/{site-id}/tags:batchCreate, and DELETE /api/{version}/sites/{site-id}/tags:BatchDelete",
-      "source": "synthetic, from the reference's Batch Add Tags and Batch Delete Tags requests, with each content's type, which Tableau Server 2025.1 asked for (409004 without it), as Tableau's Python client writes it; and a label with a space in double quotes, as the client sends it so Tableau keeps it one tag"
+      "source": "synthetic, from the reference's Batch Add Tags and Batch Delete Tags requests, with each content's type, which Tableau Server 2025.1 asked for (409004 without it), as the reference's Batch Add Tags answer writes it and Tableau's Python client sends it; and a label with a space in double quotes, as the client sends it so Tableau keeps it one tag"
     },
     {
       "file": "databases-page.json",

@@ -26,7 +26,7 @@ public sealed class ViewsTests
         ["3.0", "Get View", (Func<TableauClient, Task>)(client => client.Views.GetAsync(Id))],
         ["2.8", "Query View Data", (Func<TableauClient, Task>)(client => client.Views.DownloadDataAsync(Id))],
         ["2.5", "Query View Image", (Func<TableauClient, Task>)(client => client.Views.DownloadImageAsync(Id))],
-        ["3.23", "Query View Image at a size", (Func<TableauClient, Task>)(client => client.Views.DownloadImageAsync(Id,
+        ["3.24", "Query View Image at a size", (Func<TableauClient, Task>)(client => client.Views.DownloadImageAsync(Id,
             new ExportOptions { Width = 800, Height = 600 }))],
         ["2.8", "Query View PDF", (Func<TableauClient, Task>)(client => client.Views.DownloadPdfAsync(Id))],
         ["3.9", "Download View Crosstab Excel", (Func<TableauClient, Task>)(client => client.Views.DownloadCrosstabAsync(Id))],

@@ -156,15 +156,19 @@ and [the migration guide](docs/migration-2.0.md) lists every change from 1.2.5 a
     asked, and a workbook's, gets one, and exports one as data (CSV), an image (PNG), a PDF or a crosstab (an .xlsx),
     and downloads its preview image; `client.DataSources` lists, gets, updates and deletes published data sources,
     lists and updates their connections, runs their extract refresh and downloads their file. Workbooks and data
-    sources list, download and remove their revisions, a revision list sending its page size and number. Lists filter
+    sources list, download and remove their revisions, a revision list sending its page size and number, a workbook's
+    revision downloaded with or without its extract. Lists filter
     and sort over `WorkbookField`, `ViewField` and `DataSourceField`, and come oldest first, then by name, a view by
     its workbook's name first.
   - **`ExportOptions`** holds every export's options: view filters by field name, sent as `vf_` and the name on every
-    export; how many minutes old a cached export may be; an image's resolution (`ImageResolution`); a width and a
-    height; a PDF's page (`PageType`) and orientation (`PageOrientation`). An export refuses an option it doesn't take,
-    and one below its REST API version, before anything is sent, such as a workbook PDF's size below 3.26.
+    export, several fields' values linked by position, so each must hold as many; how many minutes old a cached
+    export may be; an image's resolution (`ImageResolution`); a width and a height; a PDF's page (`PageType`) and
+    orientation (`PageOrientation`). An export refuses an option it doesn't take, and one below its REST API version,
+    before anything is sent: a view image's size and a workbook PDF's view filters below 3.24, a workbook PDF's size
+    below 3.26.
   - **Updates** take `WorkbookUpdate`, `DataSourceUpdate` and `ConnectionUpdate`, records of the reference's members
-    for each, and send what is set and no element for what isn't. A `ConnectionUpdate` prints its password as `***`.
+    for each, and send what is set and no element for what isn't; a connection's authentication type is refused
+    before sending below REST API 3.27. A `ConnectionUpdate` prints its password as `***`.
   - Every file comes as a `TableauDownload`, streamed. An extract refresh is sent once; every other call of the three
     may be sent again after a failure, as a read is.
 - **The library builds with the trim and native AOT analyzers on** (`IsAotCompatible`), and the models pass them: they

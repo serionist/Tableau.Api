@@ -135,7 +135,7 @@ public class ViewsClient
     /// <param name="id">The view's LUID.</param>
     /// <param name="options">
     /// Its <see cref="ExportOptions.Filters"/>, <see cref="ExportOptions.MaxAge"/>, <see cref="ExportOptions.Resolution"/>,
-    /// and <see cref="ExportOptions.Width"/> and <see cref="ExportOptions.Height"/> (from REST API 3.23); null for
+    /// and <see cref="ExportOptions.Width"/> and <see cref="ExportOptions.Height"/> (from REST API 3.24); null for
     /// Tableau's defaults.
     /// </param>
     /// <param name="cancellationToken">Cancels the call, and stops reading the image.</param>
@@ -146,7 +146,7 @@ public class ViewsClient
     /// </exception>
     /// <exception cref="TableauException">
     /// The call failed; <see cref="TableauException.Kind"/> says how, <see cref="TableauErrorKind.UnsupportedApiVersion"/>
-    /// for a size below REST API 3.23, before anything is sent.
+    /// for a size below REST API 3.24, before anything is sent.
     /// </exception>
     public virtual Task<TableauDownload> DownloadImageAsync(string id, ExportOptions? options = null, CancellationToken cancellationToken = default) =>
         ExportAsync(options?.Width is null ? Endpoints.QueryViewImage : Endpoints.QueryViewImageSized, ExportKind.ViewImage, id, options, cancellationToken);

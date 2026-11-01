@@ -28,6 +28,8 @@ public sealed class DataSourcesTests
         ["2.0", "Update Data Source", (Func<TableauClient, Task>)(client => client.DataSources.UpdateAsync(Id, new DataSourceUpdate()))],
         ["2.3", "Update Data Source Connection",
             (Func<TableauClient, Task>)(client => client.DataSources.UpdateConnectionAsync(Id, ConnectionId, new ConnectionUpdate()))],
+        ["3.27", "Update Data Source Connection with an authentication type", (Func<TableauClient, Task>)(client =>
+            client.DataSources.UpdateConnectionAsync(Id, ConnectionId, new ConnectionUpdate { AuthenticationType = "oauth" }))],
         ["2.8", "Update Data Source Now", (Func<TableauClient, Task>)(client => client.DataSources.RunExtractRefreshAsync(Id))],
         ["2.0", "Delete Data Source", (Func<TableauClient, Task>)(client => client.DataSources.DeleteAsync(Id))],
         ["2.0", "Download Data Source", (Func<TableauClient, Task>)(client => client.DataSources.DownloadAsync(Id))],
