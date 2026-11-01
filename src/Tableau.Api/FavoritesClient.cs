@@ -15,6 +15,8 @@ namespace Tableau.Api;
 /// </remarks>
 public class FavoritesClient
 {
+    private const string Takes = "a workbook, a view, a data source, a project or a flow";
+
     private readonly TableauPipeline? _pipeline;
 
     /// <summary>A sub-client with no connection, for a mock to derive from: its methods throw until overridden.</summary>
@@ -53,22 +55,27 @@ public class FavoritesClient
 
     /// <summary>
     /// Add a workbook, a view, a data source, a project or a flow to the user's favorites, under a label; adding it again
-    /// with another label changes its label.
+    /// with another label changes its label. Each kind is added from its own REST API version: a workbook and a view from
+    /// 1.0, a data source from 2.3, a project from 3.1, a flow from 3.3.
     /// </summary>
     /// <param name="userId">The user's LUID.</param>
     /// <param name="label">The favorite's label, which the user sees.</param>
-    /// <param name="target">The content, such as <c>FavoriteTarget.Workbook(id)</c>.</param>
+    /// <param name="content">The content, such as <c>TableauContent.Workbook(id)</c>.</param>
     /// <param name="cancellationToken">Cancels the call.</param>
     /// <returns>The favorites Tableau answers with, empty, never null, when it lists none.</returns>
-    /// <exception cref="ArgumentException"><paramref name="userId"/> is no LUID, or <paramref name="label"/> is empty.</exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="userId"/> is no LUID, <paramref name="label"/> is empty, or <paramref name="content"/> is of a kind
+    /// favorites don't take, such as a table: nothing is sent.
+    /// </exception>
     /// <exception cref="TableauException">The call failed; <see cref="TableauException.Kind"/> says how.</exception>
-    public virtual Task<IReadOnlyList<Favorite>> AddAsync(string userId, string label, FavoriteTarget target,
+    public virtual Task<IReadOnlyList<Favorite>> AddAsync(string userId, string label, TableauContent content,
         CancellationToken cancellationToken = default)
     {
         RequestUri.Luid(userId, nameof(userId));
         ArgumentException.ThrowIfNullOrEmpty(label);
-        ArgumentNullException.ThrowIfNull(target);
-        return SendAsync(Pipeline, new TableauRequest([userId], Body: new TsRequest { Favorite = target.Labelled(label) }), target.Add,
+        ArgumentNullException.ThrowIfNull(content);
+        var (add, _) = Calls(content);
+        return SendAsync(Pipeline, new TableauRequest([userId], Body: new TsRequest { Favorite = Labelled(content, label) }), add,
             cancellationToken);
 
         static async Task<IReadOnlyList<Favorite>> SendAsync(TableauPipeline pipeline, TableauRequest request, Endpoint endpoint,
@@ -79,87 +86,45 @@ public class FavoritesClient
         }
     }
 
-    /// <summary>Delete a workbook, a view, a data source, a project or a flow from the user's favorites; one that isn't there stays so.</summary>
+    /// <summary>
+    /// Delete a workbook, a view, a data source, a project or a flow from the user's favorites; one that isn't there stays
+    /// so. Each kind is deleted from its own REST API version: a workbook and a view from 2.0, a data source from 2.3, a
+    /// project from 3.1, a flow from 3.3.
+    /// </summary>
     /// <param name="userId">The user's LUID.</param>
-    /// <param name="target">The content, such as <c>FavoriteTarget.Workbook(id)</c>.</param>
+    /// <param name="content">The content, such as <c>TableauContent.Workbook(id)</c>.</param>
     /// <param name="cancellationToken">Cancels the call.</param>
-    /// <exception cref="ArgumentException"><paramref name="userId"/> is no LUID.</exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="userId"/> is no LUID, or <paramref name="content"/> is of a kind favorites don't take: nothing is
+    /// sent.
+    /// </exception>
     /// <exception cref="TableauException">The call failed; <see cref="TableauException.Kind"/> says how.</exception>
-    public virtual Task RemoveAsync(string userId, FavoriteTarget target, CancellationToken cancellationToken = default)
+    public virtual Task RemoveAsync(string userId, TableauContent content, CancellationToken cancellationToken = default)
     {
         RequestUri.Luid(userId, nameof(userId));
-        ArgumentNullException.ThrowIfNull(target);
-        return Pipeline.SendAsync(target.Delete, new TableauRequest([userId, target.Id]), cancellationToken);
+        ArgumentNullException.ThrowIfNull(content);
+        var (_, delete) = Calls(content);
+        return Pipeline.SendAsync(delete, new TableauRequest([userId, content.Id]), cancellationToken);
     }
-}
 
-/// <summary>
-/// The content a favorite names: a workbook, a view, a data source, a project or a flow, by its LUID, each from the REST
-/// API version Tableau's reference gives for its favorites.
-/// </summary>
-public sealed class FavoriteTarget
-{
-    private readonly Func<string, string, Favorite> _favorite;
-
-    private FavoriteTarget(FavoriteType type, string id, Endpoint add, Endpoint delete, Func<string, string, Favorite> favorite)
+    // The add and the delete of a kind favorites take, each from its own version; another kind is refused.
+    private static (Endpoint Add, Endpoint Delete) Calls(TableauContent content) => content.Kind switch
     {
-        Type = type;
-        Id = id;
-        Add = add;
-        Delete = delete;
-        _favorite = favorite;
-    }
+        TableauContentKind.Workbook => (Endpoints.AddWorkbookToFavorites, Endpoints.DeleteWorkbookFromFavorites),
+        TableauContentKind.View => (Endpoints.AddViewToFavorites, Endpoints.DeleteViewFromFavorites),
+        TableauContentKind.DataSource => (Endpoints.AddDataSourceToFavorites, Endpoints.DeleteDataSourceFromFavorites),
+        TableauContentKind.Project => (Endpoints.AddProjectToFavorites, Endpoints.DeleteProjectFromFavorites),
+        TableauContentKind.Flow => (Endpoints.AddFlowToFavorites, Endpoints.DeleteFlowFromFavorites),
+        _ => throw content.Refused("A favorite takes", Takes, nameof(content)),
+    };
 
-    /// <summary>What kind of content it is, as a favorite in Tableau's answer names it.</summary>
-    public FavoriteType Type { get; }
-
-    /// <summary>The content's LUID.</summary>
-    public string Id { get; }
-
-    /// <summary>The call that adds this kind of content.</summary>
-    internal Endpoint Add { get; }
-
-    /// <summary>The call that deletes this kind of content.</summary>
-    internal Endpoint Delete { get; }
-
-    /// <summary>A workbook, by its LUID: added to favorites from REST API 1.0, and removed from 2.0.</summary>
-    /// <param name="id">The workbook's LUID.</param>
-    /// <exception cref="ArgumentException"><paramref name="id"/> is no LUID.</exception>
-    public static FavoriteTarget Workbook(string id) =>
-        new(FavoriteType.Workbook, RequestUri.Luid(id, nameof(id)), Endpoints.AddWorkbookToFavorites, Endpoints.DeleteWorkbookFromFavorites,
-            static (label, luid) => new Favorite { Label = label, Workbook = new Rest.Models.Workbook { Id = luid } });
-
-    /// <summary>A view, by its LUID: added to favorites from REST API 1.0, and removed from 2.0.</summary>
-    /// <param name="id">The view's LUID.</param>
-    /// <exception cref="ArgumentException"><paramref name="id"/> is no LUID.</exception>
-    public static FavoriteTarget View(string id) =>
-        new(FavoriteType.View, RequestUri.Luid(id, nameof(id)), Endpoints.AddViewToFavorites, Endpoints.DeleteViewFromFavorites,
-            static (label, luid) => new Favorite { Label = label, View = new Rest.Models.View { Id = luid } });
-
-    /// <summary>A published data source, by its LUID: in favorites from REST API 2.3.</summary>
-    /// <param name="id">The data source's LUID.</param>
-    /// <exception cref="ArgumentException"><paramref name="id"/> is no LUID.</exception>
-    public static FavoriteTarget DataSource(string id) =>
-        new(FavoriteType.Datasource, RequestUri.Luid(id, nameof(id)), Endpoints.AddDataSourceToFavorites, Endpoints.DeleteDataSourceFromFavorites,
-            static (label, luid) => new Favorite { Label = label, Datasource = new Rest.Models.DataSource { Id = luid } });
-
-    /// <summary>A project, by its LUID: in favorites from REST API 3.1.</summary>
-    /// <param name="id">The project's LUID.</param>
-    /// <exception cref="ArgumentException"><paramref name="id"/> is no LUID.</exception>
-    public static FavoriteTarget Project(string id) =>
-        new(FavoriteType.Project, RequestUri.Luid(id, nameof(id)), Endpoints.AddProjectToFavorites, Endpoints.DeleteProjectFromFavorites,
-            static (label, luid) => new Favorite { Label = label, Project = new Rest.Models.Project { Id = luid } });
-
-    /// <summary>A flow, by its LUID: in favorites from REST API 3.3.</summary>
-    /// <param name="id">The flow's LUID.</param>
-    /// <exception cref="ArgumentException"><paramref name="id"/> is no LUID.</exception>
-    public static FavoriteTarget Flow(string id) =>
-        new(FavoriteType.Flow, RequestUri.Luid(id, nameof(id)), Endpoints.AddFlowToFavorites, Endpoints.DeleteFlowFromFavorites,
-            static (label, luid) => new Favorite { Label = label, Flow = new Rest.Models.Flow { Id = luid } });
-
-    /// <summary>The kind and the LUID, such as <c>workbook 1f2f3e4e-...</c>.</summary>
-    public override string ToString() => $"{Type} {Id}";
-
-    /// <summary>The favorite Add Favorite sends: its label, and this content by its id.</summary>
-    internal Favorite Labelled(string label) => _favorite(label, Id);
+    // The favorite Add Favorite sends: its label, and the content by its id.
+    private static Favorite Labelled(TableauContent content, string label) => content.Kind switch
+    {
+        TableauContentKind.Workbook => new Favorite { Label = label, Workbook = new Workbook { Id = content.Id } },
+        TableauContentKind.View => new Favorite { Label = label, View = new View { Id = content.Id } },
+        TableauContentKind.DataSource => new Favorite { Label = label, Datasource = new DataSource { Id = content.Id } },
+        TableauContentKind.Project => new Favorite { Label = label, Project = new Project { Id = content.Id } },
+        _ => new Favorite { Label = label, Flow = new Flow { Id = content.Id } },
+    };
 }

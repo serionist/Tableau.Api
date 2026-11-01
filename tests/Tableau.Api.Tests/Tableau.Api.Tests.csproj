@@ -17,6 +17,8 @@
 
   <ItemGroup>
     <None Include="Fixtures\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The Metadata API's GraphQL answers, outside the manifest: they aren't Tableau's REST JSON. -->
+    <None Include="Fixtures\GraphQL\*.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- The native AOT app's root list, which the test of public types reads. -->
     <EmbeddedResource Include="..\Tableau.Api.Aot\roots.xml" LogicalName="roots.xml" />
   </ItemGroup>

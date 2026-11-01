@@ -1,0 +1,30 @@
+{
+  "database": {
+    "site": {
+      "id": "0f4b9e1c-3a52-4d6e-9c8b-1a2b3c4d5e6f"
+    },
+    "contact": {
+      "id": "8d2e3f4a-5b6c-4d7e-9f0a-1b2c3d4e5f6a",
+      "name": "ada"
+    },
+    "certifier": {
+      "id": "7c1d2e3f-4a5b-4c6d-8e9f-0a1b2c3d4e5f",
+      "name": "grace"
+    },
+    "location": {
+      "id": "22222222-3333-4444-8555-666666666666",
+      "type": "PROJECT"
+    },
+    "tags": {},
+    "id": "b749a80e-43eb-4805-9e6d-44c615ee10e2",
+    "name": "invented-airlines",
+    "connectionType": "sqlserver",
+    "isEmbedded": false,
+    "description": "Invented: ask the data team before changing it.",
+    "isCertified": true,
+    "certificationNote": "Checked by the invented data team",
+    "type": "DatabaseServer",
+    "hostName": "sql.invented.example",
+    "contentPermissions": "ManagedByOwner"
+  }
+}

@@ -58,56 +58,6 @@ public partial class TableauApiClient
     }
 
     /// <summary>
-    /// Adds one or more tags to the specified view. Available in all versions
-    /// </summary>
-    /// <param name="session"></param>
-    /// <param name="viewId">The ID of the views to add tags to.</param>
-    /// <param name="tagsToAdd">The view to add the tag to. If the view is already tagged with a tag that's included in the request body, those tags are ignored and the view retains them.</param>
-    /// <param name="cancelToken"></param>
-    /// <returns></returns>
-    /// <exception cref="TableauRequestException"></exception>
-    /// <exception cref="TableauApiVersionException"></exception>
-    /// <exception cref="TableauOnlineNotSupportedException"></exception>
-    [ApiVersion(1, 0)]
-    public async Task<tagType[]> AddTagsToView(Models.TableauSession session, string viewId, string[] tagsToAdd,
-        CancellationToken? cancelToken = null)
-    {
-        checkEndpointAvailability();
-        checkNullParameters((nameof(session), session), (nameof(viewId), viewId), (nameof(tagsToAdd), tagsToAdd));
-        checkEmptyArrays((nameof(tagsToAdd), tagsToAdd));
-        return (await getResponseAsObject<tagListType>(await apiRequest(
-            buildUri($"sites/{session.SiteId}/views/{viewId}/tags"), HttpMethod.Put, 200, cancelToken, session,
-            getObjectAsRequestContent(new tagListType()
-            {
-                tag = tagsToAdd.Select(e => new tagType() { label = e }).ToArray()
-            })))).tag;
-    }
-    /// <summary>
-    /// Adds one or more tags to the specified workbook. Available in all versions
-    /// </summary>
-    /// <param name="session"></param>
-    /// <param name="workbookId">The ID of the workbook to add tags to.</param>
-    /// <param name="tagsToAdd">The workbook to add the tag to. If the workbook is already tagged with a tag that's included in the request body, those tags are ignored and the workbook retains them.</param>
-    /// <param name="cancelToken"></param>
-    /// <returns></returns>
-    /// <exception cref="TableauRequestException"></exception>
-    /// <exception cref="TableauApiVersionException"></exception>
-    /// <exception cref="TableauOnlineNotSupportedException"></exception>
-    [ApiVersion(1, 0)]
-    public async Task<tagType[]> AddTagsToWorkbook(Models.TableauSession session, string workbookId, string[] tagsToAdd,
-        CancellationToken? cancelToken = null)
-    {
-        checkEndpointAvailability();
-        checkNullParameters((nameof(session), session), (nameof(workbookId), workbookId), (nameof(tagsToAdd), tagsToAdd));
-        checkEmptyArrays((nameof(tagsToAdd), tagsToAdd));
-        return (await getResponseAsObject<tagListType>(await apiRequest(
-            buildUri($"sites/{session.SiteId}/workbooks/{workbookId}/tags"), HttpMethod.Put, 200, cancelToken, session,
-            getObjectAsRequestContent(new tagListType()
-            {
-                tag = tagsToAdd.Select(e => new tagType() { label = e }).ToArray()
-            })))).tag;
-    }
-    /// <summary>
     /// Returns all the views for the specified workbook, optionally including usage statistics. Available in all versions
     /// </summary>
     /// <param name="session"></param>
@@ -583,48 +533,6 @@ public partial class TableauApiClient
         checkEndpointAvailability();
         checkNullParameters((nameof(session), session), (nameof(workbookId), workbookId));
         await apiRequest(buildUri($"sites/{session.SiteId}/workbooks/{workbookId}"), HttpMethod.Delete, 204,
-            cancelToken, session);
-    }
-
-    /// <summary>
-    /// Deletes a tag from the specified view.
-    /// </summary>
-    /// <param name="session"></param>
-    /// <param name="viewId">The ID of the view to remove the tag from.</param>
-    ///<param name="tagName">The name of the tag to remove from the view.</param>
-    /// <param name="cancelToken"></param>
-    /// <returns></returns>
-    /// <exception cref="TableauRequestException"></exception>
-    /// <exception cref="TableauApiVersionException"></exception>
-    /// <exception cref="TableauOnlineNotSupportedException"></exception>
-    [ApiVersion(1, 0)]
-    public async Task DeleteTagFromView(Models.TableauSession session, string viewId, string tagName,
-        CancellationToken? cancelToken = null)
-    {
-        checkEndpointAvailability();
-        checkNullParameters((nameof(session), session), (nameof(viewId), viewId), (nameof(tagName), tagName));
-        await apiRequest(buildUri($"sites/{session.SiteId}/views/{viewId}/tags/{tagName}"), HttpMethod.Delete, 204,
-            cancelToken, session);
-    }
-
-    /// <summary>
-    /// Deletes a tag from the specified workbook. Available in all versions
-    /// </summary>
-    /// <param name="session"></param>
-    /// <param name="workbookId">The ID of the workbook to remove the tag from.</param>
-    ///<param name="tagName">The name of the tag to remove from the workbook.</param>
-    /// <param name="cancelToken"></param>
-    /// <returns></returns>
-    /// <exception cref="TableauRequestException"></exception>
-    /// <exception cref="TableauApiVersionException"></exception>
-    /// <exception cref="TableauOnlineNotSupportedException"></exception>
-    [ApiVersion(1, 0)]
-    public async Task DeleteTagFromWorkbook(Models.TableauSession session, string workbookId, string tagName,
-        CancellationToken? cancelToken = null)
-    {
-        checkEndpointAvailability();
-        checkNullParameters((nameof(session), session), (nameof(workbookId), workbookId), (nameof(tagName), tagName));
-        await apiRequest(buildUri($"sites/{session.SiteId}/workbooks/{workbookId}/tags/{tagName}"), HttpMethod.Delete, 204,
             cancelToken, session);
     }
 }

@@ -30,6 +30,7 @@
     <TrimmerRootDescriptor Include="roots.xml" />
     <!-- The fixtures the offline tests read, inside the binary, so it runs from anywhere. -->
     <EmbeddedResource Include="..\Tableau.Api.Tests\Fixtures\*.json" LogicalName="Fixtures/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="..\Tableau.Api.Tests\Fixtures\GraphQL\*.json" LogicalName="Fixtures/GraphQL/%(Filename)%(Extension)" />
     <Compile Include="..\Tableau.Api.Tests\JsonEquivalence.cs" Link="JsonEquivalence.cs" />
   </ItemGroup>
 

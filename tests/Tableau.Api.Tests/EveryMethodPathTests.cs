@@ -77,9 +77,10 @@ public sealed class EveryMethodPathTests
         // Every method sends a request with plain values, so none is skipped unseen.
         Assert.IsEmpty(silent, "methods that sent nothing:\n" + string.Join("\n", silent));
         // The client's methods put this many string parameters in request paths, fewer would mean some went unseen:
-        // 1.2.5's 122, less the 33 of the sites, projects, users, groups and favorites methods that went with the 2.0
-        // client's, DeleteProject2 among them, and the view id of QueryView, QueryViewCrosstabExcel and QueryViewPermissions.
-        Assert.HasCount(92, pathParameters, string.Join("\n", pathParameters));
+        // 1.2.5's 122 and the view id of QueryView, QueryViewCrosstabExcel and QueryViewPermissions, less those of the
+        // methods that went with the 2.0 client's: the 33 of the sites, projects, users, groups and favorites methods,
+        // DeleteProject2 among them, and the 48 of the permissions, metadata and tag methods, QueryViewPermissions among them.
+        Assert.HasCount(44, pathParameters, string.Join("\n", pathParameters));
     }
 
     private static IEnumerable<MethodInfo> PublicMethods() =>

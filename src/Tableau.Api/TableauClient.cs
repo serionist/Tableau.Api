@@ -10,8 +10,9 @@ namespace Tableau.Api;
 
 /// <summary>
 /// A client for Tableau's REST API, on Tableau Server or Tableau Cloud, with one sub-client per area: <see cref="Server"/>,
-/// <see cref="Sessions"/>, <see cref="Sites"/>, <see cref="Projects"/>, <see cref="Users"/>, <see cref="Groups"/> and
-/// <see cref="Favorites"/> so far, and the others as the 2.0 client takes them over from <see cref="TableauApiClient"/>.
+/// <see cref="Sessions"/>, <see cref="Sites"/>, <see cref="Projects"/>, <see cref="Users"/>, <see cref="Groups"/>,
+/// <see cref="Favorites"/>, <see cref="Permissions"/>, <see cref="Tags"/> and <see cref="Metadata"/> so far, and the
+/// others as the 2.0 client takes them over from <see cref="TableauApiClient"/>.
 /// </summary>
 /// <remarks>
 /// <para>Get one from DI, registered with <c>services.AddTableauClient(name, options => ...)</c>, or build one with
@@ -58,6 +59,9 @@ public class TableauClient : IDisposable, IAsyncDisposable
     private readonly UsersClient? _users;
     private readonly GroupsClient? _groups;
     private readonly FavoritesClient? _favorites;
+    private readonly PermissionsClient? _permissions;
+    private readonly TagsClient? _tags;
+    private readonly MetadataClient? _metadata;
     private readonly HttpMessageInvoker? _owned;
     private readonly bool _ownsState;
     private int _disposed;
@@ -136,7 +140,7 @@ public class TableauClient : IDisposable, IAsyncDisposable
             chain?.Dispose();
             state?.Dispose();
         }
-        (_server, _sessions, _sites, _projects, _users, _groups, _favorites) = SubClients(_pipeline);
+        (_server, _sessions, _sites, _projects, _users, _groups, _favorites, _permissions, _tags, _metadata) = SubClients(_pipeline);
         _ownsState = true;
     }
 
@@ -161,7 +165,7 @@ public class TableauClient : IDisposable, IAsyncDisposable
     private TableauClient(TableauPipeline pipeline)
     {
         _pipeline = pipeline;
-        (_server, _sessions, _sites, _projects, _users, _groups, _favorites) = SubClients(_pipeline);
+        (_server, _sessions, _sites, _projects, _users, _groups, _favorites, _permissions, _tags, _metadata) = SubClients(_pipeline);
     }
 
     /// <summary>Server Info: the versions of the server and of its REST API.</summary>
@@ -184,6 +188,17 @@ public class TableauClient : IDisposable, IAsyncDisposable
 
     /// <summary>A user's favorites: list them, add and remove one.</summary>
     public virtual FavoritesClient Favorites => _favorites ?? throw ForMocksOnly();
+
+    /// <summary>Permissions on content of every kind, and a project's default permissions: list, add and delete them.</summary>
+    public virtual PermissionsClient Permissions => _permissions ?? throw ForMocksOnly();
+
+    /// <summary>Tags on content of every kind: add and delete them, one content at a time or in a batch.</summary>
+    public virtual TagsClient Tags => _tags ?? throw ForMocksOnly();
+
+    /// <summary>
+    /// Tableau Catalog's databases, tables and columns, data quality warnings, and the Metadata API's GraphQL queries.
+    /// </summary>
+    public virtual MetadataClient Metadata => _metadata ?? throw ForMocksOnly();
 
     /// <summary>The pipeline every sub-client sends through.</summary>
     internal TableauPipeline Pipeline => _pipeline ?? throw ForMocksOnly();
@@ -303,10 +318,11 @@ public class TableauClient : IDisposable, IAsyncDisposable
         new("This instance was made by the protected constructor, for a mock: override the members it uses.");
 
     // Each sub-client made once per client, over its pipeline.
-    private static (ServerClient, SessionsClient, SitesClient, ProjectsClient, UsersClient, GroupsClient, FavoritesClient) SubClients(
-        TableauPipeline pipeline) =>
+    private static (ServerClient, SessionsClient, SitesClient, ProjectsClient, UsersClient, GroupsClient, FavoritesClient, PermissionsClient,
+        TagsClient, MetadataClient) SubClients(TableauPipeline pipeline) =>
         (new ServerClient(pipeline), new SessionsClient(pipeline), new SitesClient(pipeline), new ProjectsClient(pipeline),
-            new UsersClient(pipeline), new GroupsClient(pipeline), new FavoritesClient(pipeline));
+            new UsersClient(pipeline), new GroupsClient(pipeline), new FavoritesClient(pipeline), new PermissionsClient(pipeline),
+            new TagsClient(pipeline), new MetadataClient(pipeline));
 
     // Once, and only for a client that owns its session and holds one.
     private bool OwnsSessionToSignOut() =>

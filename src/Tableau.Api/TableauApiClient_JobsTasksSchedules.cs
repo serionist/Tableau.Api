@@ -530,4 +530,29 @@ public partial class TableauApiClient
         await apiRequest(buildUri($"schedules/{scheduleId}"), HttpMethod.Delete, 204,
             cancelToken, session);
     }
+
+    /// <summary>
+    /// Adds a task to refresh a workbook to an existing schedule. Versions 2.8+
+    /// </summary>
+    /// <param name="session"></param>
+    /// <param name="workbookId">The ID of the workbook</param>
+    ///  <param name="scheduleId">The ID of the schedule</param>
+    /// <param name="granteeCapabilities">The permissions to assign. Permissions can either be for a user or group</param>
+    /// <param name="cancelToken"></param>
+    /// <returns></returns>
+    [ApiVersion(2, 8)]
+    public async Task<permissionsType> AddWorkbookToSchedule(Models.TableauSession session, string workbookId,
+       string scheduleId, granteeCapabilitiesType[] granteeCapabilities, CancellationToken? cancelToken = null)
+    {
+        checkEndpointAvailability();
+        checkNullParameters((nameof(session), session), (nameof(workbookId), workbookId), (nameof(scheduleId), scheduleId), (nameof(granteeCapabilities), granteeCapabilities));
+        return await getResponseAsObject<permissionsType>(await apiRequest(
+            buildUri($"sites/{session.SiteId}/schedules/{scheduleId}/workbooks"), HttpMethod.Put, 200,
+            cancelToken, session,
+            getObjectAsRequestContent(new taskType()
+            {
+                Item = new taskExtractRefreshType() { Item = new workbookType() { id = workbookId } }
+            })));
+
+    }
 }

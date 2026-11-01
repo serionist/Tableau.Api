@@ -1,0 +1,29 @@
+{
+  "data": {
+    "databasesConnection": null
+  },
+  "errors": [
+    {
+      "message": "Showing partial results. The request exceeded the 20000 node limit. Use pagination, additional filtering, or both in the query to adjust results.",
+      "locations": [
+        {
+          "line": 1,
+          "column": 3
+        }
+      ],
+      "path": [
+        "databasesConnection"
+      ],
+      "extensions": {
+        "severity": "WARNING",
+        "code": "NODE_LIMIT_EXCEEDED",
+        "properties": {
+          "nodeLimit": 20000
+        }
+      }
+    },
+    {
+      "message": "Invented: a second error, its code left out."
+    }
+  ]
+}

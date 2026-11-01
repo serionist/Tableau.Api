@@ -50,6 +50,22 @@ public sealed record GroupListOptions
     public int PageSize { get; init; } = 100;
 }
 
+/// <summary>What <see cref="MetadataClient.ListDatabasesAsync"/> and <see cref="MetadataClient.ListDatabasesPageAsync"/> ask for.</summary>
+/// <remarks>A page size alone: Tableau's reference lists no filter or sort for Query Databases.</remarks>
+public sealed record DatabaseListOptions
+{
+    /// <summary>How many databases a page holds: 1 to 1,000, 100 by default.</summary>
+    public int PageSize { get; init; } = 100;
+}
+
+/// <summary>What <see cref="MetadataClient.ListTablesAsync"/> and <see cref="MetadataClient.ListTablesPageAsync"/> ask for.</summary>
+/// <remarks>A page size alone: Tableau's reference lists no filter or sort for Query Tables.</remarks>
+public sealed record TableListOptions
+{
+    /// <summary>How many tables a page holds: 1 to 1,000, 100 by default.</summary>
+    public int PageSize { get; init; } = 100;
+}
+
 /// <summary>What <see cref="SitesClient.ListAsync"/> and <see cref="SitesClient.ListPageAsync"/> ask for.</summary>
 /// <remarks>
 /// No filter or sort: Tableau Server 2025.1 refuses the one filter Tableau's reference lists for Query Sites, on the

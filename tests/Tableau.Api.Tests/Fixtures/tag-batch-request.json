@@ -1,0 +1,36 @@
+{
+  "tagBatch": {
+    "tags": {
+      "tag": [
+        {
+          "label": "PII"
+        },
+        {
+          "label": "\"Yearly Sales\""
+        }
+      ]
+    },
+    "contents": {
+      "content": [
+        {
+          "id": "21cade8c-d4eb-4fef-bd4a-bdb9d8b09b7d"
+        },
+        {
+          "id": "a0314be1-afd4-4a4f-ab85-d75dac661c41"
+        },
+        {
+          "id": "8fec4046-e054-476d-a6d0-e808b0d5448b"
+        },
+        {
+          "id": "c8c3a0be-3ac8-4de7-8bd6-f912900a1ccd"
+        },
+        {
+          "id": "ec2b7845-d627-430e-b99c-8543ed50b25c"
+        },
+        {
+          "id": "c4a560eb-c8a6-48c6-86f4-c9d5e518d027"
+        }
+      ]
+    }
+  }
+}

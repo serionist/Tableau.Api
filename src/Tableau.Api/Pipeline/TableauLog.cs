@@ -6,7 +6,8 @@ namespace Tableau.Api.Pipeline;
 
 /// <summary>
 /// Every line the 2.0 client logs. Requests at Debug, a path's query values as <c>***</c>; a failure the caller
-/// receives at Debug, since the caller decides what it is worth; warnings only for a setting that weakens the client.
+/// receives at Debug, since the caller decides what it is worth; warnings only for a setting that weakens the client,
+/// and for a Metadata API answer whose data may be partial, which the caller receives with no other sign.
 /// No line holds a token, a password, a secret, a JWT, a cookie, an <c>X-Tableau-Auth</c> header or a body; a sign-in
 /// names the kind of credentials, never the user.
 /// </summary>
@@ -71,6 +72,10 @@ internal static partial class TableauLog
     [LoggerMessage(EventId = 15, Level = LogLevel.Debug,
         Message = "Tableau client {Client}: the HttpClient's own handler sent a session's token to {Origin}; signing that session out")]
     public static partial void TokenSentElsewhere(ILogger logger, string client, string origin);
+
+    [LoggerMessage(EventId = 17, Level = LogLevel.Warning,
+        Message = "Tableau client {Client}: {Method} {RequestPath} answered with a warning, and its data, which may be partial, is returned: {Code}: {Text}")]
+    public static partial void PartialAnswer(ILogger logger, string client, HttpMethod method, string requestPath, string code, string text);
 
     [LoggerMessage(EventId = 9, Level = LogLevel.Warning,
         Message = "Tableau client {Client}: REST API {Version} is below {Floor}, the oldest this client supports; "

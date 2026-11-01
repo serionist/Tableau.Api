@@ -10,13 +10,20 @@
     <!-- The models generated from Tableau's schema, with their converters and the JSON context. -->
     <namespace fullname="Tableau.Api.Rest.Models" />
     <!-- The client: its options, its registration with DI, its credentials and sessions, its exception, its downloads,
-         its sub-clients, and their pages, list options, fields, filters and sorts. -->
+         its sub-clients, and their pages, list options, fields, filters and sorts, the content they name, and the
+         grantees of permissions. -->
+    <type fullname="Tableau.Api.CursorPage`1" />
+    <type fullname="Tableau.Api.DatabaseListOptions" />
+    <type fullname="Tableau.Api.DefaultPermissionsKind" />
     <type fullname="Tableau.Api.FavoritesClient" />
-    <type fullname="Tableau.Api.FavoriteTarget" />
     <type fullname="Tableau.Api.GroupField" />
     <type fullname="Tableau.Api.GroupListOptions" />
     <type fullname="Tableau.Api.GroupsClient" />
+    <type fullname="Tableau.Api.MetadataClient" />
     <type fullname="Tableau.Api.Page`1" />
+    <type fullname="Tableau.Api.PermissionGrantee" />
+    <type fullname="Tableau.Api.PermissionGranteeKind" />
+    <type fullname="Tableau.Api.PermissionsClient" />
     <type fullname="Tableau.Api.ProjectField" />
     <type fullname="Tableau.Api.ProjectListOptions" />
     <type fullname="Tableau.Api.ProjectsClient" />
@@ -24,9 +31,12 @@
     <type fullname="Tableau.Api.SessionsClient" />
     <type fullname="Tableau.Api.SiteListOptions" />
     <type fullname="Tableau.Api.SitesClient" />
+    <type fullname="Tableau.Api.TableListOptions" />
     <type fullname="Tableau.Api.TableauClient" />
     <type fullname="Tableau.Api.TableauClientBuilder" />
     <type fullname="Tableau.Api.TableauClientOptions" />
+    <type fullname="Tableau.Api.TableauContent" />
+    <type fullname="Tableau.Api.TableauContentKind" />
     <type fullname="Tableau.Api.TableauCredentials" />
     <type fullname="Tableau.Api.TableauDeployment" />
     <type fullname="Tableau.Api.TableauDownload" />
@@ -38,6 +48,7 @@
     <type fullname="Tableau.Api.TableauServiceCollectionExtensions" />
     <type fullname="Tableau.Api.TableauSession" />
     <type fullname="Tableau.Api.TableauSort" />
+    <type fullname="Tableau.Api.TagsClient" />
     <type fullname="Tableau.Api.UserAddOptions" />
     <type fullname="Tableau.Api.UserField" />
     <type fullname="Tableau.Api.UserListOptions" />

@@ -12,7 +12,8 @@
 #   which is the default site.
 # - One run at a time: the suite makes a project and local groups named after the run and deletes them at the end, and
 #   deletes what an earlier run left behind more than a day ago. Its JWT asks for the scopes tableau:content:read,
-#   tableau:projects:*, tableau:groups:* and tableau:users:read (LiveSite.cs).
+#   which the Metadata API's queries need too, tableau:projects:*, tableau:groups:*, tableau:users:read,
+#   tableau:permissions:read, tableau:permissions:update and tableau:permissions:delete (LiveSite.cs).
 # - The suite's log check fails on any log line holding a setting's secret or a token any of its clients carried, and
 #   on one holding an invented secret or a query value; in a run that reached a site it counts such lines and shows
 #   none, since a line may hold a live value no list names, such as a JWT the client minted, and this log is public.

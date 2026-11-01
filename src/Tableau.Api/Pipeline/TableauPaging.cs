@@ -87,6 +87,39 @@ internal static class TableauPaging
         }
     }
 
+    /// <summary>
+    /// Every item of a list paged by cursors, a page at a time as the caller reads on: each page after the cursor the one
+    /// before ended with, until a page says it is the last. A page that says more follow and gives no cursor, or a
+    /// cursor already met, fails the list, where reading on would repeat pages without end.
+    /// </summary>
+    /// <param name="page">A page by the cursor it starts after, null for the first.</param>
+    /// <param name="call">The list's call, which the failure names.</param>
+    /// <param name="cancellationToken">Stops the list between items and between pages.</param>
+    public static async IAsyncEnumerable<T> CursorListAsync<T>(Func<string?, CancellationToken, Task<CursorPage<T>>> page, string call,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var met = new HashSet<string>(StringComparer.Ordinal);
+        string? cursor = null;
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var current = await page(cursor, cancellationToken).ConfigureAwait(false);
+            foreach (var item in current.Items)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return item;
+            }
+            if (!current.HasNextPage) yield break;
+            if (current.EndCursor is not { } next || !met.Add(next))
+            {
+                throw new TableauException(TableauErrorKind.InvalidResponse,
+                    $"{call} answered that more pages follow, {(current.EndCursor is null ? "with no cursor" : "with a cursor it gave before")}, "
+                    + "so the list can't go on; it stops here rather than read the same page again.");
+            }
+            cursor = next;
+        }
+    }
+
     // A list whose server answered an earlier page than the one asked for: reading on would repeat it without end.
     private static TableauException Repeated(string call, int asked, int answered) =>
         new(TableauErrorKind.InvalidResponse,

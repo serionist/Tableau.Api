@@ -46,33 +46,6 @@ public sealed class PathTests
     }
 
     [TestMethod]
-    public async Task ATagThatIsOnlyDotsIsRefusedBeforeSending()
-    {
-        using var server = FakeTableauServer.Start();
-        var client = Fixtures.Client(server);
-
-        var thrown = await Assert.ThrowsAsync<ArgumentException>(
-            () => client.DeleteTagFromDataSource(Fixtures.Session(), "d1", ".."));
-
-        Assert.AreEqual("tag", thrown.ParamName);
-        Assert.IsEmpty(server.Requests);
-    }
-
-    [TestMethod]
-    public async Task ATagIsSentAsOneSegment()
-    {
-        using var server = FakeTableauServer.Start();
-        var client = Fixtures.Client(server);
-        var session = Fixtures.Session();
-        var tagPath = DatasourcesPath + "d1/tags/C%23%20%26%20R%2FD";
-        server.Map("DELETE", tagPath, FakeResponse.Empty(204));
-
-        await client.DeleteTagFromDataSource(session, "d1", "C# & R/D");
-
-        Assert.AreEqual($"DELETE {tagPath} HTTP/1.1", server.Requests.Single().RequestLine);
-    }
-
-    [TestMethod]
     [DataRow("tableau/")]
     [DataRow("tableau")]
     public async Task ABaseUrlsPathIsKept(string basePath)

@@ -1,0 +1,43 @@
+{
+  "permissions": {
+    "project": {
+      "owner": {
+        "id": "7c1d2e3f-4a5b-4c6d-8e9f-0a1b2c3d4e5f"
+      },
+      "id": "33333333-4444-4555-8666-777777777777",
+      "name": "Quarterly reports"
+    },
+    "granteeCapabilities": [
+      {
+        "group": {
+          "id": "4a1b2c3d-0002-4e5f-8a9b-0c1d2e3f4a5b"
+        },
+        "capabilities": {
+          "capability": [
+            {
+              "name": "Read",
+              "mode": "Allow"
+            },
+            {
+              "name": "Write",
+              "mode": "Deny"
+            }
+          ]
+        }
+      },
+      {
+        "user": {
+          "id": "8d2e3f4a-5b6c-4d7e-9f0a-1b2c3d4e5f6a"
+        },
+        "capabilities": {
+          "capability": [
+            {
+              "name": "ProjectLeader",
+              "mode": "Allow"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

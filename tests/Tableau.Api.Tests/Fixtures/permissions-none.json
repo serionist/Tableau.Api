@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "database": {
+      "id": "0f206b0e-da69-4746-bb95-87695f522b4d",
+      "name": "stage"
+    }
+  }
+}

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -336,7 +337,14 @@ public sealed class VersionTests
     [TestMethod]
     public void EveryEndpointsTemplateReadsAndItsVersionIsMajorMinor()
     {
-        var fields = typeof(Endpoints).GetFields().Where(field => field.FieldType == typeof(Endpoint)).Select(field => (Endpoint)field.GetValue(null)!);
+        // A descriptor stands alone or in the calls of a kind's permissions or tags.
+        var fields = typeof(Endpoints).GetFields().SelectMany(field => field.GetValue(null) switch
+        {
+            Endpoint endpoint => [endpoint],
+            PermissionCalls permissions => permissions.All,
+            TagCalls tags => tags.All,
+            _ => (IReadOnlyList<Endpoint>)[],
+        });
 
         CollectionAssert.AreEquivalent(fields.ToList(), Endpoints.All.ToList(), "Endpoints.All lists every descriptor once.");
         foreach (var endpoint in Endpoints.All)

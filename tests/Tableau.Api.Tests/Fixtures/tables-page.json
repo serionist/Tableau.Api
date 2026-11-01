@@ -1,0 +1,43 @@
+{
+  "pagination": {
+    "pageNumber": "1",
+    "pageSize": "100",
+    "totalAvailable": "2"
+  },
+  "tables": {
+    "table": [
+      {
+        "site": {
+          "id": "0f4b9e1c-3a52-4d6e-9c8b-1a2b3c4d5e6f"
+        },
+        "tags": {},
+        "id": "6a9b6058-671d-44bc-ad6d-c58b225f5d4c",
+        "name": "Culture",
+        "isEmbedded": false,
+        "isCertified": false,
+        "schema": "invented"
+      },
+      {
+        "site": {
+          "id": "0f4b9e1c-3a52-4d6e-9c8b-1a2b3c4d5e6f"
+        },
+        "contact": {
+          "id": "8d2e3f4a-5b6c-4d7e-9f0a-1b2c3d4e5f6a"
+        },
+        "tags": {
+          "tag": [
+            {
+              "label": "PII"
+            }
+          ]
+        },
+        "id": "917b1438-7000-4a9e-a949-13b90a0237dd",
+        "name": "[Orders$]",
+        "description": "Invented orders",
+        "isEmbedded": true,
+        "isCertified": true,
+        "certificationNote": "Invented note"
+      }
+    ]
+  }
+}

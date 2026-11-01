@@ -5,8 +5,9 @@ public enum TableauErrorKind
 {
     /// <summary>
     /// Tableau answered with an error the other kinds don't name, such as 400 or 403, or a 5xx once the retries ran out, or
-    /// the request never got a whole answer: the connection failed or broke off, the server's certificate was refused, or
-    /// a handler of the caller's threw (<see cref="System.Exception.InnerException"/>).
+    /// a Metadata API answer whose GraphQL <c>errors</c> hold one that is no warning, the first code its <see cref="TableauException.ErrorCode"/>;
+    /// or the request never got a whole answer: the connection failed or broke off, the server's certificate was refused,
+    /// or a handler of the caller's threw (<see cref="System.Exception.InnerException"/>).
     /// </summary>
     Http,
 
@@ -23,7 +24,8 @@ public enum TableauErrorKind
     /// <summary>
     /// Tableau answered 429, too many calls, and the client didn't wait it out: the call isn't safe to send twice, its
     /// retries ran out, or the wait asked for is longer than <see cref="TableauClientOptions.MaxRetryAfter"/>.
-    /// <see cref="TableauException.RetryAfter"/> says when to try again.
+    /// <see cref="TableauException.RetryAfter"/> says when to try again. Also a Metadata API answer whose GraphQL
+    /// <c>errors</c> hold <c>RATE_EXCEEDED</c>, which names no wait.
     /// </summary>
     RateLimited,
 

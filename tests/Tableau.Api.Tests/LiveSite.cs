@@ -54,10 +54,14 @@ internal static partial class LiveSite
     public const string ProjectDescription = "Made by Tableau.Api's live suite; deleted when the run ends.";
 
     /// <summary>
-    /// The scopes the suite's connected app asks for: to read content and users, and to make, change and delete its
-    /// projects and groups.
+    /// The scopes the suite's connected app asks for: to read content and users, the Metadata API's queries among the
+    /// reads; to make, change and delete its projects and groups; and to read, add and delete a permission on its project.
     /// </summary>
-    public static readonly string[] Scopes = ["tableau:content:read", "tableau:projects:*", "tableau:groups:*", "tableau:users:read"];
+    public static readonly string[] Scopes =
+    [
+        "tableau:content:read", "tableau:projects:*", "tableau:groups:*", "tableau:users:read", "tableau:permissions:read",
+        "tableau:permissions:update", "tableau:permissions:delete",
+    ];
 
     /// <summary>The settings whose values name the site or the sign-in without being secrets.</summary>
     private static readonly string[] _knownSettings =
