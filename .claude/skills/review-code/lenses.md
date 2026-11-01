@@ -93,8 +93,9 @@ Applies when: the scope touches `src/Tableau.Api/VizPortal/`.
   `tests/Tableau.Api.Tests/Fixtures/` with its `manifest.json` entry, are `EveryModelTests`' counts true, and is each new
   public type in `tests/Tableau.Api.Aot/roots.xml`?
 - The `Live` and `ServerOnly` tests need a site: does the PR say what ran, against which Tableau Server version or
-  Tableau Cloud, and what it can't cover? A Server-only change: did its `ServerOnly` tests run by hand on a Tableau
-  Server, and does the PR say what Tableau Cloud couldn't show? Is a failure compared with `main`'s run on the same
+  Tableau Cloud, and what it can't cover? A Server-only change: did the `Live` tests that reach it run on a Tableau
+  Server (the `ServerOnly` tests, by hand, for a password's sign-in), and does the PR say what Tableau Cloud couldn't
+  show? Is a failure compared with `main`'s run on the same
   site before it is called the change's?
 - Coverage: does the coverage gate pass without a lower floor or a wider exclusion in `tests/coverage.config`, and does
   a new test cover its code's branches?

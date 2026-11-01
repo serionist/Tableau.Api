@@ -180,7 +180,8 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
                         throw await ErrorAsync(endpoint, response, path, Hint(endpoint, request, session, renewed, response), token).ConfigureAwait(false);
                     var result = await read(response, path, token).ConfigureAwait(false);
                     var elapsed = Stopwatch.GetElapsedTime(started);
-                    TableauLog.Answered(state.Logger, state.DisplayName, endpoint.Method, path, (int)response.StatusCode, elapsed.TotalMilliseconds);
+                    TableauLog.Answered(state.Logger, state.DisplayName, endpoint.Name, endpoint.Method, path, (int)response.StatusCode,
+                        elapsed.TotalMilliseconds);
                     return result;
                 }
             }
@@ -267,7 +268,8 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
                         var call = new DownloadCall(this, endpoint, path, cancellationToken, transfer.Token);
                         var download = await TableauDownload.OpenAsync(response, transfer, call).ConfigureAwait(false);
                         var elapsed = Stopwatch.GetElapsedTime(started);
-                        TableauLog.Answered(state.Logger, state.DisplayName, endpoint.Method, path, (int)response.StatusCode, elapsed.TotalMilliseconds);
+                        TableauLog.Answered(state.Logger, state.DisplayName, endpoint.Name, endpoint.Method, path, (int)response.StatusCode,
+                            elapsed.TotalMilliseconds);
                         response = null;
                         transfer = null;
                         return download;
@@ -293,7 +295,7 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
     /// <summary>A failure the pipeline made, logged at Debug, as the caller receives it.</summary>
     internal TableauException Failed(Endpoint endpoint, string? path, TableauException exception)
     {
-        TableauLog.Failed(state.Logger, state.DisplayName, endpoint.Method, path ?? endpoint.Template, exception.Kind, exception);
+        TableauLog.Failed(state.Logger, state.DisplayName, endpoint.Name, endpoint.Method, path ?? endpoint.Template, exception.Kind, exception);
         return exception;
     }
 
@@ -465,7 +467,7 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
             message.Headers.TryAddWithoutValidation("X-Tableau-Auth", token);
         if (body is not null)
             message.Content = new ByteArrayContent(body) { Headers = { ContentType = new MediaTypeHeaderValue("application/json") } };
-        TableauLog.Sending(state.Logger, state.DisplayName, method, path);
+        TableauLog.Sending(state.Logger, state.DisplayName, endpoint.Name, method, path);
         try
         {
             return http is HttpClient client

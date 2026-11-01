@@ -8,9 +8,12 @@ namespace Tableau.Api.Tests;
 /// <summary>
 /// Server Info on a Tableau site, which needs no sign-in: the client negotiates its version there, reads the answer
 /// as Tableau's JSON, and reads Tableau's error body. It changes nothing on the site. TABLEAU_LIVE_SERVER_URL is the
-/// server's address, such as https://tableau.example.com/ or a Tableau Cloud pod's.
+/// server's address, such as https://tableau.example.com/ or a Tableau Cloud pod's. One at a time, as the other site
+/// tests, so each call answered
+/// is credited to its own test in <see cref="LiveSite.Record"/>, which its clients log through.
 /// </summary>
 [TestClass]
+[DoNotParallelize]
 public sealed class ServerInfoSiteTests
 {
     private const string ServerUrl = "TABLEAU_LIVE_SERVER_URL";
@@ -18,7 +21,8 @@ public sealed class ServerInfoSiteTests
     [SiteTest(TableauSite.Live, [ServerUrl]), TestCategory(TableauSite.Live)]
     public async Task ServerInfoAnswersWithoutASignInAtTheNegotiatedVersion()
     {
-        await using var client = TableauClient.Create(new TableauClientOptions { ServerUrl = new Uri(TableauSite.Setting(ServerUrl)) }, loggerFactory: Fixtures.Log.Factory);
+        await using var client = TableauClient.Create(new TableauClientOptions { ServerUrl = new Uri(TableauSite.Setting(ServerUrl)) },
+            loggerFactory: LiveSite.Record.Factory);
 
         var info = await client.Server.GetInfoAsync();
 
@@ -35,7 +39,7 @@ public sealed class ServerInfoSiteTests
         {
             ServerUrl = new Uri(TableauSite.Setting(ServerUrl)),
             ApiVersion = new Version(9, 0),
-        }, loggerFactory: Fixtures.Log.Factory);
+        }, loggerFactory: LiveSite.Record.Factory);
 
         var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.NotFound, () => client.Server.GetInfoAsync());
 

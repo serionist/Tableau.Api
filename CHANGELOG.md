@@ -60,7 +60,9 @@ and [the migration guide](docs/migration-2.0.md) lists every change from 1.2.5 a
     scheme, host and port, at most five; no cookies kept; any 2xx a success. Handlers an app gives every
     `HttpClient` with `ConfigureHttpClientDefaults` don't reach the client's.
   - **Logging** at Debug, through `ILogger`, with no token, password, body or query value; warnings only for an option
-    that weakens the client, and for a Metadata API answer whose data may be partial.
+    that weakens the client, and for a Metadata API answer whose data may be partial. A request's lines, sent,
+    answered and failed, name its call as Tableau's reference does, in their text and as a `Call` property:
+    `Tableau client (default): Query Projects: GET /api/3.25/sites/{site}/projects?pageSize=*** answered 200 in 41 ms`.
   - **Retries:** a call that is safe to send twice, such as a read, is sent again after a 408, a 429, a 5xx, a
     connection that failed or an attempt longer than `RequestTimeout`: `MaxRetries` times, three by default, 0 for
     none, with jittered back-off. A publish, a create or a run is sent once. After a 429 or a 503 the client waits as

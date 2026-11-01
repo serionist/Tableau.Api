@@ -8,9 +8,10 @@ using Tableau.Api.Rest.Models;
 namespace Tableau.Api.Tests;
 
 /// <summary>
-/// Sessions on a Tableau site, signed in with the live suite's personal access token (<see cref="LiveSite"/> has the
+/// Sessions on the run's site, signed in with the live suite's personal access token (<see cref="LiveSite"/> has the
 /// settings): a client signs itself in for a call and signs out when disposed; a session signed in by hand serves a
-/// bound client through its sub-clients, makes the run's project, and is signed out. Each test checks the sign-out took:
+/// bound client through its sub-clients, makes the run's project, and is signed out; Switch Site takes a session on
+/// TABLEAU_LIVE_SITE to the run's site, and ends the first. Each test checks the sign-out took:
 /// the token is refused after it. They run one at a time: a personal access token allows one session, so a sign-in of
 /// one test would end the other's. <see cref="LiveConnectedAppTests"/> has the connected app's sessions.
 /// </summary>
@@ -18,29 +19,31 @@ namespace Tableau.Api.Tests;
 [DoNotParallelize]
 public sealed class LiveSessionTests
 {
+    private static readonly ProjectListOptions _onePage = new() { PageSize = 1 };
+
     [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = LiveSignIn.Token), TestCategory(TableauSite.Live)]
     public async Task AClientSignsItselfInForACallAndSignsOutWhenDisposed()
     {
+        var site = await LiveSite.RunSiteAsync();
         TableauSession session;
-        await using (var client = LiveSite.Client(LiveSite.Credentials()))
+        await using (var client = await LiveSite.RunClientAsync())
         {
-            await LiveSite.SignedInAsync(LiveSignIn.Token, () => LiveSite.RunProjectsAsync(client));
+            await LiveSite.SignedInAsync(LiveSignIn.Token, () => client.Projects.ListPageAsync(1, _onePage));
             session = LiveSite.Saw(client.Pipeline.State.Sessions.Current!);
-            Assert.AreEqual(LiveSite.SiteContentUrl, session.SiteContentUrl);
-            Assert.IsTrue(Guid.TryParse(session.SiteId, out _), "the site's LUID");
+            Assert.AreEqual((site.ContentUrl, site.Id), (session.SiteContentUrl, session.SiteId), "the run's site");
             Assert.IsTrue(Guid.TryParse(session.UserId, out _), "the user's LUID");
             Assert.IsGreaterThan(DateTimeOffset.UtcNow, session.ExpiresAt);
             Assert.IsGreaterThanOrEqualTo(ApiVersions.Floor, session.ApiVersion);
         }
 
         await using var check = LiveSite.Client(null);
-        await ClientFixtures.FailsAsync(TableauErrorKind.Authentication, () => LiveSite.RunProjectsAsync(check.WithSession(session)));
+        await ClientFixtures.FailsAsync(TableauErrorKind.Authentication, () => check.WithSession(session).Projects.ListPageAsync(1, _onePage));
     }
 
     [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = LiveSignIn.Token), TestCategory(TableauSite.Live)]
     public async Task ASessionSignedInByHandServesABoundClientAcrossItsSubClients()
     {
-        await using var client = LiveSite.Client(null);
+        await using var client = LiveSite.Client(null, await LiveSite.RunOptionsAsync());
         var session = LiveSite.Saw(await LiveSite.SignedInAsync(LiveSignIn.Token, () => client.Sessions.SignInAsync(LiveSite.Credentials())));
         await using var bound = client.WithSession(session);
         ServerInfo info;
@@ -58,18 +61,47 @@ public sealed class LiveSessionTests
         }
 
         Assert.IsFalse(string.IsNullOrEmpty(info.ProductVersion?.Value));
-        Assert.AreEqual(LiveSite.ProjectName, listed.Name, "the sweep finds a run's project by its prefix");
-        var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.Authentication, () => LiveSite.RunProjectsAsync(bound));
+        Assert.AreEqual((LiveSite.ProjectName, LiveSite.ProjectDescription), (listed.Name, listed.Description));
+        var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.Authentication, () => bound.Projects.ListPageAsync(1, _onePage));
         Assert.Contains("WithSession", thrown.Message, "a bound client never signs in");
+    }
+
+    [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = LiveSignIn.Token), TestCategory(TableauSite.Live)]
+    public async Task SwitchSiteGivesASessionOnTheRunsSiteAndEndsTheFirst()
+    {
+        // The run's site first, so its making signs in before the session this test holds.
+        var site = await LiveSite.RunSiteAsync();
+        await using var client = LiveSite.Client(null);
+        var first = LiveSite.Saw(await LiveSite.SignedInAsync(LiveSignIn.Token, () => client.Sessions.SignInAsync(LiveSite.Credentials())));
+
+        var other = LiveSite.Saw(await client.Sessions.SwitchSiteAsync(first, site.ContentUrl!));
+        Page<Project> page;
+        try
+        {
+            page = await client.WithSession(other).Projects.ListPageAsync(1, _onePage);
+        }
+        finally
+        {
+            // A session held by hand is its holder's to end, whatever failed.
+            await client.Sessions.SignOutAsync(other);
+        }
+
+        Assert.AreEqual(LiveSite.SiteContentUrl, first.SiteContentUrl, "the first session is on TABLEAU_LIVE_SITE");
+        Assert.AreEqual((site.ContentUrl, site.Id), (other.SiteContentUrl, other.SiteId), "the session switched to is on the run's site");
+        Assert.AreNotEqual(first.SiteId, other.SiteId);
+        Assert.AreEqual(first.UserName, other.UserName);
+        Assert.HasCount(1, page.Items, "the run's site has its Default project at least");
+        await ClientFixtures.FailsAsync(TableauErrorKind.Authentication, () => client.WithSession(first).Projects.ListPageAsync(1, _onePage));
+        await ClientFixtures.FailsAsync(TableauErrorKind.Authentication, () => client.WithSession(other).Projects.ListPageAsync(1, _onePage));
     }
 }
 
 /// <summary>
-/// What only a Tableau Server's sign-in has, run by hand with TABLEAU_SERVER_ONLY=1 on a server you may change:
-/// impersonation with a server administrator's password, and Switch Site between two sites the user can reach. Settings:
-/// TABLEAU_SERVER_ONLY_SERVER_URL; TABLEAU_SERVER_ONLY_SITE, unset or empty for the default site;
+/// What only a password's sign-in shows, which an automated run is given no password for, run by hand with
+/// TABLEAU_SERVER_ONLY=1 on a Tableau Server you may change: impersonation with a server administrator's password.
+/// Settings: TABLEAU_SERVER_ONLY_SERVER_URL; TABLEAU_SERVER_ONLY_SITE, unset or empty for the default site;
 /// TABLEAU_SERVER_ONLY_USER and TABLEAU_SERVER_ONLY_PASSWORD, a server administrator's; TABLEAU_SERVER_ONLY_IMPERSONATE,
-/// the LUID of a user to act as; TABLEAU_SERVER_ONLY_OTHER_SITE, a second site's content URL. One at a time, as the live ones.
+/// the LUID of a user to act as. One at a time, as the live ones.
 /// </summary>
 [TestClass]
 [DoNotParallelize]
@@ -79,7 +111,6 @@ public sealed class ServerOnlySessionTests
     private const string User = "TABLEAU_SERVER_ONLY_USER";
     private const string Password = "TABLEAU_SERVER_ONLY_PASSWORD";
     private const string Impersonate = "TABLEAU_SERVER_ONLY_IMPERSONATE";
-    private const string OtherSite = "TABLEAU_SERVER_ONLY_OTHER_SITE";
 
     [SiteTest(TableauSite.ServerOnly, [ServerUrl, User, Password, Impersonate]), TestCategory(TableauSite.ServerOnly)]
     public async Task APasswordSignInImpersonatesAUser()
@@ -91,7 +122,7 @@ public sealed class ServerOnlySessionTests
             LiveSite.Secret(Password), impersonated)));
         try
         {
-            await LiveSite.RunProjectsAsync(client.WithSession(session));
+            await client.WithSession(session).Projects.ListPageAsync(1, new ProjectListOptions { PageSize = 1 });
         }
         finally
         {
@@ -99,31 +130,7 @@ public sealed class ServerOnlySessionTests
         }
 
         Assert.IsTrue(string.Equals(impersonated, session.UserId, StringComparison.OrdinalIgnoreCase), "the session acts as the user impersonated");
-        await ClientFixtures.FailsAsync(TableauErrorKind.Authentication, () => LiveSite.RunProjectsAsync(client.WithSession(session)));
-    }
-
-    [SiteTest(TableauSite.ServerOnly, [ServerUrl, User, Password, OtherSite]), TestCategory(TableauSite.ServerOnly)]
-    public async Task SwitchSiteGivesASessionOnTheOtherSiteAndEndsTheFirst()
-    {
-        await using var client = Client();
-        var first = LiveSite.Saw(await client.Sessions.SignInAsync(TableauCredentials.Password(TableauSite.Setting(User),
-            LiveSite.Secret(Password))));
-
-        var other = LiveSite.Saw(await client.Sessions.SwitchSiteAsync(first, TableauSite.Setting(OtherSite)));
-        try
-        {
-            await LiveSite.RunProjectsAsync(client.WithSession(other));
-        }
-        finally
-        {
-            await client.Sessions.SignOutAsync(other);
-        }
-
-        Assert.AreEqual(TableauSite.Setting(OtherSite), other.SiteContentUrl);
-        Assert.AreNotEqual(first.SiteId, other.SiteId);
-        Assert.AreEqual(first.UserName, other.UserName);
-        await ClientFixtures.FailsAsync(TableauErrorKind.Authentication, () => LiveSite.RunProjectsAsync(client.WithSession(first)));
-        await ClientFixtures.FailsAsync(TableauErrorKind.Authentication, () => LiveSite.RunProjectsAsync(client.WithSession(other)));
+        await ClientFixtures.FailsAsync(TableauErrorKind.Authentication, () => client.WithSession(session).Projects.ListPageAsync(1, new ProjectListOptions { PageSize = 1 }));
     }
 
     // Over the suite's HttpClient, so every token it carries is kept for the log check.
