@@ -86,8 +86,7 @@ internal static partial class LiveSite
     private static readonly string[] _knownSettings =
     [
         Site, "TABLEAU_LIVE_USER", "TABLEAU_LIVE_PAT_NAME", "TABLEAU_LIVE_CLIENT_ID", "TABLEAU_LIVE_SECRET_ID", "TABLEAU_SERVER_ONLY_SITE",
-        "TABLEAU_SERVER_ONLY_USER", "TABLEAU_SERVER_ONLY_OTHER_SITE", "TABLEAU_SERVER_ONLY_AD_GROUP", "TABLEAU_SERVER_ONLY_AD_DOMAIN",
-        "TABLEAU_SERVER_ONLY_NEW_USER",
+        "TABLEAU_SERVER_ONLY_USER", "TABLEAU_SERVER_ONLY_AD_GROUP", "TABLEAU_SERVER_ONLY_AD_DOMAIN", "TABLEAU_SERVER_ONLY_NEW_USER",
     ];
 
     private static readonly ConcurrentDictionary<string, byte> _secrets = new(StringComparer.Ordinal);

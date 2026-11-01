@@ -33,7 +33,7 @@ run: it stays checked by hand.
 | `SessionsClient.SignInAsync` | Sign In with a personal access token, impersonating a user | no | not live yet (#57) |
 | `SessionsClient.SignInAsync` | Sign In with a JWT | yes | `LiveConnectedAppTests.ASessionSignedInWithAMintedJwtServesABoundClientAndIsSignedOut` |
 | `SessionsClient.SignInAsync` | Sign In with a unified access token | no | Tableau Cloud only |
-| `SessionsClient.SwitchSiteAsync` | Switch Site | no | not live yet (#57) |
+| `SessionsClient.SwitchSiteAsync` | Switch Site | yes | `LiveSessionTests.SwitchSiteGivesASessionOnTheRunsSiteAndEndsTheFirst` |
 | `SessionsClient.SignOutAsync` | Sign Out | yes | `LiveSessionTests.ASessionSignedInByHandServesABoundClientAcrossItsSubClients`, `LiveConnectedAppTests.ASessionSignedInWithAMintedJwtServesABoundClientAndIsSignedOut` |
 | `TableauCredentials.PersonalAccessToken` | Sign In with a personal access token | yes | `LiveSessionTests.AClientSignsItselfInForACallAndSignsOutWhenDisposed`, `LiveAreaTests.AProjectIsMadeFoundByAFilterUpdatedAndDeletedInTheRunsProject` |
 | `TableauCredentials.PersonalAccessToken` | Sign In with a personal access token, impersonating a user | no | not live yet (#57) |
@@ -42,13 +42,13 @@ run: it stays checked by hand.
 | `TableauCredentials.UnifiedAccessToken` | Sign In with a unified access token | no | Tableau Cloud only |
 | `TableauCredentials.Password` | Sign In | no | a password: an automated run is given none, and `ServerOnlySessionTests` signs in with one by hand |
 | `TableauCredentials.Password` | Sign In, impersonating a user | no | a password: an automated run is given none, and `ServerOnlySessionTests` signs in with one by hand |
-| `SitesClient.GetAsync` | Query Site | no | not live yet (#57) |
-| `SitesClient.GetByContentUrlAsync` | Query Site by content URL | no | not live yet (#57) |
-| `SitesClient.GetByNameAsync` | Query Site by name | no | not live yet (#57) |
-| `SitesClient.ListAsync` | Query Sites | yes | `LiveSite` |
-| `SitesClient.ListPageAsync` | Query Sites | no | not live yet (#57) |
+| `SitesClient.GetAsync` | Query Site | yes | `LiveSiteAdminTests.TheRunsSiteIsReadByItsIdContentUrlAndNameListedAndUpdatedWithAnotherRevisionLimit` |
+| `SitesClient.GetByContentUrlAsync` | Query Site by content URL | yes | `LiveSiteAdminTests.TheRunsSiteIsReadByItsIdContentUrlAndNameListedAndUpdatedWithAnotherRevisionLimit` |
+| `SitesClient.GetByNameAsync` | Query Site by name | refused 404000 | `LiveSiteAdminTests.TheRunsSiteIsReadByItsIdContentUrlAndNameListedAndUpdatedWithAnotherRevisionLimit` |
+| `SitesClient.ListAsync` | Query Sites | yes | `LiveSiteAdminTests.TheRunsSiteIsReadByItsIdContentUrlAndNameListedAndUpdatedWithAnotherRevisionLimit`, `LiveSite` |
+| `SitesClient.ListPageAsync` | Query Sites | yes | `LiveSiteAdminTests.TheRunsSiteIsReadByItsIdContentUrlAndNameListedAndUpdatedWithAnotherRevisionLimit` |
 | `SitesClient.CreateAsync` | Create Site | yes | `LiveSite` |
-| `SitesClient.UpdateAsync` | Update Site | no | not live yet (#57) |
+| `SitesClient.UpdateAsync` | Update Site | yes | `LiveSiteAdminTests.TheRunsSiteIsReadByItsIdContentUrlAndNameListedAndUpdatedWithAnotherRevisionLimit` |
 | `SitesClient.DeleteAsync` | Delete Site | yes | `SuiteCleanup` |
 | `ProjectsClient.ListAsync` | Query Projects | yes | `LiveAreaTests.AProjectIsMadeFoundByAFilterUpdatedAndDeletedInTheRunsProject`, `LiveSessionTests.AClientSignsItselfInForACallAndSignsOutWhenDisposed` |
 | `ProjectsClient.ListPageAsync` | Query Projects | yes | `LiveAreaTests.AProjectIsMadeFoundByAFilterUpdatedAndDeletedInTheRunsProject`, `LiveConnectedAppTests.AClientWithTheConnectedAppSignsItselfInForAPageOfProjectsAndSignsOutWhenDisposed` |

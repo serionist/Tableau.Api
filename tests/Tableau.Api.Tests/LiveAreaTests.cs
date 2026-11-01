@@ -197,13 +197,13 @@ internal sealed record LiveWorkbooksConnection(IReadOnlyList<LiveWorkbookNode> N
 internal sealed partial class LiveJson : System.Text.Json.Serialization.JsonSerializerContext;
 
 /// <summary>
-/// What only a Tableau Server has, or what changes its users and sites, run by hand with TABLEAU_SERVER_ONLY=1 on a server
-/// you may change, signed in as a server administrator (TABLEAU_SERVER_ONLY_SERVER_URL, TABLEAU_SERVER_ONLY_SITE,
-/// TABLEAU_SERVER_ONLY_USER and TABLEAU_SERVER_ONLY_PASSWORD, as for the session tests): a site made with a revision limit
-/// sent as a JSON number, updated and deleted; a group imported from Active Directory and synchronised, at once and as a
-/// job (TABLEAU_SERVER_ONLY_AD_GROUP, a directory group not on the site, and TABLEAU_SERVER_ONLY_AD_DOMAIN, its domain;
-/// its users join the site and stay); and a user added, updated and removed (TABLEAU_SERVER_ONLY_NEW_USER, a name not on
-/// the site, from the directory where the server uses one). One at a time, as the live ones.
+/// What only a Tableau Server has, or what changes its users, run by hand with TABLEAU_SERVER_ONLY=1 on a server you may
+/// change, signed in as a server administrator (TABLEAU_SERVER_ONLY_SERVER_URL, TABLEAU_SERVER_ONLY_SITE,
+/// TABLEAU_SERVER_ONLY_USER and TABLEAU_SERVER_ONLY_PASSWORD, as for the session tests): a group imported from Active
+/// Directory and synchronised, at once and as a job (TABLEAU_SERVER_ONLY_AD_GROUP, a directory group not on the site, and
+/// TABLEAU_SERVER_ONLY_AD_DOMAIN, its domain; its users join the site and stay); and a user added, updated and removed
+/// (TABLEAU_SERVER_ONLY_NEW_USER, a name not on the site, from the directory where the server uses one). One at a time,
+/// as the live ones. <see cref="LiveSiteAdminTests"/> makes, reads and updates a site each night.
 /// </summary>
 [TestClass]
 [DoNotParallelize]
@@ -215,55 +215,6 @@ public sealed class ServerOnlyAreaTests
     private const string DirectoryGroup = "TABLEAU_SERVER_ONLY_AD_GROUP";
     private const string DirectoryDomain = "TABLEAU_SERVER_ONLY_AD_DOMAIN";
     private const string NewUser = "TABLEAU_SERVER_ONLY_NEW_USER";
-
-    [SiteTest(TableauSite.ServerOnly, [ServerUrl, User, Password]), TestCategory(TableauSite.ServerOnly)]
-    public async Task ASiteIsMadeWithARevisionLimitUpdatedOnItAndDeleted()
-    {
-        await using var client = Client();
-        var first = await SignInAsync(client);
-        var contentUrl = "tableau-api-server-only-" + LiveSite.Run;
-        Site? made = null;
-        Site updated;
-        Site read;
-        try
-        {
-            made = await client.WithSession(first).Sites.CreateAsync(new Site
-            {
-                Name = "Tableau.Api ServerOnly " + LiveSite.Run,
-                ContentUrl = contentUrl,
-                RevisionHistoryEnabled = true,
-                RevisionLimit = 25,
-            });
-            // Tableau updates only the site a session is on, so the update, the read and the delete are made from one.
-            var onIt = LiveSite.Saw(await client.Sessions.SignInAsync(TableauCredentials.Password(TableauSite.Setting(User),
-                LiveSite.Secret(Password)), contentUrl));
-            var there = client.WithSession(onIt);
-            updated = await there.Sites.UpdateAsync(made.Id!, new Site { RevisionLimit = 30 });
-            read = await there.Sites.GetByContentUrlAsync(contentUrl);
-            await there.Sites.DeleteAsync(made.Id!);
-        }
-        catch (Exception failed) when (made?.Id is { } id)
-        {
-            // The site the test made goes whatever failed; one that can't is named, so it can be deleted by hand.
-            try
-            {
-                await client.WithSession(first).Sites.DeleteAsync(id);
-            }
-            catch (TableauException cleanup)
-            {
-                throw new AggregateException($"The site '{contentUrl}' ({id}) is left on the server: delete it by hand.", failed, cleanup);
-            }
-            throw;
-        }
-        finally
-        {
-            await client.Sessions.SignOutAsync(first);
-        }
-
-        Assert.AreEqual((contentUrl, 25L), (made.ContentUrl, made.RevisionLimit));
-        Assert.AreEqual(30L, updated.RevisionLimit);
-        Assert.AreEqual((made.Id, 30L), (read.Id, read.RevisionLimit));
-    }
 
     [SiteTest(TableauSite.ServerOnly, [ServerUrl, User, Password, DirectoryGroup, DirectoryDomain]), TestCategory(TableauSite.ServerOnly)]
     public async Task AGroupIsImportedFromActiveDirectoryAndSynchronisedAtOnceAndAsAJob()
