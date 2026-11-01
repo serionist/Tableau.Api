@@ -72,7 +72,7 @@ administrator's on the default site; the connected app (direct trust) keeps its 
     and its token is refused after;
   - a session signed in with `TableauCredentials.Jwt`, from a JWT the test mints with the library's
     `ConnectedAppJwt.Mint` and the same settings, serves a bound client and is signed out. That makes the `Jwt` kind
-    live too.
+    live too. The minted JWT joins `LiveSite`'s live secrets, so the log check and the scrubbing know it.
 - **The token and the local runs:** the CI token is not the one in a maintainer's local settings, so a local run and the
   nightly never sign each other out. One token allows one session: a test's client is disposed before the next signs
   in, as the tests run one at a time today.
@@ -101,12 +101,19 @@ right. Once the server reaches 2025.3 the app could do more, but the token stays
 
 ### A site per run
 
-- **The site:** named `Tableau.Api live run <run> <made>`, content URL `tableau-api-live-run-<run>-<made>`, where
-  `<run>` is `LiveSite.Run` (CI's run and attempt, or a local run's time and random part) and `<made>` the second it was
-  made, in UTC (`yyyyMMddTHHmmssZ`): a site has no creation date in the REST API, so its name carries one, as a run's
-  groups' names do today. The content URL uses only letters, digits and hyphens, which Create Site keeps as given.
+- **The site:** named `Tableau.Api live run <run> <made>`, content URL `tableau-api-live-run-<run>-<stamp>`, where
+  `<run>` is `LiveSite.Run` (CI's run and attempt, or a local run's time and random part), `<made>` the second it was
+  made in UTC (`yyyyMMddTHHmmssZ`) and `<stamp>` the same second in digits alone (`yyyyMMddHHmmss`): a site has no
+  creation date in the REST API, so its name carries one, as a run's groups' names do today. The content URL holds only
+  lower-case letters, digits and hyphens, which Create Site keeps as given.
 - **Made once a run,** by `LiveSite.RunSiteAsync`, under a lock, from a client of the token on `TABLEAU_LIVE_SITE`,
   after the sweep; that client is disposed before anything signs in to the run site.
+  - It is made with `RevisionHistoryEnabled = true` and a `RevisionLimit`, so S14's revision lists have the history
+    they read, and each night shows Tableau takes the limit as a JSON number in Create Site.
+  - `RunSiteAsync` fails, naming the site, unless Create Site's answer passes the sweep's own rule (`IsRunSite`): a
+    name or content URL Tableau changed would otherwise leave every run site out of the sweep, silently.
+  - Each test that needs the run site takes it (`RunSiteAsync`) before its first sign-in, so the setup's sign-in, which
+    ends the token's other session, never ends one a test holds, such as Switch Site's.
 - **Worked in:** every content test gets its client from `LiveSite.RunClientAsync()`, whose options name the run site,
   so the client signs in there with the token, and signs in there again on renewal or after a 401. Switch Site is not
   how the content clients get there: a client that owns its session signs in again to its options' site, so one moved by
@@ -115,22 +122,39 @@ right. Once the server reaches 2025.3 the app could do more, but the token stays
 - **Inside it,** as today: the run's project made with `publishSamples=true`, so Tableau publishes two sample workbooks
   and their data source into it; the run's local groups. Every list in the site holds only the run's content, so Query
   Workbooks for User and the Metadata API read nothing else.
+- **Shared and owned content,** since MSTest promises no order between tests:
+  - the run's project and its samples are shared: every test may read them, and may change them only as it changes
+    them back in the same test (an update, a tag, a permission, a favorite), never delete them;
+  - a test that deletes content owns it: `LiveSite.OwnSamplesAsync` makes it a project of its own with
+    `publishSamples=true`, named after the run and the test. S14's data source test (Delete Data Source), its tags test
+    (Delete Workbook) and `LiveCatalogTests` (the catalog's deletes) take their own;
+  - the directory user is owned by the test that adds it, which impersonates it too.
+- **On a fresh site:** the Metadata API test waits, with `LiveSite.EventuallyAsync`, until a query filtered on the run's
+  project lists both samples, and pages by one, so it follows a cursor; the counts it compares come from that filter,
+  which the owned projects don't change. The users test pages by one, the site holding few users.
 - **Deleted at the end** by `LiveSite.CleanupAsync`: Delete Site from a session on the run site, as the reference asks
   ("you must include the authentication token that you got back when you signed into the site"). The cleanup's client
   has a `RequestTimeout` of ten minutes, since a site with content can take long to delete and Delete Site is never sent
   twice. The site's projects, groups, content, catalog assets, group set and users' memberships go with it.
 - **The sweep,** before the run site is made: Query Sites, and for each site whose name and content URL are a run's
-  exactly and whose `<made>` is more than a day ago, a sign-in to it and Delete Site. A site already gone is passed
-  over. Any other site stays, whatever its name.
+  exactly and whose `<made>` is more than a day ago, a sign-in to it and Delete Site, from a client with the cleanup's
+  options and its ten minutes. Any other site stays, whatever its name.
+  - A sign-in to a leftover that fails is told apart by Query Sites again, from the default site: a site no longer
+    listed is gone and passed over; one still listed is a failure.
+  - A leftover the sweep can't delete never stops the run site's creation, which would fail every content test: it is
+    kept, and `SuiteCleanup` fails the run at its end naming the site, so that night is red with the cause and every
+    test has still run.
 - **What goes:** the project and group sweeps on the default site, with `IsRunProject`, `IsRunGroup` and their rows in
-  `LiveSiteTests`; the site sweep's rule takes their place there.
+  `LiveSiteTests`; the site sweep's rule takes their place there. Before they go, a read-only list of the default
+  site's run projects and run groups by the old rules; step 4's progress row names the count, and a maintainer deletes
+  any by hand.
 
 ### The directory accounts
 
 The maintainer made technical Active Directory accounts on the server's domain: a group with one member, and a user on
-its own; none can sign in. Their names never enter the repo; they reach the suite as settings, `tableau-live`
-environment secrets in CI (so GitHub masks them too), and join `LiveSite`'s known settings, which every test's output,
-every recorded fixture and the end-of-run scan scrub.
+its own; each is enabled, with a random password nobody holds (Q7). Their names never enter the repo; they reach the
+suite as settings, `tableau-live` environment secrets in CI (so GitHub masks their exact values), and join `LiveSite`'s
+known settings, which every test's output, every recorded fixture and the end-of-run scan scrub.
 
 | Setting | What it holds |
 |---|---|
@@ -146,6 +170,15 @@ every recorded fixture and the end-of-run scan scrub.
 - **Which form of the group's name and of the domain the import takes is open** (O1): the server knows two directory
   domains, each with a full name and a short name (List Server Active Directory Domains). The build tries the group's
   `sAMAccountName` with the domain's full name first, then the short name, and the settings hold what worked.
+- **Kept out of the public log,** where a failed test's message goes and GitHub masks only exact values:
+  - `SiteTestAttribute.ExecuteAsync` returns a failed result's message, stack trace and output with every known
+    setting and live secret as `***`, case aside. `Scrubbed` moves from `LiveContentTests` to `LiveSite` for it. Today
+    only `LiveContentTests.Record` scrubs, and a `TableauException`'s message carries Tableau's detail;
+  - the directory tests add each directory string Tableau answers (a user's or a group's name, a domain) to the known
+    values as they read it, so a form no setting holds is scrubbed too;
+  - they assert with fixed messages that name the setting, never a value:
+    `Assert.IsTrue(string.Equals(...), "the import answers TABLEAU_LIVE_AD_GROUP")`, not `Assert.AreEqual` on the
+    names, which prints both.
 
 ### The backfilled live tests
 
@@ -154,9 +187,9 @@ Everything happens in the run site unless a row says otherwise. A call Tableau r
 
 | Area | Live calls, new in this plan | Where |
 |---|---|---|
-| Sites | the run site made and deleted (setup and cleanup); read by id, content URL and name; listed by `ListAsync` and `ListPageAsync`; updated with a revision limit, which shows Tableau reads a JSON number there (S12's open item) | `LiveSiteAdminTests`, `LiveSite`, `SuiteCleanup` |
-| Sessions | Switch Site from a session on `TABLEAU_LIVE_SITE` into the run site, the first token refused after; a token sign-in impersonating the directory user (Q5) | `LiveSessionTests` |
-| Users | the directory user added as `Unlicensed`, updated to `Viewer`, read, impersonated, removed with its assets mapped to the suite's user | `LiveDirectoryTests` |
+| Sites | the run site made with revision history and a limit, and deleted (setup and cleanup); read by id, content URL and name, its history and limit read back; listed by `ListAsync` and `ListPageAsync`; updated with another limit and history kept on, which shows Tableau reads a JSON number there too (S12's open item) | `LiveSiteAdminTests`, `LiveSite`, `SuiteCleanup` |
+| Sessions | Switch Site from a session on `TABLEAU_LIVE_SITE` into the run site, the first token refused after | `LiveSessionTests` |
+| Users | the directory user added as `Unlicensed`, updated to `Viewer`, read, impersonated by a token sign-in (Q5), removed with its assets mapped to the suite's user, all in one test | `LiveDirectoryTests` |
 | Groups | the directory group imported at once (its one member listed), synchronised at once and as a job, deleted; imported as a job, found by name and domain, deleted | `LiveDirectoryTests` |
 | Favorites | a sample workbook, view and data source and the run's project added to the suite's user's favorites, listed, removed | `LiveAccessTests` |
 | Default permissions | each kind on the run's project for a run's group: read, added, deleted; data roles pinned (O3) | `LiveAccessTests` |
@@ -174,17 +207,19 @@ Everything happens in the run site unless a row says otherwise. A call Tableau r
   refused with Tableau's code, and its row says which.
 - **A group set** needs Create Group Set (REST API 3.22), which the 2.0 client doesn't have. The test sends it through
   the client's own pipeline with a test-side `Endpoint` (the test project sees the library's internals), so it signs in,
-  escapes and logs as any call does; the site's deletion takes the group set with it (Q2).
+  escapes and logs as any call does; the site's deletion takes the group set with it (Q2). Its call isn't in
+  `Endpoints`, so the matrix has no row for it, and the nightly's check passes over recorded calls the table lacks.
 - **Impersonation:** the token's owner is a server administrator and `tsm authentication pat-impersonation enable` is
   on, which lets any server administrator's token impersonate, older tokens included. The directory user is a `Viewer`
-  on the run site while the test signs in as it, since an unlicensed user has no session to act in (Q5). Whether
-  Tableau lets a token act as a directory account that can't sign in itself is open (O4).
+  on the run site while the test signs in as it, since an unlicensed user has no session to act in (Q5); the account
+  is enabled and needs no password to be impersonated (Q7). Should Tableau still refuse, the row is pinned `refused`
+  with Tableau's code, never moved to the token's own user (Q5, O4).
 
 ### The ServerOnly tests
 
 | Test | After |
 |---|---|
-| `ServerOnlyAreaTests.ASiteIsMadeWithARevisionLimitUpdatedOnItAndDeleted` | deleted: the run site and `LiveSiteAdminTests` cover it nightly |
+| `ServerOnlyAreaTests.ASiteIsMadeWithARevisionLimitUpdatedOnItAndDeleted` | deleted: the run site, made each night with revision history and a limit, and `LiveSiteAdminTests`, which reads both back and updates the limit, cover it |
 | `ServerOnlyAreaTests.AGroupIsImportedFromActiveDirectoryAndSynchronisedAtOnceAndAsAJob` | deleted: `LiveDirectoryTests` |
 | `ServerOnlyAreaTests.AUserIsAddedUpdatedAndRemoved` | deleted: `LiveDirectoryTests` |
 | `ServerOnlySessionTests.SwitchSiteGivesASessionOnTheOtherSiteAndEndsTheFirst` | deleted: `LiveSessionTests` |
@@ -195,7 +230,9 @@ Their settings `TABLEAU_SERVER_ONLY_AD_GROUP`, `_AD_DOMAIN`, `_NEW_USER` and `_O
 
 ### The live-coverage matrix
 
-`docs/live-coverage.md`: a lead line, then one table with a row for each method and each REST call it sends.
+`docs/live-coverage.md`: a lead line naming the server the nightly runs on, Tableau Server 2025.1.5, and saying Tableau
+Cloud isn't run (Q8); then one table for `TableauClient` with a row for each method and each REST call it sends; then a
+table for the Vizportal client, which S16 fills (Q9).
 
 | Column | Holds |
 |---|---|
@@ -239,22 +276,31 @@ Checked from both sides: against the code on every PR, against what Tableau answ
 - **The nightly's record:**
   - `SiteTestAttribute.ExecuteAsync` sets the site test that runs, and records how it ended. Site tests that sign in run
     one at a time (`[DoNotParallelize]`), and `ServerInfoSiteTests` joins them, so no call is credited to the wrong
-    test. `LiveSite`'s setup and `SuiteCleanup` set their own names while they call.
-  - The live clients log through a logger of the suite's that records each answered call's name and status beside the
-    test, and passes every line on to the suite's log check as now.
+    test; a `TableauSiteTests` row fails when a class with a `[SiteTest]` lacks `[DoNotParallelize]`. `LiveSite`'s
+    setup and `SuiteCleanup` set their own names while they call.
+  - The live clients log through a logger of the suite's that records each answered call's name, status and Tableau
+    error code beside the test, and passes every line on to the suite's log check as now.
+  - **Answered** means Tableau answered: an EventId 2 line (sending's answer, with its status), or an EventId 3 line
+    whose `TableauException` has a `StatusCode` (its `ErrorCode` too). A call the client's gates refuse before sending,
+    such as a sized workbook PDF at 3.25, logs an EventId 3 line with no status, and is not answered.
   - The call's name comes from the client: its three Debug lines for a request (sending, answered, failed) gain a `Call`
     property, the descriptor's name. Matching a path to a descriptor in the tests would repeat the client's own choice
     (Sign In by its body, an export by its query, Query Site by `key`) (Q3).
 - **The nightly's check,** in `SuiteCleanup` after the cleanup, when `TABLEAU_LIVE_MATRIX=1`, which `live.yml` sets,
   so a local run of one class isn't failed for the rest; it fails the run, naming each row, when:
   - a `yes` row's call wasn't answered with a 2xx in one of its tests;
-  - a `refused` row's call wasn't answered with an error in one of its tests, or was answered with a 2xx: the row
-    should say `yes`;
+  - a `refused <code>` row's call wasn't answered with an error carrying that `ErrorCode` in one of its tests, or was
+    answered with a 2xx: the row should say `yes`;
   - a `no` row's call was answered: after a server upgrade, the row should change.
 
-  A row whose test failed is left out, since that failure already fails the run.
-- **What it can't show:** two methods that send one call (a list and its page) in one test are told apart by the test's
-  code, which review reads, not by the record; a `no` row's call is checked to exist, not to be its method's.
+  A row whose test failed is left out, since that failure already fails the run; a recorded call the table has no row
+  for, such as the test-side Create Group Set, is passed over (Q2).
+- **What it can't show:** the record is per test and per call, not per method, so
+  - two methods that send one call (a list and its page) in one test are told apart by the test's code, which review
+    reads;
+  - a call of the same name made inside the named test by a helper, such as `LiveSite`'s or the client's own Server
+    Info, also satisfies the row;
+  - a `no` row's call is checked to exist, not to be its method's.
 
 ### Not chosen
 
@@ -275,25 +321,30 @@ Checked from both sides: against the code on every PR, against what Tableau answ
 - **The client's Debug log:** the lines for a request (EventIds 1, 2 and 3) gain the call's name, as a `Call` property
   and in their text: `Tableau client {Client}: {Call}: {Method} {RequestPath} answered {StatusCode} in ...`. A reader
   that matches those lines' exact text sees a new part; structured readers see one property more. CHANGELOG says so.
-- **Tableau versions:** none for users. The suite needs a Tableau Server (Create Site and Switch Site are Server only),
-  a server administrator's token, PAT impersonation on, and the directory accounts; Tableau Cloud stays checked by hand.
+- **Tableau versions:** none for users. The live suite becomes Tableau Server only (Q8): it needs Create Site and Switch
+  Site, a server administrator's token, PAT impersonation on, and the directory accounts. `TableauSite.cs` and
+  `AGENTS.md` say so, and Tableau Cloud stays checked by hand (the modernization plan's R3).
 - **The harness:** `live.yml` and the site tests' checks get stricter (a matrix on every PR and each night); nothing is
   loosened. The `ServerOnly` tests the nightly now runs are deleted, not skipped.
 
 ## Steps
 
-Two PRs (Q1): the first is step 1, so `main`'s nightly turns green; the second is steps 2 to 9. Each step is a commit
-that builds and passes `dotnet run eng/gate.cs -- full`, and each from step 3 ends with a local run of every `Live`
-test on Tableau Server 2025.1.5 with `TABLEAU_LIVE_MATRIX=1`, the settings mapped from outside the clone.
+Two PRs (Q1): the first is step 1, `Refs #57`, so `main`'s nightly turns green; the second is steps 2 to 9,
+`Closes #57`, on a branch from `main` once the first has merged. Each step is a commit that builds and passes
+`dotnet run eng/gate.cs -- full`, and each from step 3 ends with a local run of every `Live` test on Tableau Server
+2025.1.5 with `TABLEAU_LIVE_MATRIX=1`, the settings mapped from outside the clone.
 
 1. **The credential split** (Design, Two sign-ins):
    - `live.yml` maps `TABLEAU_LIVE_PAT_NAME` and `TABLEAU_LIVE_PAT_SECRET`, its header says which sign-in does what, and
      its scopes line names `tableau:content:read` alone;
    - `TableauSite` and `SiteTestAttribute` take the sign-in a test needs; `LiveSite` gives the token to every content
-     test and the app's settings to its own; `LiveConnectedAppTests` with direct trust and `Jwt`.
+     test and the app's settings to its own; `LiveConnectedAppTests` with direct trust and `Jwt`, the minted JWT kept
+     with the live secrets.
    - **Proves it:** `TableauSiteTests` rows: each sign-in's missing settings fail by name, and a test needing one isn't
      satisfied by the other's; a local run, the token and the app's settings mapped from outside the clone: the 13
-     `Live` tests and the two new ones pass. After the merge, `live.yml` by hand on `main` is green.
+     `Live` tests and the two new ones pass.
+   - **Ends with `finish-work`:** the full gate, a draft PR naming the live run (Tableau Server 2025.1.5, what passed),
+     `review-code` until clean, a maintainer's merge; then `live.yml` by hand on `main`, green.
 2. **The call's name in the log:** `TableauLog`'s three request lines take the endpoint's name; their callers pass it.
    - **Proves it:** `LogTests` rows: each line names its call, Query Projects among them; the log check still finds no
      secret.
@@ -301,26 +352,38 @@ test on Tableau Server 2025.1.5 with `TABLEAU_LIVE_MATRIX=1`, the settings mappe
    live saying `no: not live yet (#57)`; the table embedded in the test project; `LiveCoverageTests`; the record and the
    nightly's check; `live.yml` sets `TABLEAU_LIVE_MATRIX=1`.
    - **Proves it:** the checker's rows on invented tables, one per failure above, and on an invented record, one per
-     failure of the nightly's check; `LiveCoverageTests` passes on the real table; a local full `Live` run with
-     `TABLEAU_LIVE_MATRIX=1` passes, and fails when a `yes` row is pointed at a test that doesn't make its call.
-4. **A site per run** (Design, A site per run): `RunSiteAsync`, `RunClientAsync`, the cleanup's Delete Site, the site
-   sweep; every content test on the run site; the project and group sweeps and their rows go.
+     failure of the nightly's check, a `refused` row with another code and a call the table lacks among them; a
+     `TableauSiteTests` row failing for a `[SiteTest]` class without `[DoNotParallelize]`; `LiveCoverageTests` passes
+     on the real table; a local full `Live` run with `TABLEAU_LIVE_MATRIX=1` passes, and fails when a `yes` row is
+     pointed at a test that doesn't make its call.
+4. **A site per run** (Design, A site per run):
+   - first, a read-only list of the default site's run projects and run groups by the old rules, its count for this
+     step's progress row; a maintainer deletes any by hand;
+   - `RunSiteAsync` (revision history and a limit, its answer checked against `IsRunSite`), `RunClientAsync`, the
+     cleanup's Delete Site, the site sweep with the cleanup's options and its failures named by `SuiteCleanup`;
+   - every content test on the run site, the destructive ones on their own samples (`OwnSamplesAsync`); the Metadata
+     API test waiting for the run's samples and paging by one, the users test paging by one;
+   - the project and group sweeps and their rows go; `live.yml`'s `timeout-minutes` goes from 20 to 45.
    - **Proves it:** `LiveSiteTests` rows for the site sweep: a day-old run site swept; a recent one, one named
-     otherwise, one whose content URL or name differs by a character or by case, and the default site kept; the `Live`
-     tests pass on the run site; after the run, a read-only Query Sites lists no run site. Rows: Create Site, Delete
+     otherwise, one whose content URL or name differs by a character or by case, and the default site kept; a row that
+     `RunSiteAsync`'s check refuses an answer the sweep wouldn't take; the `Live` tests pass on the run site, S14's
+     revision lists among them; after the run, a read-only Query Sites lists no run site. Rows: Create Site, Delete
      Site, Query Sites.
 5. **Sites and Switch Site:** `LiveSiteAdminTests`; Switch Site in `LiveSessionTests`; `ServerOnlyAreaTests`' site test
    and `ServerOnlySessionTests`' Switch Site test deleted.
-   - **Proves it:** the new tests pass; the revision limit read back as sent. Rows: the sites' reads, lists and update,
-     Switch Site.
+   - **Proves it:** the new tests pass; the run site's revision history and limit read back as made, and the updated
+     limit as sent, history still on. Rows: the sites' reads, lists and update, Switch Site.
 6. **Directory users and groups, and impersonation:** the forms the import takes settled first, in the run site (O1);
-   the four settings in `live.yml` and `LiveSite`; `LiveDirectoryTests`; impersonation in `LiveSessionTests`;
+   the four settings in `live.yml` and `LiveSite`; the failed results' scrubbing in `SiteTestAttribute.ExecuteAsync`,
+   `Scrubbed` moved to `LiveSite`; `LiveDirectoryTests`, its user test impersonating the user it adds;
    `ServerOnlyAreaTests` deleted.
-   - **Proves it:** the import lists the one member named by `TABLEAU_LIVE_AD_GROUP_MEMBER`; the synchronisations answer
-     the group and a `GroupSync` job; the import job's group is found and deleted; the user's role reads back
-     `Viewer`; the impersonating session's user is the directory user's LUID; the test output holds none of the four
-     settings' values. Rows: Add User to Site, Update User, Remove User from Site, Create Group from Active Directory,
-     Update Group from Active Directory, Sign In with a personal access token, impersonating a user.
+   - **Proves it:** a `TableauSiteTests` row: a failed result whose message, stack trace and output hold a known
+     setting in another case comes back with `***`; the import lists the one member named by
+     `TABLEAU_LIVE_AD_GROUP_MEMBER`; the synchronisations answer the group and a `GroupSync` job; the import job's group
+     is found and deleted; the user's role reads back `Viewer`; the impersonating session's user is the directory
+     user's LUID, or the refusal is pinned (O4); the test output holds none of the four settings' values. Rows: Add
+     User to Site, Update User, Remove User from Site, Create Group from Active Directory, Update Group from Active
+     Directory, Sign In with a personal access token, impersonating a user.
 7. **Favorites and permissions:** `LiveAccessTests`, the group set's test-side descriptor.
    - **Proves it:** each favorite listed after its add and gone after its remove; each kind's default rule read back
      and gone after its delete; each sample's capability read back and gone; the group set's capability read back and
@@ -331,15 +394,17 @@ test on Tableau Server 2025.1.5 with `TABLEAU_LIVE_MATRIX=1`, the settings mappe
      tag held once and gone; each deleted asset refused as not found after. Rows: the catalog, the warnings, the tags,
      database and table permissions.
 9. **The last rows and the docs:** no row left saying `not live yet`; the docs (Docs); this plan's progress log.
-   - **Proves it:** `LiveCoverageTests`; `dotnet run eng/gate.cs -- quick` (AGENTS.md's length, links, skills); after
-     the merge, `live.yml` by hand on `main`, then a night.
+   - **Proves it:** `LiveCoverageTests`; `dotnet run eng/gate.cs -- quick` (AGENTS.md's length, links, skills).
+   - **Ends with `finish-work`:** the full gate, a draft PR naming the live run (Tableau Server 2025.1.5, what passed,
+     what was refused, what Tableau Cloud couldn't show), `review-code` until clean, a maintainer's merge; then
+     `live.yml` by hand on `main`, then a night.
 
 ## Tests
 
 | Suite | What is new or changed | Where it runs |
 |---|---|---|
-| Offline | `TableauSiteTests` (each sign-in's settings); `LiveSiteTests` (the site sweep's rule, the project and group rules gone); `LiveCoverageTests` (the table against the code, and its checker on invented tables and records); `LogTests` (the call's name in three lines) | every PR, Linux and Windows, under the gate's coverage |
-| `Live` | `LiveConnectedAppTests`, `LiveSiteAdminTests`, `LiveDirectoryTests`, `LiveAccessTests`, `LiveCatalogTests`; Switch Site and impersonation in `LiveSessionTests`; more tags in `LiveContentTests`; every content test on the run site | nightly and by hand from `main` (`live.yml`), and locally, on the maintainers' Tableau Server 2025.1.5, REST API 3.25 |
+| Offline | `TableauSiteTests` (each sign-in's settings, a failed result scrubbed, `[DoNotParallelize]` on every site test class); `LiveSiteTests` (the site sweep's rule and `RunSiteAsync`'s check, the project and group rules gone); `LiveCoverageTests` (the table against the code, and its checker on invented tables and records); `LogTests` (the call's name in three lines) | every PR, Linux and Windows, under the gate's coverage |
+| `Live` | `LiveConnectedAppTests`, `LiveSiteAdminTests`, `LiveDirectoryTests` (impersonation in its user test), `LiveAccessTests`, `LiveCatalogTests`; Switch Site in `LiveSessionTests`; more tags in `LiveContentTests`; every content test on the run site, the destructive ones on samples of their own | nightly and by hand from `main` (`live.yml`), and locally, on the maintainers' Tableau Server 2025.1.5, REST API 3.25; never on Tableau Cloud (Q8) |
 | `ServerOnly` | the password sign-ins alone | by hand, on a Tableau Server |
 
 - **The gate:** `dotnet run eng/gate.cs -- full` on each commit; coverage of the library can only rise, since only
@@ -351,15 +416,18 @@ test on Tableau Server 2025.1.5 with `TABLEAU_LIVE_MATRIX=1`, the settings mappe
 
 ## Docs
 
-- `docs/live-coverage.md`, new.
+- `docs/live-coverage.md`, new: its lead line names Tableau Server 2025.1.5 and says Tableau Cloud isn't run (Q8); its
+  Vizportal table waits for S16 (Q9).
 - `AGENTS.md`, rows edited in place (it holds 148 of its 150 lines): the `docs/` row names `live-coverage.md`; the
   `tests/` row's `LiveSite.cs` says run site, not run project and groups, and names `LiveCoverageTests`; the `.github/`
-  row's `live.yml` says it signs in with the CI token in a site of the run's own; Build and test's site-test bullet
-  says a new public method adds its rows to `docs/live-coverage.md`.
+  row's `live.yml` says it signs in with the CI token in a site of the run's own, on Tableau Server only; Build and
+  test's site-test bullet says the `Live` tests run on a Tableau Server alone (Q8) and a new public method adds its
+  rows to `docs/live-coverage.md`.
+- `TableauSite.cs`: `Live` runs on a Tableau Server alone, as a server administrator, where its summary says Tableau
+  Cloud or a Tableau Server (Q8).
 - `.claude/skills/finish-work/SKILL.md`, step 3: a live test works in the run's own site, which the suite deletes, with
   the token's settings; the connected app's settings drive its own tests.
-- `.github/workflows/live.yml`'s header; the summaries in `LiveSite.cs`, `TableauSite.cs`, `SuiteCleanup.cs` and the
-  live test classes.
+- `.github/workflows/live.yml`'s header; the summaries in `LiveSite.cs`, `SuiteCleanup.cs` and the live test classes.
 - `CHANGELOG.md`, Unreleased: the Debug lines name the call.
 - `docs/plans/2026-10-28-modernization.md`: a progress-log row for #57 (the token, the run site, the matrix that S15 to
   S17 follow and S18 publishes); in For the maintainers, the After S14 item on the JWT's 3.27 scopes closed by it, and
@@ -372,14 +440,16 @@ test on Tableau Server 2025.1.5 with `TABLEAU_LIVE_MATRIX=1`, the settings mappe
 
 | Risk | Status |
 |---|---|
-| Delete Site outlasts the cleanup's ten minutes, or the run breaks off, and a run site stays | Mitigated: the next run's sweep deletes it after a day; a failed cleanup fails the run and names the site |
-| One token allows one session: Switch Site and the impersonating sign-in end the token's other session | Mitigated: the site tests run one at a time, and each client is disposed before the next signs in; local runs use another token |
+| Delete Site outlasts the cleanup's ten minutes, or the run breaks off, and a run site stays | Mitigated: the next run's sweep deletes it after a day, with the same ten minutes; a failed cleanup fails the run and names the site |
+| The sweep stops matching run sites, or can't delete one, and leftovers pile up unseen | Mitigated: `RunSiteAsync` fails when Create Site's answer wouldn't pass the sweep's rule; the content URL's stamp is digits alone; a leftover the sweep can't delete fails that night's run by name, after every test has run |
+| One token allows one session: Switch Site and the impersonating sign-in end the token's other session | Mitigated: the site tests run one at a time, each client is disposed before the next signs in, and a test takes the run site before its first sign-in; local runs use another token |
 | The catalog takes longer than five minutes to list a new site's assets | Accepted: the test fails naming the wait; a rerun shows whether it was the index |
 | The server isn't licensed for Data Management | Accepted: those calls are pinned as refused, and the rows say so (O2) |
 | The directory user as a `Viewer` takes a user licence; with none free, Tableau adds it `Unlicensed` and answers 201 | Accepted: the test fails naming the role it got; the maintainer frees a licence or the test drops the impersonation |
-| Tableau won't let a token impersonate a directory account that can't sign in | Open (O4): the row is pinned as refused with Tableau's code, or the maintainer names another user |
+| Tableau won't let a token impersonate the directory account | Open (O4): the row is pinned `refused` with Tableau's code; it never falls back to the token's own user (Q5) |
 | The import takes another form of the group's name or domain than the settings give | Open (O1): settled before the settings are set |
-| A setting's value reaches the public Actions log | Mitigated: the four directory settings are environment secrets, which GitHub masks, and known settings, which the suite scrubs from its output, fixtures and log check |
+| A directory name reaches the public Actions log, through a failed test's message or Tableau's detail in an exception | Mitigated for the settings' values: environment secrets, which GitHub masks when exact; known settings, which `SiteTestAttribute` scrubs, case aside, from a failed result's message, stack trace and output, and the suite from its own output and fixtures; each directory string Tableau answers added to them at run time; assertions with fixed messages. Accepted for a form no setting holds and no answer the test read gives |
+| Tests that share content depend on their order | Mitigated: the shared samples are never deleted, and a test that deletes content owns samples of its own |
 | The run gets longer: a site made and deleted, imports, the catalog's wait | Mitigated: `live.yml`'s `timeout-minutes` goes from 20 to 45 |
 | The matrix check fails on a night when a test failed early | Mitigated: a row whose test failed is left out |
 | A user's tooling matches the client's Debug lines by their exact text | Accepted: a property is added, nothing removed; CHANGELOG says so |
@@ -387,14 +457,7 @@ test on Tableau Server 2025.1.5 with `TABLEAU_LIVE_MATRIX=1`, the settings mappe
 
 ## Owner calls
 
-| # | Question | Recommendation | Answer |
-|---|---|---|---|
-| Q1 | One PR, or the credential split first on its own? | Two: step 1 first, so `main`'s nightly is green within a day; steps 2 to 9 on a second branch from `main` | |
-| Q2 | A group set for the permission test: through a test-side descriptor on the client's pipeline, in the run site; Create and Delete Group Set in the 2.0 client (a door); or group sets not live | The test-side descriptor: no public API, and the run site takes the group set with it | |
-| Q3 | The record needs each call's name: add it to the client's Debug lines (users see it), or match paths in the tests | The Debug lines: one place, and a log reader learns the call too | |
-| Q4 | `ServerOnly` keeps only the password sign-ins, the rest folded into the nightly and deleted | Yes | |
-| Q5 | Impersonation acts as the directory user, made a `Viewer` for the test's length (a user licence, briefly); or as the token's own user, which proves less | The directory user | |
-| Q6 | The nightly's matrix check runs only with `TABLEAU_LIVE_MATRIX=1`, set by `live.yml`, so a local run of one class isn't failed | Yes | |
+Q1 to Q9, with the maintainer's answers on #57, are in Plan review, Round 1.
 
 ## Open items
 
@@ -405,7 +468,7 @@ What the build settles, on the server, before the row or the setting it decides:
 | O1 | Which form of the group's name and domain Create Group's import takes | an import into the run site with the group's `sAMAccountName` and the domain's full name, then its short name; the settings get what worked |
 | O2 | Whether the server is licensed for Data Management | Add Data Quality Warning on the run's data source: answered or refused, and each row follows |
 | O3 | The data roles' default permissions answer 405000 on Tableau Server 2025.1 (a read-only probe) | pinned as refused; whether the 2.0 client keeps `DefaultPermissionsKind.DataRoles` is a follow-up issue |
-| O4 | Whether a token can impersonate a directory account that can't sign in | the impersonating sign-in, answered or refused |
+| O4 | Whether a token can impersonate the directory account, enabled with a password nobody holds (Q7) | the impersonating sign-in: answered, or refused and pinned `refused` (Q5) |
 
 **Looked up** (2026-11-01): the reference's Sign In, Switch Site, Create Site, Delete Site, Query Sites, Add User to
 Site, Create Group, Update Group, the favorites, the permissions and default permissions, the metadata page (data
@@ -425,7 +488,73 @@ roles.
 | Date | Step | What happened |
 |---|---|---|
 | 2026-11-01 | plan | Written on `57-live-coverage` from `origin/main` at `c7ffe6f`, with the maintainer's decisions on #57 and the CI token in `tableau-live`. |
+| 2026-11-01 | plan | Plan review round 1 on `993a9e1`: eight minors, all fixed; the maintainer answered Q1 to Q9 on #57 and took every improvement. Awaiting the maintainer's approval. |
 
 ## Plan review
 
-Not reviewed yet: `review-plan` writes each round here.
+### Round 1
+
+- **How:** a fresh reviewer agent with review-plan's method and lenses, and a fresh refuter agent for the one finding
+  it rated major, P1 (Claude Opus 5.5), on `993a9e1`, 2026-11-01.
+- **Verdict:** approved. Eight findings, all minor: the refuter confirmed P1 on its facts and rated it minor, since a
+  directory name isn't a credential, the leak needs a test to fail first, and #57's ruling keeps the names out of the
+  repo, not the CI log. No blocker or major is open, every owner call has its answer, and the plan names its checks
+  and docs and ends each PR with `finish-work` and `review-code`. No round 2.
+- **Now:** every finding below is fixed in the plan, the answers to Q1 to Q9 are folded into its design and steps, and
+  every improvement is taken, in the commit "Apply plan review round 1". The frontmatter's `status` stays `draft`
+  until a maintainer approves the plan.
+
+| # | Sev | Finding | Status |
+|---|---|---|---|
+| P1 | minor (major, refuted to minor) | Nothing scrubs a failed test's message: only `LiveContentTests.Record` scrubs, `SiteTestAttribute.ExecuteAsync` returns results unchanged, a `TableauException`'s message carries Tableau's detail, the log check looks for secrets only, and GitHub masks exact values only. If the import answers the domain's other form, the ported `Assert.AreEqual((name, domain), ...)` prints it in the public log | fixed: `ExecuteAsync` returns a failed result's message, stack trace and output with every known setting and live secret as `***`, case aside (`Scrubbed` moves to `LiveSite`); the directory tests add each directory string Tableau answers to the known values and assert with fixed messages naming the setting; the Risks row says mitigated for the settings' values and accepted for a form no setting holds, without the log check; step 6 proves it with a `TableauSiteTests` row (The directory accounts, Risks, step 6) |
+| P2 | minor | On a fresh site the Metadata API test compares two counts while the index grows, and with two workbooks at a page of two it never follows a cursor | fixed: it waits until a query filtered on the run's project lists both samples, compares counts under that filter, and pages by one; the users test pages by one (A site per run, step 4) |
+| P3 | minor | The tests depend on their order: S14's data source test deletes the only sample data source, and `LiveCatalogTests` deletes catalog assets other tests would read; impersonation sat in two classes | fixed: the shared samples are never deleted; a test that deletes content owns samples of its own (`OwnSamplesAsync`), S14's data source and tags tests and `LiveCatalogTests` among them; impersonation stays in the test that adds the user (A site per run, The backfilled live tests, steps 4 and 6) |
+| P4 | minor | "Answered" was undefined: a call the client's gates refuse logs an EventId 3 line with no status, such as S14's sized workbook PDF at 3.25 | fixed: answered is an EventId 2 line, or an EventId 3 line whose `TableauException` has a `StatusCode` (How the matrix stays honest) |
+| P5 | minor | Create Site leaves revision history off by default, which breaks S14's revision lists on the run site, and deleting the `ServerOnly` site test dropped the live proof that Create Site sends `RevisionLimit` as a JSON number | fixed: the run site is made with `RevisionHistoryEnabled = true` and a `RevisionLimit`, `LiveSiteAdminTests` reads both back, and the update keeps history on (A site per run, The ServerOnly tests, steps 4 and 5) |
+| P6 | minor | The sweep could stop silently: a case change by Tableau in the content URL's `T` and `Z` would never match; its Delete Site ran at the default timeout, unretried; a leftover it couldn't delete threw from `RunSiteAsync` and failed every content test, with "gone" not told from a refused sign-in | fixed: the content URL's stamp is digits alone, and `RunSiteAsync` fails unless Create Site's answer passes the sweep's own rule; the sweep deletes with the cleanup's options; a leftover it can't delete is named by `SuiteCleanup` at the run's end, and a failed sign-in is told apart by listing the sites again (A site per run, Risks, step 4) |
+| P7 | minor | Removing the default site's project and group sweeps would orphan any old run project or group there | fixed: before they go, a read-only list by the old rules, its count in step 4's progress row, and a maintainer deletes any by hand (A site per run, step 4) |
+| P8 | minor | Neither PR's last step ended with `finish-work` and `review-code` | fixed: steps 1 and 9 each end with the full gate, a draft PR naming the live run, `review-code` until clean, and a maintainer's merge (Steps) |
+
+**Refuted:**
+
+- **The `Call` log property as a one-way door:** `TableauLog` is internal, and log text is not among `AGENTS.md`'s
+  doors; the plan names the change under Compatibility and CHANGELOG.
+- **The sweep deleting a maintainers' site:** it takes only a site whose name and content URL are a run's exactly and
+  more than a day old, and the default site can't be deleted.
+- **Step 1 alone not turning the nightly green:** the 401002s were the JWT's scope refusals, and the same tests passed
+  13 of 13 with a token.
+- **The sweep's sign-in to a leftover breaking its own client:** the client signs in again once after a 401.
+- **The cleanup's session signing a test out:** `[AssemblyCleanup]` runs after every test.
+- **A failed run keeping a directory user's licence:** the role lives on the run site, which the cleanup or the next
+  sweep deletes.
+- **The group set needing public API:** the test-side descriptor sends it through the client's internal pipeline.
+- **The job's timeout too short:** the plan raises it to 45 minutes.
+- **Delete Site from a session on the site misreading the reference:** the reference asks for "the authentication token
+  that you got back when you signed into the site".
+- **Deleting the `ServerOnly` tests loosening the harness:** each assertion moves to a nightly `Live` test; the one that
+  didn't, Create Site's revision limit, is P5, now fixed.
+
+**Owner calls** (the maintainer's answers on #57, 2026-11-01):
+
+| # | Question | Recommendation | Answer |
+|---|---|---|---|
+| Q1 | One PR, or the credential split first on its own? | Two: step 1 first, so `main`'s nightly is green within a day; steps 2 to 9 on a second branch from `main` | As recommended: two PRs, the token split first, `Refs #57`, then `Closes #57` |
+| Q2 | A group set for the permission test: through a test-side descriptor on the client's pipeline, in the run site; Create and Delete Group Set in the 2.0 client (a door); or group sets not live | The test-side descriptor: no public API, and the run site takes the group set with it | As recommended; the nightly's check passes over recorded calls the table has no row for |
+| Q3 | The record needs each call's name: add it to the client's Debug lines (users see it), or match paths in the tests | The Debug lines: one place, and a log reader learns the call too | As recommended: `Call` in the Debug lines |
+| Q4 | `ServerOnly` keeps only the password sign-ins, the rest folded into the nightly and deleted | Yes | As recommended, with P5's fix |
+| Q5 | Impersonation acts as the directory user, made a `Viewer` for the test's length (a user licence, briefly); or as the token's own user, which proves less | The directory user | As recommended; if Tableau refuses, the row is pinned `refused`, with no fall back to the token's own user |
+| Q6 | The nightly's matrix check runs only with `TABLEAU_LIVE_MATRIX=1`, set by `live.yml`, so a local run of one class isn't failed | Yes | As recommended |
+| Q7 | How are the technical directory accounts set up, which decides whether they can be imported and impersonated? | none: raised in this round and answered directly | They are enabled, each with a random password nobody holds |
+| Q8 | Does the live suite still claim Tableau Cloud, now that it makes a site per run? | none: raised in this round and answered directly | Tableau Server only: `TableauSite.cs` and `AGENTS.md` say so, the matrix's lead line names Tableau Server 2025.1.5 and says Cloud isn't run, and the modernization plan's R3, Tableau Cloud checked by hand, stands |
+| Q9 | Where does the Vizportal client go in the matrix? | none: raised in this round and answered directly | A table of its own in `docs/live-coverage.md`, filled by S16 |
+
+**Improvements:**
+
+| Improvement | Answer |
+|---|---|
+| A `TableauSiteTests` row failing when a `[SiteTest]` class lacks `[DoNotParallelize]` | taken (How the matrix stays honest, step 3) |
+| The nightly's check compares a `refused <code>` row's code with the recorded `TableauException.ErrorCode` | taken (How the matrix stays honest, step 3) |
+| The JWT the `Jwt` test mints joins `LiveSite`'s live secrets | taken (Two sign-ins, step 1) |
+| A test takes the run site before its first sign-in, so `RunSiteAsync`'s sign-in can't end a default-site session the Switch Site test holds | taken (A site per run, Risks) |
+| "What it can't show" widened: the record is per test, so a call of the same name made by a helper inside the named test also satisfies a row | taken (How the matrix stays honest) |
+| The `timeout-minutes` change named in step 4, not only under Risks | taken (step 4) |
