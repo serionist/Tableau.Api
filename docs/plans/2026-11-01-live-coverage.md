@@ -489,6 +489,7 @@ roles.
 |---|---|---|
 | 2026-11-01 | plan | Written on `57-live-coverage` from `origin/main` at `c7ffe6f`, with the maintainer's decisions on #57 and the CI token in `tableau-live`. |
 | 2026-11-01 | plan | Plan review round 1 on `993a9e1`: eight minors, all fixed; the maintainer answered Q1 to Q9 on #57 and took every improvement. Awaiting the maintainer's approval. |
+| 2026-11-01 | 1 | The credential split: `SignsIn` takes `LiveSignIn.Token` or `LiveSignIn.ConnectedApp`; every content test signs in with the token; `LiveConnectedAppTests` signs in by direct trust and with `Jwt`, the JWT it mints kept with the live secrets; `live.yml` maps the token, and its JWT asks for `tableau:content:read` alone. `gate full` passed: 972 tests, lines 97.61%, branches 95.08%. A local run on Tableau Server 2025.1.5 (REST API 3.25) with the local token, `TABLEAU_LIVE=1` and `TestCategory=Live`: the 13 `Live` tests passed, in 50 s with the setup. The two `LiveConnectedAppTests` failed before any call, naming `TABLEAU_LIVE_CLIENT_ID`, `TABLEAU_LIVE_SECRET_ID`, `TABLEAU_LIVE_SECRET_VALUE` and `TABLEAU_LIVE_USER`, which the local settings don't hold: their first run on a site is `live.yml`'s on `main`. A read-only check after: no run group on the default site, the token's sessions signed out, and one run project, left by a local run of 2026-10-31 and not this one's, which the sweep takes once it is a day old. |
 
 ## Plan review
 
