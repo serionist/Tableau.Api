@@ -12,13 +12,14 @@
 // - sessions: a call that needs one signs in with a personal access token, carries its token and its site, and the
 //   client signs it out when disposed; a connected app's JWT is minted and signed with HMAC-SHA256; a session signed in
 //   by hand prints no token and serves a bound client, which signs it out when told;
+// - a list read through its sub-client, page by page until the total, with a filter escaped and the stable sort on the
+//   wire;
 // - the client from DI, its options bound from configuration by the binder's source generator, its primary handler
 //   configured and a handler of the caller's in its chain, and bad options refused at start-up by the options
 //   validation source generator's code.
 //
 // In the native binary reflection-based JSON is off, so a converter that reached for it would fail here. Later steps
-// add their paths: a page, a publish, a Vizportal call. It prints a line per check and exits with 1 on the
-// first failure.
+// add their paths: a publish, a Vizportal call. It prints a line per check and exits with 1 on the first failure.
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -135,6 +136,20 @@ try
             Check("a call that needs a session signs in first and carries its token and site",
                 FixtureHandler.Sent[^2] == "POST /api/3.25/auth/signin -"
                 && FixtureHandler.Sent[^1] == "GET /api/3.25/sites/0f4b9e1c-3a52-4d6e-9c8b-1a2b3c4d5e6f/items invented-session-token");
+
+            var projects = new List<string>();
+            await foreach (var project in signing.Projects.ListAsync(new ProjectListOptions
+            {
+                Filter = TableauFilter.And(TableauFilter.Eq(ProjectField.TopLevelProject, true), TableauFilter.In(ProjectField.Name, "R&D", "C++")),
+                PageSize = 3,
+            }))
+                projects.Add(project.Name!);
+            Check("a list reads its pages until the total, its filter escaped and its sort stable on the wire",
+                projects.SequenceEqual(["Default", "Finance", "Quarterly reports", "R&D", "C++ #1 100%"])
+                && FixtureHandler.Queries[^2..].SequenceEqual([
+                    "?pageSize=3&pageNumber=1&filter=topLevelProject:eq:true,name:in:%5BR%26D,C%2B%2B%5D&sort=createdAt:asc,name:asc",
+                    "?pageSize=3&pageNumber=2&filter=topLevelProject:eq:true,name:in:%5BR%26D,C%2B%2B%5D&sort=createdAt:asc,name:asc",
+                ]));
         }
         Check("disposing the client signs its session out", FixtureHandler.Sent[^1] == "POST /api/3.25/auth/signout invented-session-token");
 
@@ -236,6 +251,9 @@ internal sealed class FixtureHandler : HttpMessageHandler
 
     public static List<string> Paths { get; } = [];
 
+    /// <summary>Each request's query, as sent.</summary>
+    public static List<string> Queries { get; } = [];
+
     /// <summary>Each request as its method, its path and its session token, or "-" for none.</summary>
     public static List<string> Sent { get; } = [];
 
@@ -249,6 +267,7 @@ internal sealed class FixtureHandler : HttpMessageHandler
     {
         var path = request.RequestUri!.AbsolutePath;
         Paths.Add(path);
+        Queries.Add(request.RequestUri.Query);
         Sent.Add($"{request.Method} {path} {(request.Headers.TryGetValues("X-Tableau-Auth", out var tokens) ? tokens.Single() : "-")}");
         if (path == "/api/3.25/auth/signin")
         {
@@ -266,6 +285,11 @@ internal sealed class FixtureHandler : HttpMessageHandler
             return new HttpResponseMessage(HttpStatusCode.NoContent) { RequestMessage = request };
         if (path == "/api/3.25/sites/0f4b9e1c-3a52-4d6e-9c8b-1a2b3c4d5e6f/items")
             return Json(request, HttpStatusCode.OK, Fixture("server-info.json"));
+        if (path == "/api/3.25/sites/0f4b9e1c-3a52-4d6e-9c8b-1a2b3c4d5e6f/projects")
+        {
+            return Json(request, HttpStatusCode.OK,
+                Fixture(request.RequestUri.Query.Contains("pageNumber=1", StringComparison.Ordinal) ? "projects-page.json" : "projects-last-page.json"));
+        }
         if (path == "/api/3.25/workbooks/w1/content")
         {
             var file = new ByteArrayContent(Workbook);

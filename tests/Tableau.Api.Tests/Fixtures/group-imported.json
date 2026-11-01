@@ -1,0 +1,11 @@
+{
+  "group": {
+    "import": {
+      "domainName": "example.org",
+      "siteRole": "Viewer",
+      "grantLicenseMode": "onSync"
+    },
+    "id": "4a1b2c3d-0003-4e5f-8a9b-0c1d2e3f4a5b",
+    "name": "Finance"
+  }
+}

@@ -9,10 +9,21 @@
   <assembly fullname="Tableau.Api">
     <!-- The models generated from Tableau's schema, with their converters and the JSON context. -->
     <namespace fullname="Tableau.Api.Rest.Models" />
-    <!-- The client: its options, its registration with DI, its credentials and sessions, its exception, its downloads
-         and its sub-clients. -->
+    <!-- The client: its options, its registration with DI, its credentials and sessions, its exception, its downloads,
+         its sub-clients, and their pages, list options, fields, filters and sorts. -->
+    <type fullname="Tableau.Api.FavoritesClient" />
+    <type fullname="Tableau.Api.FavoriteTarget" />
+    <type fullname="Tableau.Api.GroupField" />
+    <type fullname="Tableau.Api.GroupListOptions" />
+    <type fullname="Tableau.Api.GroupsClient" />
+    <type fullname="Tableau.Api.Page`1" />
+    <type fullname="Tableau.Api.ProjectField" />
+    <type fullname="Tableau.Api.ProjectListOptions" />
+    <type fullname="Tableau.Api.ProjectsClient" />
     <type fullname="Tableau.Api.ServerClient" />
     <type fullname="Tableau.Api.SessionsClient" />
+    <type fullname="Tableau.Api.SiteListOptions" />
+    <type fullname="Tableau.Api.SitesClient" />
     <type fullname="Tableau.Api.TableauClient" />
     <type fullname="Tableau.Api.TableauClientBuilder" />
     <type fullname="Tableau.Api.TableauClientOptions" />
@@ -21,8 +32,15 @@
     <type fullname="Tableau.Api.TableauDownload" />
     <type fullname="Tableau.Api.TableauErrorKind" />
     <type fullname="Tableau.Api.TableauException" />
+    <type fullname="Tableau.Api.TableauField" />
     <type fullname="Tableau.Api.TableauFileKind" />
+    <type fullname="Tableau.Api.TableauFilter" />
     <type fullname="Tableau.Api.TableauServiceCollectionExtensions" />
     <type fullname="Tableau.Api.TableauSession" />
+    <type fullname="Tableau.Api.TableauSort" />
+    <type fullname="Tableau.Api.UserAddOptions" />
+    <type fullname="Tableau.Api.UserField" />
+    <type fullname="Tableau.Api.UserListOptions" />
+    <type fullname="Tableau.Api.UsersClient" />
   </assembly>
 </linker>

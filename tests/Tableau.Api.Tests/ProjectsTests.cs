@@ -1,53 +1,142 @@
+using System;
 using System.Linq;
-using System.Net;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Tableau.Api.Exceptions;
+using Tableau.Api.Rest.Models;
 using Tableau.Api.Tests.Fakes;
 
 namespace Tableau.Api.Tests;
 
+/// <summary>
+/// <see cref="ProjectsClient"/>: each call's method, path, query and body as the reference gives them, and its answer
+/// read from a fixture, on Tableau Server and Tableau Cloud alike.
+/// </summary>
 [TestClass]
 public sealed class ProjectsTests
 {
-    private const string ProjectsPath = "/api/" + Fixtures.ApiVersion + "/sites/" + Fixtures.SiteId + "/projects";
+    private const string Projects = AreaFixtures.SitePath + "/projects";
 
     [TestMethod]
-    public async Task QueryProjectsGetsAPageAndReadsIt()
+    [DataRow(TableauDeployment.Server)]
+    [DataRow(TableauDeployment.Cloud)]
+    public async Task ListPageSortsByAStableOrderUnlessToldAndReadsTheProjects(TableauDeployment deployment)
     {
-        using var server = FakeTableauServer.Start();
-        var client = Fixtures.Client(server);
-        var session = Fixtures.Session();
-        server.Map("GET", ProjectsPath, FakeResponse.Xml(200,
-            "<pagination pageNumber=\"1\" pageSize=\"100\" totalAvailable=\"2\"/><projects>"
-            + "<project id=\"1d0e8a7b-0001-4c2d-9e3f-5a6b7c8d9e0f\" name=\"Sales\" description=\"Quarterly reports\"/>"
-            + "<project id=\"1d0e8a7b-0002-4c2d-9e3f-5a6b7c8d9e0f\" name=\"Marketing\"/></projects>"));
+        using var server = AreaFixtures.Server();
+        server.Map("GET", Projects, FakeResponse.Fixture(200, "projects-page.json"));
+        await using var client = AreaFixtures.Client(server, deployment);
 
-        var (pagination, projects) = await client.QueryProjects(session);
+        var page = await client.Projects.ListPageAsync(1);
 
-        var request = server.Requests[^1];
-        Assert.AreEqual($"GET {ProjectsPath}?pageSize=100&pageNumber=1 HTTP/1.1", request.RequestLine);
-        Assert.AreEqual(Fixtures.SessionToken, request.Header("X-Tableau-Auth"));
-        Assert.AreEqual("application/xml", request.Header("Accept"));
-        Assert.AreEqual("2", pagination.totalAvailable);
-        CollectionAssert.AreEqual(new[] { "Sales", "Marketing" }, projects.Select(project => project.name).ToArray());
-        Assert.AreEqual("Quarterly reports", projects[0].description);
+        AreaFixtures.Sent(server, $"GET {Projects}?pageSize=100&pageNumber=1&sort=createdAt:asc,name:asc");
+        Assert.AreEqual((1, 3, 5), (page.PageNumber, page.PageSize, page.TotalAvailable));
+        CollectionAssert.AreEqual(new[] { "Default", "Finance", "Quarterly reports" }, page.Items.Select(project => project.Name).ToArray());
+        Assert.AreEqual(page.Items[1].Id, page.Items[2].ParentProjectId);
     }
 
     [TestMethod]
-    public async Task AnErrorResponseThrowsWithTableausDetails()
+    public async Task ListPageSendsTheFilterTheSortAndThePageGiven()
     {
-        using var server = FakeTableauServer.Start();
-        var client = Fixtures.Client(server);
-        var session = Fixtures.Session();
-        server.Map("GET", ProjectsPath, FakeResponse.Error(401, "401002", "Unauthorized Access",
-            "Invalid authentication credentials were provided."));
+        using var server = AreaFixtures.Server();
+        server.Map("GET", Projects, FakeResponse.Fixture(200, "projects-empty.json"));
+        await using var client = AreaFixtures.Client(server);
 
-        var thrown = await Assert.ThrowsExactlyAsync<TableauRequestException>(() => client.QueryProjects(session));
+        var page = await client.Projects.ListPageAsync(3, new ProjectListOptions
+        {
+            Filter = TableauFilter.And(TableauFilter.Eq(ProjectField.ParentProjectId, AreaFixtures.ProjectId), TableauFilter.Eq(ProjectField.TopLevelProject, false)),
+            Sort = TableauSort.Desc(ProjectField.UpdatedAt),
+            PageSize = 1000,
+        });
 
-        Assert.AreEqual(HttpStatusCode.Unauthorized, thrown.StatusCode);
-        Assert.IsTrue(thrown.HasDetails);
-        Assert.AreEqual("401002", thrown.Details.code);
-        Assert.AreEqual("Unauthorized Access", thrown.Details.summary);
+        AreaFixtures.Sent(server, $"GET {Projects}?pageSize=1000&pageNumber=3&filter=parentProjectId:eq:{AreaFixtures.ProjectId},topLevelProject:eq:false"
+            + "&sort=updatedAt:desc,createdAt:asc,name:asc");
+        Assert.IsEmpty(page.Items);
+        Assert.AreEqual(0, page.TotalAvailable);
+    }
+
+    [TestMethod]
+    public async Task ListReadsEveryPageUntilTheTotal()
+    {
+        using var server = AreaFixtures.Server();
+        server.Map("GET", Projects, request => FakeResponse.Fixture(200,
+            request.Query.Contains("pageNumber=1", StringComparison.Ordinal) ? "projects-page.json" : "projects-last-page.json"));
+        await using var client = AreaFixtures.Client(server);
+
+        var projects = await AreaFixtures.AllAsync(client.Projects.ListAsync(new ProjectListOptions { PageSize = 3 }));
+
+        CollectionAssert.AreEqual(new[] { "Default", "Finance", "Quarterly reports", "R&D", "C++ #1 100%" },
+            projects.Select(project => project.Name).ToArray());
+        CollectionAssert.AreEqual(new[] { "1", "2" },
+            AreaFixtures.Calls(server).Select(call => call.QueryParameters.Single(pair => pair.Key == "pageNumber").Value).ToArray());
+    }
+
+    [TestMethod]
+    public async Task CreateSendsTheProjectOnceAndReadsIt()
+    {
+        using var server = AreaFixtures.Server();
+        server.Map("POST", Projects, FakeResponse.Fixture(201, "create-project.json"));
+        await using var client = AreaFixtures.Client(server, TableauDeployment.Cloud);
+        var project = ModelFixtures.Request("create-project-request.json").Project!;
+
+        var made = await client.Projects.CreateAsync(project);
+
+        AreaFixtures.Sent(server, $"POST {Projects}", ModelFixtures.Write(new TsRequest { Project = project }));
+        ModelFixtures.AssertSameJson(ModelFixtures.Text("create-project-request.json"), AreaFixtures.Calls(server)[0].BodyText);
+        Assert.AreEqual(AreaFixtures.ProjectId, made.Id);
+    }
+
+    [TestMethod]
+    public async Task CreateAsksForTheSamplesOnlyWhenTold()
+    {
+        using var server = AreaFixtures.Server();
+        server.Map("POST", Projects, FakeResponse.Fixture(201, "create-project.json"));
+        await using var client = AreaFixtures.Client(server);
+
+        await client.Projects.CreateAsync(new Project { Name = "Samples" }, publishSamples: true);
+
+        AreaFixtures.Sent(server, $"POST {Projects}?publishSamples=true", """{"project":{"name":"Samples"}}""");
+    }
+
+    [TestMethod]
+    public async Task UpdateSendsOnlyWhatIsSet()
+    {
+        using var server = AreaFixtures.Server();
+        server.Map("PUT", $"{Projects}/{AreaFixtures.ProjectId}", FakeResponse.Fixture(200, "create-project.json"));
+        await using var client = AreaFixtures.Client(server);
+
+        var project = await client.Projects.UpdateAsync(AreaFixtures.ProjectId, new Project
+        {
+            Name = "Quarterly reports",
+            Description = "R&D, C++ #1 100%",
+            ParentProjectId = "",
+        });
+
+        AreaFixtures.Sent(server, $"PUT {Projects}/{AreaFixtures.ProjectId}",
+            """{"project":{"description":"R&D, C++ #1 100%","name":"Quarterly reports","parentProjectId":""}}""");
+        Assert.AreEqual("Invented nested project", project.Description);
+    }
+
+    [TestMethod]
+    public async Task DeleteSendsADeleteToTheProject()
+    {
+        using var server = AreaFixtures.Server();
+        server.Map("DELETE", $"{Projects}/{AreaFixtures.ProjectId}", FakeResponse.Empty(204));
+        await using var client = AreaFixtures.Client(server);
+
+        await client.Projects.DeleteAsync(AreaFixtures.ProjectId);
+
+        AreaFixtures.Sent(server, $"DELETE {Projects}/{AreaFixtures.ProjectId}");
+    }
+
+    [TestMethod]
+    public async Task ARefusedArgumentSendsNothing()
+    {
+        using var server = AreaFixtures.Server();
+        await using var client = AreaFixtures.Client(server);
+
+        await AreaFixtures.RefusedAsync<ArgumentNullException>(server, () => client.Projects.CreateAsync(null!));
+        Assert.AreEqual("project", (await AreaFixtures.RefusedAsync<ArgumentException>(server, () => client.Projects.CreateAsync(new Project()))).ParamName);
+        Assert.AreEqual("id", (await AreaFixtures.RefusedAsync<ArgumentException>(server, () => client.Projects.UpdateAsync("finance", new Project()))).ParamName);
+        await AreaFixtures.RefusedAsync<ArgumentNullException>(server, () => client.Projects.UpdateAsync(AreaFixtures.ProjectId, null!));
+        Assert.AreEqual("id", (await AreaFixtures.RefusedAsync<ArgumentException>(server, () => client.Projects.DeleteAsync(""))).ParamName);
     }
 }

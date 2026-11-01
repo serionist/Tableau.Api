@@ -17,7 +17,7 @@ namespace Tableau.Api.Tests;
 [TestClass]
 public sealed class ClientTests
 {
-    private const string ProjectsPath = "/api/" + Fixtures.ApiVersion + "/sites/" + Fixtures.SiteId + "/projects";
+    private const string DataSourcesPath = "/api/" + Fixtures.ApiVersion + "/sites/" + Fixtures.SiteId + "/datasources";
     private static readonly Uri _url = new("https://tableau.example.com/");
 
     [TestMethod]
@@ -65,10 +65,10 @@ public sealed class ClientTests
     {
         using var server = FakeTableauServer.Start();
         var client = Fixtures.Client(server);
-        server.Map("GET", ProjectsPath, FakeResponse.Error(403, "403069", "Forbidden", "Invented: not these."));
+        server.Map("GET", DataSourcesPath, FakeResponse.Error(403, "403069", "Forbidden", "Invented: not these."));
 
         var thrown = await Assert.ThrowsExactlyAsync<TableauRequestException>(
-            () => client.QueryProjects(Fixtures.Session()));
+            () => client.QueryDataSources(Fixtures.Session()));
 
         Assert.AreEqual(HttpStatusCode.Forbidden, thrown.StatusCode);
         Assert.AreEqual("403069", thrown.Details.code);
@@ -82,10 +82,10 @@ public sealed class ClientTests
         using var server = FakeTableauServer.Start();
         var log = new RecordingLogger();
         var client = new TableauApiClient(server.BaseUrl, log, Fixtures.ApiVersion);
-        server.Map("GET", ProjectsPath, FakeResponse.Content(502, "text/html", "<html>Bad gateway</html>"));
+        server.Map("GET", DataSourcesPath, FakeResponse.Content(502, "text/html", "<html>Bad gateway</html>"));
 
         var thrown = await Assert.ThrowsExactlyAsync<TableauRequestException>(
-            () => client.QueryProjects(Fixtures.Session()));
+            () => client.QueryDataSources(Fixtures.Session()));
 
         Assert.AreEqual(HttpStatusCode.BadGateway, thrown.StatusCode);
         Assert.IsFalse(thrown.HasDetails);
@@ -101,7 +101,7 @@ public sealed class ClientTests
         await cancelled.CancelAsync();
 
         await Assert.ThrowsAsync<OperationCanceledException>(
-            () => client.QueryProjects(Fixtures.Session(), cancelToken: cancelled.Token));
+            () => client.QueryDataSources(Fixtures.Session(), cancelToken: cancelled.Token));
 
         Assert.IsEmpty(server.Requests);
     }

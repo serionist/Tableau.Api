@@ -1,0 +1,41 @@
+{
+  "favorites": {
+    "favorite": [
+      {
+        "view": {
+          "workbook": {
+            "id": "6c3d4e5f-0001-4a7b-8c9d-0e1f2a3b4c5d"
+          },
+          "owner": {
+            "id": "7c1d2e3f-4a5b-4c6d-8e9f-0a1b2c3d4e5f"
+          },
+          "project": {
+            "id": "22222222-3333-4444-8555-666666666666"
+          },
+          "tags": {},
+          "id": "6c3d4e5f-0002-4a7b-8c9d-0e1f2a3b4c5d",
+          "name": "Overview",
+          "contentUrl": "Superstore/sheets/Overview",
+          "createdAt": "2025-11-09T21:39:59Z",
+          "updatedAt": "2026-08-30T21:05:37Z",
+          "viewUrlName": "Overview"
+        },
+        "label": "Global indicators",
+        "position": "1",
+        "addedAt": "2026-10-01T08:00:00Z"
+      },
+      {
+        "project": {
+          "id": "22222222-3333-4444-8555-666666666666",
+          "name": "Finance"
+        },
+        "label": "Finance",
+        "position": "2",
+        "addedAt": "2026-10-02T08:00:00Z"
+      },
+      {
+        "label": "A workbook since deleted"
+      }
+    ]
+  }
+}

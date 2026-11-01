@@ -59,23 +59,17 @@ public sealed class PathTests
     }
 
     [TestMethod]
-    public async Task ATagAndASiteNameAreEachSentAsOneSegment()
+    public async Task ATagIsSentAsOneSegment()
     {
         using var server = FakeTableauServer.Start();
         var client = Fixtures.Client(server);
         var session = Fixtures.Session();
         var tagPath = DatasourcesPath + "d1/tags/C%23%20%26%20R%2FD";
-        var sitePath = "/api/" + Fixtures.ApiVersion + "/sites/Sales%2FEMEA%3F";
         server.Map("DELETE", tagPath, FakeResponse.Empty(204));
-        server.Map("GET", sitePath, FakeResponse.Xml(200, "<site id=\"s2\" name=\"Sales/EMEA?\" contentUrl=\"emea\"/>"));
 
         await client.DeleteTagFromDataSource(session, "d1", "C# & R/D");
-        var site = await client.QuerySiteByName(session, "Sales/EMEA?");
 
-        CollectionAssert.AreEqual(
-            new[] { $"DELETE {tagPath} HTTP/1.1", $"GET {sitePath}?key=name HTTP/1.1" },
-            server.Requests.Select(request => request.RequestLine).ToArray());
-        Assert.AreEqual("s2", site.id);
+        Assert.AreEqual($"DELETE {tagPath} HTTP/1.1", server.Requests.Single().RequestLine);
     }
 
     [TestMethod]
@@ -85,12 +79,12 @@ public sealed class PathTests
     {
         using var server = FakeTableauServer.Start();
         var client = new TableauApiClient(new Uri(server.BaseUrl, basePath), Fixtures.ApiVersion);
-        var projects = $"/tableau/api/{Fixtures.ApiVersion}/sites/{Fixtures.SiteId}/projects";
-        server.Map("GET", projects, FakeResponse.Xml(200, "<pagination pageNumber=\"1\" pageSize=\"100\" totalAvailable=\"0\"/><projects/>"));
+        var dataSources = $"/tableau/api/{Fixtures.ApiVersion}/sites/{Fixtures.SiteId}/datasources";
+        server.Map("GET", dataSources, FakeResponse.Xml(200, "<pagination pageNumber=\"1\" pageSize=\"100\" totalAvailable=\"0\"/><datasources/>"));
 
-        await client.QueryProjects(Fixtures.Session());
+        await client.QueryDataSources(Fixtures.Session());
 
-        Assert.AreEqual($"GET {projects}?pageSize=100&pageNumber=1 HTTP/1.1", server.Requests.Single().RequestLine);
+        Assert.AreEqual($"GET {dataSources}?pageSize=100&pageNumber=1 HTTP/1.1", server.Requests.Single().RequestLine);
     }
 
     [TestMethod]

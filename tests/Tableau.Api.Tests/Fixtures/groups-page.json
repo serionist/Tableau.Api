@@ -1,0 +1,44 @@
+{
+  "pagination": {
+    "pageNumber": "1",
+    "pageSize": "100",
+    "totalAvailable": "3"
+  },
+  "groups": {
+    "group": [
+      {
+        "domain": {
+          "name": "local"
+        },
+        "id": "4a1b2c3d-0001-4e5f-8a9b-0c1d2e3f4a5b",
+        "name": "All Users"
+      },
+      {
+        "domain": {
+          "name": "local"
+        },
+        "import": {
+          "domainName": "local",
+          "siteRole": "Explorer",
+          "grantLicenseMode": "onLogin"
+        },
+        "id": "4a1b2c3d-0002-4e5f-8a9b-0c1d2e3f4a5b",
+        "name": "Finance analysts",
+        "minimumSiteRole": "Explorer"
+      },
+      {
+        "domain": {
+          "name": "example.org"
+        },
+        "import": {
+          "source": "ActiveDirectory",
+          "domainName": "example.org",
+          "siteRole": "Viewer",
+          "grantLicenseMode": "onSync"
+        },
+        "id": "4a1b2c3d-0003-4e5f-8a9b-0c1d2e3f4a5b",
+        "name": "Finance"
+      }
+    ]
+  }
+}

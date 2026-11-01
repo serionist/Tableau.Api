@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Tableau.Api.Enums;
+using Tableau.Api.Rest.Models;
 using Tableau.Api.Tests.Fakes;
 
 namespace Tableau.Api.Tests;
@@ -20,6 +21,7 @@ namespace Tableau.Api.Tests;
 public sealed class CultureTests
 {
     private const string SitePath = "/api/" + Fixtures.ApiVersion + "/sites";
+    private const string SitesPath = "/api/" + ClientFixtures.Version + "/sites";
     private const string Minus = "\u2212";
 
     // What each culture leg in .github/workflows/ci.yml sets, and a rule of that culture which the invariant culture
@@ -51,31 +53,57 @@ public sealed class CultureTests
     public async Task ASiteSendsMinusOneAsAHyphenUnderSwedish()
     {
         using var server = FakeTableauServer.Start();
-        var client = Fixtures.Client(server);
-        var site = $"<site id=\"{Fixtures.SiteId}\" name=\"Finance\" contentUrl=\"{Fixtures.SiteContentUrl}\"/>";
-        server.Map("POST", SitePath, FakeResponse.Xml(201, site));
-        server.Map("PUT", SitePath + "/" + Fixtures.SiteId, FakeResponse.Xml(200, site));
+        SessionFixtures.MapSignIns(server, Fixtures.SessionToken);
+        var site = $$$"""{"site":{"id":"{{{Fixtures.SiteId}}}","name":"Finance","contentUrl":"{{{Fixtures.SiteContentUrl}}}"}}""";
+        server.Map("POST", SitesPath, FakeResponse.Json(201, site));
+        server.Map("PUT", SitesPath + "/" + Fixtures.SiteId, FakeResponse.Json(200, site));
+        await using var client = SessionFixtures.Client(SessionFixtures.Options(server), SessionFixtures.Pat());
+        var capacities = new Site { TierCreatorCapacity = -1, TierExplorerCapacity = -1, TierViewerCapacity = -1, RevisionLimit = -1 };
 
         await InCulture("sv-SE", async () =>
         {
-            // The precondition: Swedish writes -1 with U+2212, which is no xs:integer.
+            // The precondition: Swedish writes -1 with U+2212, which is no number.
             Assert.AreEqual(Minus + "1", (-1).ToString(CultureInfo.CurrentCulture));
-            await client.CreateSite(Fixtures.Session(), "Finance", Fixtures.SiteContentUrl, tierCreatorCapacity: -1,
-                tierExplorerCapacity: -1, tierViewerCapacity: -1, storageQuotaMb: -1);
-            await client.UpdateSite(Fixtures.Session(), Fixtures.SiteId, newTierCreatorCapacity: -1,
-                newTierExplorerCapacity: -1, newTierViewerCapacity: -1, newStorageQuota: -1, newRevisionLimit: -1);
+            await client.Sites.CreateAsync(capacities with { Name = "Finance", ContentUrl = Fixtures.SiteContentUrl });
+            await client.Sites.UpdateAsync(Fixtures.SiteId, capacities);
         });
 
-        var bodies = server.Requests.Select(request => request.BodyText).ToList();
+        var bodies = server.Requests.Where(request => request.Path.StartsWith(SitesPath, StringComparison.Ordinal))
+            .Select(request => request.BodyText).ToList();
         Assert.HasCount(2, bodies);
-        foreach (var attribute in new[] { "tierCreatorCapacity", "tierExplorerCapacity", "tierViewerCapacity",
-                     "storageQuota" })
+        foreach (var attribute in new[] { "tierCreatorCapacity", "tierExplorerCapacity", "tierViewerCapacity", "revisionLimit" })
         {
-            Assert.Contains($"{attribute}=\"-1\"", bodies[0]);
-            Assert.Contains($"{attribute}=\"-1\"", bodies[1]);
+            Assert.Contains($"\"{attribute}\":-1", bodies[0]);
+            Assert.Contains($"\"{attribute}\":-1", bodies[1]);
         }
-        Assert.Contains("revisionLimit=\"-1\"", bodies[1]);
         Assert.IsFalse(bodies.Any(body => body.Contains(Minus, StringComparison.Ordinal)), string.Join("\n", bodies));
+    }
+
+    // th-TH counts years in the Buddhist era, and fi-FI writes the time with dots, so a date filter written in either
+    // culture would name another year, or a time Tableau can't read.
+    [TestMethod]
+    [DataRow("th-TH")]
+    [DataRow("fi-FI")]
+    public async Task ADateFilterIsWrittenTheSameInEveryCulture(string culture)
+    {
+        using var server = FakeTableauServer.Start();
+        SessionFixtures.MapSignIns(server, Fixtures.SessionToken);
+        server.Map("GET", SitesPath + "/" + Fixtures.SiteId + "/users", FakeResponse.Json(200, "{}"));
+        await using var client = SessionFixtures.Client(SessionFixtures.Options(server), SessionFixtures.Pat());
+        var since = new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero);
+        string? written = null;
+
+        await InCulture(culture, async () =>
+        {
+            // The precondition: the culture writes this date otherwise.
+            Assert.AreNotEqual("2026-01-02T03:04:05", since.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.CurrentCulture));
+            written = TableauFilter.Gte(UserField.LastLogin, since).ToString();
+            await client.Users.ListPageAsync(1, new UserListOptions { Filter = TableauFilter.Lt(UserField.LastLogin, since) });
+        });
+
+        Assert.AreEqual("lastLogin:gte:2026-01-02T03:04:05Z", written);
+        var sent = server.Requests.Single(request => request.Path.EndsWith("/users", StringComparison.Ordinal));
+        Assert.AreEqual("lastLogin:lt:2026-01-02T03:04:05Z", sent.QueryParameters.Single(pair => pair.Key == "filter").Value);
     }
 
     [TestMethod]

@@ -14,8 +14,9 @@ on a break the ledger doesn't list. Each section below groups the ledger's entri
 | [Version](#version) | 2.0.0, from git tags | none |
 | [Signatures](#five-methods-whose-signature-changed) | five methods whose parameters or return type changed | 5, `CP0002` |
 | [Permission capabilities](#permission-capabilities-renumbered) | `capabilityTypeName` members renumbered | 12, `CP0011` |
-| [The 2.0 client](#the-20-client) | `TableauClient` takes over `TableauApiClient`'s calls area by area; so far Server Info | 1, `CP0002` |
+| [The 2.0 client](#the-20-client) | `TableauClient` takes over `TableauApiClient`'s calls area by area, Server Info first | 1, `CP0002` |
 | [Sessions](#sessions) | `TableauApiClient`'s sign-in methods gone: the 2.0 client signs itself in, or you sign in through `client.Sessions` | 4, `CP0002` |
+| [Sites, projects, users, groups and favorites](#sites-projects-users-groups-and-favorites) | `TableauApiClient`'s methods for them gone, `DeleteProject2` with them: `client.Sites`, `.Projects`, `.Users`, `.Groups` and `.Favorites`, with lists that page themselves | 40, `CP0002` |
 | [Dependencies](#dependencies) | Microsoft.Extensions' abstractions in place of Microsoft.Extensions.Logging, and Newtonsoft.Json added | none |
 
 ## Target: net10.0 only
@@ -142,6 +143,83 @@ Also new: `TableauCredentials.ConnectedAppDirectTrust`, which mints a connected 
 `TableauCredentials.Jwt`, for a JWT minted elsewhere; and `TableauCredentials.UnifiedAccessToken`, Tableau Cloud's,
 from REST API 3.27. A sign-in's `TableauException` keeps none of Tableau's answer. A namespace that imports both
 `Tableau.Api` and `Tableau.Api.Models` must name which `TableauSession` it means.
+
+## Sites, projects, users, groups and favorites
+
+`TableauApiClient`'s methods for these areas are gone, `QueryViewsForSite` excepted, which stays with the old views
+methods until views move; `TableauClient` has a sub-client for each. They take the session's site from the client,
+string LUIDs, and the token last, and return the models in `Tableau.Api.Rest.Models`.
+
+```csharp
+await foreach (var user in tableau.Users.ListAsync(new UserListOptions
+{
+    Filter = TableauFilter.And(TableauFilter.Eq(UserField.SiteRole, "Viewer"), TableauFilter.Gte(UserField.LastLogin, since)),
+}, cancellationToken))
+{
+    // every page, read as you go
+}
+```
+
+What changes for a caller:
+
+- **Lists:** `ListAsync` reads every page as you go, and stops at Tableau's total or on a short page; `ListPageAsync`
+  returns one `Page<T>` (`Items`, `PageNumber`, `PageSize`, `TotalAvailable`). Neither is ever null. 1.2.5 returned a
+  `paginationType` and an array, null when Tableau sent none, and some returned the first page alone.
+- **Filters and sorts:** `TableauFilter` and `TableauSort` over a resource's fields (`ProjectField`, `UserField`,
+  `GroupField`), which a list refuses for another resource before sending. Write values as they are: the client
+  escapes them. A filter you wrote by hand is `TableauFilter.FromString(filterExpression)`. A value can't hold a comma,
+  which Tableau refuses even escaped. A list you don't sort comes in an order that doesn't change from page to page:
+  projects oldest first, then by name; users by name, then on Tableau Server by domain; groups by name. A sort you give
+  is followed by the default fields it doesn't name. `Eq` and `In` take a `SiteRole` too. Query Sites takes no filter or
+  sort, as
+  Tableau Server 2025.1 refuses the first, the reference's one included, and ignores the second.
+- **Updates** take a model with only what changes set, such as `new Project { Name = "Finance" }`, where 1.2.5 took
+  one parameter for each.
+- **Deployments:** Create Site, Delete Site, Query Sites and Active Directory groups are refused on Tableau Cloud before
+  anything is sent; Update Site and Delete Group, which 1.2.5 refused there, run on it.
+
+| 1.2.5 | 2.0 | How to move over |
+|---|---|---|
+| `CreateSite(session, name, contentUrl, adminMode, tierCreatorCapacity, tierExplorerCapacity, tierViewerCapacity, storageQuotaMb, disableSubscriptions, cancelToken)` | `client.Sites.CreateAsync(site, cancellationToken)` | `new Site { Name = ..., ContentUrl = ..., AdminMode = ..., TierCreatorCapacity = ..., StorageQuota = "100", DisableSubscriptions = ... }`; any setting the reference lists for Create Site |
+| `QuerySiteById(session, siteId, cancelToken)` | `client.Sites.GetAsync(id, cancellationToken)` | Tableau answers for the session's site alone |
+| `QuerySiteByName(session, siteName, cancelToken)` | `client.Sites.GetByNameAsync(name, cancellationToken)` | The same |
+| `QuerySiteByContentUrl(session, siteContentUrl, cancelToken)` | `client.Sites.GetByContentUrlAsync(contentUrl, cancellationToken)` | The default site has no content URL: get it by its LUID |
+| `QuerySites(session, pageSize, pageNumber, cancelToken)` returns `(paginationType, siteListType)` | `client.Sites.ListAsync(options, cancellationToken)`, or `ListPageAsync(pageNumber, options, cancellationToken)` | `new SiteListOptions { PageSize = ... }` |
+| `UpdateSite(session, siteId, newName, newContentUrl, newAdminMode, newTierCreatorCapacity, newTierExplorerCapacity, newTierViewerCapacity, newState, newStorageQuota, newDisableSubscriptions, newRevisionHistoryEnabled, newRevisionLimit, cancelToken)` | `client.Sites.UpdateAsync(id, changes, cancellationToken)` | Set only what changes, such as `new Site { RevisionLimit = 25, State = "Suspended" }` |
+| `DeleteSiteById(session, siteId, cancelToken)` | `client.Sites.DeleteAsync(id, cancellationToken)` | Signed in to that site, as Tableau asks |
+| `DeleteSiteByName(session, siteName, cancelToken)` | `client.Sites.DeleteAsync(id, cancellationToken)` | Take the id from `GetByNameAsync` |
+| `DeleteSiteByContentUrl(session, siteContentUrl, cancelToken)` | `client.Sites.DeleteAsync(id, cancellationToken)` | Take the id from `GetByContentUrlAsync` |
+| `CreateProject(session, projectName, description, contentPermissions, parentProjectId, publishSamples, cancelToken)` | `client.Projects.CreateAsync(project, publishSamples, cancellationToken)` | `new Project { Name = ..., Description = ..., ParentProjectId = ..., ContentPermissions = ... }`; left null, the permissions are Tableau's default, `ManagedByOwner`, which 1.2.5 always sent |
+| `QueryProjects(session, pageSize, pageNumber, filterExpression, sortExpression, cancelToken)` returns `(paginationType, projectType[])` | `client.Projects.ListAsync(options, cancellationToken)`, or `ListPageAsync(pageNumber, options, cancellationToken)` | `new ProjectListOptions { Filter = ..., Sort = ..., PageSize = ... }` |
+| `UpdateProject(session, projectId, newProjectName, newDescription, newContentPermissions, newParentProjectId, publishSamples, cancelToken)` | `client.Projects.UpdateAsync(id, changes, cancellationToken)` | Set only what changes; an empty `ParentProjectId` moves the project to the top. Samples are published on create alone |
+| `DeleteProject(session, projectId, cancelToken)` | `client.Projects.DeleteAsync(id, cancellationToken)` | None |
+| `DeleteProject2(session, projectId, cancelToken)` | `client.Projects.DeleteAsync(id, cancellationToken)` | It was the same call |
+| `QueryUser(session, userId, cancelToken)` | `client.Users.GetAsync(id, cancellationToken)` | None |
+| `GetUsersOnSite(session, pageSize, pageNumber, fieldsExpression, filterExpression, sortExpression, cancelToken)` returns `(paginationType, userType[])` | `client.Users.ListAsync(options, cancellationToken)`, or `ListPageAsync(pageNumber, options, cancellationToken)` | `new UserListOptions { Filter = ..., Sort = ..., PageSize = ... }`; no `fields`: each user comes with Tableau's default fields |
+| `AddUserToSite(session, userName, siteRole, authSetting, cancelToken)` | `client.Users.AddAsync(name, siteRole, options, cancellationToken)` | `new UserAddOptions { AuthSetting = ... }`, with the reference's identity pool, identity provider, email, language and locale too |
+| `UpdateUser(session, userId, newFullName, newEmail, newPassword, newSiteRole, newAuthSetting, newDisplayName, cancelToken)` | `client.Users.UpdateAsync(id, changes, cancellationToken)` | `new User { FullName = ..., SiteRole = ... }`, and the reference's `IdentityPoolName`, `IdpConfigurationId`, `Language` and `Locale`. `newDisplayName` went as the user's name, which Update User doesn't take |
+| `RemoveUserFromSite(session, userId, cancelToken)` | `client.Users.RemoveAsync(id, mapAssetsToUserId, cancellationToken)` | Name a user to take over what the user owns, or leave it null |
+| `GetGroupsOfUser(session, userId, pageSize, pageNumber, cancelToken)` returns `(paginationType, groupType[])` | `client.Users.ListGroupsAsync(userId, cancellationToken)` | Every page, 100 at a time |
+| `QueryGroups(session, pageSize, pageNumber, filterExpression, sortExpression, cancelToken)` returns `(paginationType, groupType[])` | `client.Groups.ListAsync(options, cancellationToken)`, or `ListPageAsync(pageNumber, options, cancellationToken)` | `new GroupListOptions { Filter = ..., Sort = ..., PageSize = ... }` |
+| `CreateGroup(session, groupName, cancelToken)` | `client.Groups.CreateAsync(name, minimumSiteRole, externalUserEnabled, cancellationToken)` | A local group |
+| `CreateGroupFromActiveDirectory(session, adGroupName, domainName, siteRole, cancelToken)` | `client.Groups.ImportFromActiveDirectoryAsync(name, domainName, siteRole, grantLicenseMode, cancellationToken)` | Tableau Server only |
+| `CreateGroupFromActiveDirectoryAsJob(session, adGroupName, domainName, siteRole, cancelToken)` returns `jobType` | `client.Groups.ImportFromActiveDirectoryAsJobAsync(name, domainName, siteRole, grantLicenseMode, cancellationToken)` returns `Job` | Tableau Server only |
+| `UpdateGroup(session, groupId, newGroupName, cancelToken)` | `client.Groups.UpdateAsync(id, name, minimumSiteRole, externalUserEnabled, cancellationToken)` | A local group; what you leave null stays |
+| `UpdateGroupFromActiveDirectory(session, newAdGroupName, newDomainName, newSiteRole, cancelToken)` | `client.Groups.UpdateFromActiveDirectoryAsync(id, name, domainName, siteRole, grantLicenseMode, cancellationToken)` | It takes the group's id, which 1.2.5's left out, so its update went to the group list, not to the group |
+| `UpdateGroupFromActiveDirectoryAsJob(session, newAdGroupName, newDomainName, siteRole, cancelToken)` returns `jobType` | `client.Groups.UpdateFromActiveDirectoryAsJobAsync(id, name, domainName, siteRole, grantLicenseMode, cancellationToken)` returns `Job` | The same |
+| `DeleteGroup(session, groupId, cancelToken)` | `client.Groups.DeleteAsync(id, cancellationToken)` | Now on Tableau Cloud too |
+| `AddUserToGroup(session, groupId, userId, cancelToken)` | `client.Groups.AddUserAsync(groupId, userId, cancellationToken)` | None |
+| `RemoveUserFromGroup(session, groupId, userId, cancelToken)` | `client.Groups.RemoveUserAsync(groupId, userId, cancellationToken)` | None |
+| `GetUsersInGroup(session, groupId, pageSize, pageNumber, cancelToken)` returns `(paginationType, userType[])` | `client.Groups.ListUsersAsync(groupId, cancellationToken)` | Every page, 100 at a time |
+| `GetFavoritesForUser(session, userId, cancelToken)` returns `favoriteType[]` | `client.Favorites.ListAsync(userId, cancellationToken)` | Every page, where 1.2.5 read the first |
+| `AddWorkbookToFavorites(session, userId, workbookId, favoriteLabel, cancelToken)` returns `favoriteType` | `client.Favorites.AddAsync(userId, label, FavoriteTarget.Workbook(id), cancellationToken)` | It returns the favorites Tableau answers with |
+| `AddViewToFavorites(session, userId, viewId, favoriteLabel, cancelToken)` | `client.Favorites.AddAsync(userId, label, FavoriteTarget.View(id), cancellationToken)` | The same |
+| `AddDataSourceToFavorites(session, userId, datasourceId, favoriteLabel, cancelToken)` | `client.Favorites.AddAsync(userId, label, FavoriteTarget.DataSource(id), cancellationToken)` | The same |
+| `AddProjectToFavorites(session, userId, projectId, favoriteLabel, cancelToken)` | `client.Favorites.AddAsync(userId, label, FavoriteTarget.Project(id), cancellationToken)` | The same; `FavoriteTarget.Flow(id)` is new |
+| `DeleteWorkbookFromFavorites(session, userId, workbookId, cancelToken)` | `client.Favorites.RemoveAsync(userId, FavoriteTarget.Workbook(id), cancellationToken)` | None |
+| `DeleteViewFromFavorites(session, userId, viewId, cancelToken)` | `client.Favorites.RemoveAsync(userId, FavoriteTarget.View(id), cancellationToken)` | None |
+| `DeleteDataSourceFromFavorites(session, userId, datasourceId, cancelToken)` | `client.Favorites.RemoveAsync(userId, FavoriteTarget.DataSource(id), cancellationToken)` | None |
+| `DeleteProjectFromFavorites(session, userId, projectId, cancelToken)` | `client.Favorites.RemoveAsync(userId, FavoriteTarget.Project(id), cancellationToken)` | None |
 
 ## Dependencies
 

@@ -15,8 +15,8 @@ namespace Tableau.Api.Tests;
 [TestClass]
 public sealed class CertificateTests
 {
-    private const string ProjectsPath = "/api/" + Fixtures.ApiVersion + "/sites/" + Fixtures.SiteId + "/projects";
-    private const string NoProjects = "<pagination pageNumber=\"1\" pageSize=\"100\" totalAvailable=\"0\"/><projects/>";
+    private const string DataSourcesPath = "/api/" + Fixtures.ApiVersion + "/sites/" + Fixtures.SiteId + "/datasources";
+    private const string NoDataSources = "<pagination pageNumber=\"1\" pageSize=\"100\" totalAvailable=\"0\"/><datasources/>";
 
     [TestMethod]
     public async Task VizportalRefusesAnUntrustedCertificate()
@@ -56,9 +56,9 @@ public sealed class CertificateTests
     {
         using var server = FakeTableauServer.StartTls();
         var client = Fixtures.Client(server);
-        server.Map("GET", ProjectsPath, FakeResponse.Xml(200, NoProjects));
+        server.Map("GET", DataSourcesPath, FakeResponse.Xml(200, NoDataSources));
 
-        var thrown = await Assert.ThrowsAsync<HttpRequestException>(() => client.QueryProjects(Fixtures.Session()));
+        var thrown = await Assert.ThrowsAsync<HttpRequestException>(() => client.QueryDataSources(Fixtures.Session()));
 
         Assert.IsInstanceOfType<AuthenticationException>(thrown.InnerException);
         Assert.IsEmpty(server.Requests);
@@ -70,9 +70,9 @@ public sealed class CertificateTests
         using var server = FakeTableauServer.StartTls();
         var client = Fixtures.Client(server);
         client.IgnoreSSLErrors = true;
-        server.Map("GET", ProjectsPath, FakeResponse.Xml(200, NoProjects));
+        server.Map("GET", DataSourcesPath, FakeResponse.Xml(200, NoDataSources));
 
-        var (pagination, _) = await client.QueryProjects(Fixtures.Session());
+        var (pagination, _) = await client.QueryDataSources(Fixtures.Session());
 
         Assert.AreEqual("0", pagination.totalAvailable);
         Assert.AreEqual(Uri.UriSchemeHttps, server.BaseUrl.Scheme);

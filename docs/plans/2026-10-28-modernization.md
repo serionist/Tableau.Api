@@ -534,15 +534,42 @@ As S11 built it (#43, the door agreed there):
 
 ### Paging and filters (S12)
 
-- `ListAsync(options, cancellationToken)` pages lazily with `[EnumeratorCancellation]`. `ListPageAsync` returns
-  `Page<T>(IReadOnlyList<T> Items, int PageNumber, int PageSize, int? TotalAvailable)`.
-- Paging stops at `TotalAvailable` or on a short page. The default page size is 100, at most 1,000 where the docs say
-  so. Lists are never null (F20).
-- Results follow Tableau's internal order unless sorted. The list sorts by a stable field where the resource has one,
-  and the docs state the caveat.
-- **Filters and sorts:** `TableauFilter.Eq`, `In`, `Gt`, `Gte`, `Lt`, `Lte`, `Has` and `CiEq`, combined with `And`,
-  over typed fields (`WorkbookField.Tags`); `TableauSort.Asc` and `Desc`. Values are escaped and the syntax kept. A raw
-  string overload escapes the parts between separators.
+As S12 built it (#45, both doors agreed there):
+
+- `ListAsync(options, cancellationToken)` pages lazily with `[EnumeratorCancellation]`, through the virtual
+  `ListPageAsync`, so a mock that overrides the one serves the other. `ListPageAsync(pageNumber, options,
+  cancellationToken)` returns `Page<T>(IReadOnlyList<T> Items, int PageNumber, int PageSize, int? TotalAvailable)`, the
+  numbers as Tableau answered them, the requested ones when it sends no pagination (Get Favorites for User).
+- Paging stops after the page that reaches `TotalAvailable`, or after a short or empty page, so it never asks for a
+  page past the end: Tableau Server 2025.1 answers one with 400006 for groups, 400117 for projects, and an empty page
+  with a total of 0 for users. Page size 1 to 1,000 (403014 above), 100 by default, checked before sending; the page
+  number from 1. Lists are never null; a list wrapper missing from a 2xx body is an empty list (F20). A server that
+  answers an earlier page than the one asked for, or, for favorites, which carry no pagination, a page that starts with
+  the page before's first item, fails the list as `InvalidResponse`, where reading on would repeat that page without
+  end.
+- **Stable order:** a list the caller doesn't sort sends a sort on fields that keep its pages apart, which Tableau
+  Server 2025.1 took: projects `createdAt:asc,name:asc`; users `name:asc,domainName:asc` on Tableau Server and
+  `name:asc` on Tableau Cloud, where a user's domain names how they sign in and nothing here shows Cloud sorts by it;
+  groups `name:asc`, which a group holds alone in a site. A sort the caller gives is followed by the default's fields
+  it doesn't name, to break its ties. The server refused `luid`, `id` and `parentProjectId` in a sort. Query Sites
+  ignores any sort, so sites come in Tableau's order. The sub-lists that take no options (a user's groups, a group's
+  users, favorites) come in Tableau's order, 100 a page.
+- **Options records,** one per resource: `ProjectListOptions`, `UserListOptions`, `GroupListOptions` with `Filter`,
+  `Sort` and `PageSize`; `SiteListOptions` with `PageSize` alone (below).
+- **Fields:** `TableauField`, made only by the library, in `ProjectField`, `UserField` and `GroupField`, each the
+  reference's list for its resource. A list refuses a field of another resource, by its options, before sending.
+  Operators aren't checked per field: the reference's tables and the server disagree (`like` works on user names,
+  `isLocal` on users fails), and the server's 400065 names the problem.
+- **Filters:** `TableauFilter.Eq` (string, bool, long, date), `CiEq`, `In` (`[a,b]`), `Has`, `Gt`, `Gte`, `Lt` and
+  `Lte` (long, date), joined with `And`; `FromString` for an expression written by hand, unchecked. A filter renders
+  Tableau's syntax with values as written, and the pipeline's rule escapes the parts between `:` and `,` on the wire,
+  so `R&D`, `C++`, `#` and `%` arrive as written: the live suite finds a project named `R&D C++ #1 100%` by an `eq`
+  filter on Tableau Server 2025.1, though the reference says a filter can't hold `&` even encoded. A comma, which the
+  server refuses even as `%2C` (400065), is refused in a value. Dates go in UTC as `yyyy-MM-ddTHH:mm:ssZ`, in the
+  invariant culture. `Eq` and `In` also take `SiteRole`, the generated enumeration S12's fields hold (agreed on #45);
+  a later area adds the ones its fields hold. Filters and sorts compare by their expression and fields, so list
+  options built alike are equal.
+- **Sorts:** `TableauSort.Asc` and `Desc`, chained with `Then`.
 - One enumerable model also serves Vizportal's page tokens and GraphQL cursors.
 
 ### Models and the generator (S8)
@@ -681,6 +708,9 @@ As S11 built it (#43, the door agreed there):
     and only a top-level project with the suite's description and a run's exact name counts as one. Tableau Server
     lists a project from its index, a second behind a create and minutes behind a delete, so the suite waits for a new
     one and the sweep passes over one already gone.
+  - A group can't be in a project, so the run's local groups (S12) are named after the run and the second each was made,
+    in UTC, since a group has no description or date; the suite deletes each when done with it or at its end, and the
+    sweep takes a local group of that exact name more than a day old.
   - Every live client sends through one `HttpClient` that keeps each session token it carries, renewals included, for
     the log check, and is disposed after the cleanup's client signs out through it.
   - With `TABLEAU_RECORD=1` each JSON body goes through `FixtureRecorder`, which fails closed: every string is invented
@@ -793,8 +823,8 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
 | S8 | main | Models, generator, AOT | F14 F23 F50 | #37 | #38 | done: squash `ffc43f5` |
 | S9 | main | Client core | F4 F16 F18 F20 F21 F22 F35 F36 F37 F38 F46 F47 F48 | #39 | #40 | done: squash `18c8404` |
 | S10 | main | Resilience and downloads | F17 F19 F42 | #41 | #42 | done: squash `54b6764` |
-| S11 | main | Sessions and the live suite | F27 F34 | #43 | #44 | in review |
-| S12 | main | Port: server, sites, projects, users, groups, favorites; paging and filters | F13 F33 | | | todo |
+| S11 | main | Sessions and the live suite | F27 F34 | #43 | #44 | done: squash `eb79b4b` |
+| S12 | main | Port: server, sites, projects, users, groups, favorites; paging and filters | F13 F33 | #45 | #46 | in review |
 | S13 | main | Port: permissions, tags, metadata (REST and GraphQL) | F8 F44 | | | todo |
 | S14 | main | Port: workbooks, views, data sources, revisions | F5 F7 F32 | | | todo |
 | S15 | main | Port: jobs, tasks, schedules, subscriptions, Server and Cloud | F9 F10 F11 F12 F15 F31 | | | todo |
@@ -1196,9 +1226,12 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
     confirms on a site that Tableau takes a JSON number there, since the models write one where Tableau sends a string.
   - **Paging:** stops at `TotalAvailable` and on a short page; cancellation stops it.
   - **Filters:** escaping rows (`R&D`, `C++`, `#`, `%`, in-lists).
-  - **Live:** create, list, update and delete a project, a group and a user in the run's scope.
-  - **ServerOnly, by hand:** sites create and delete; Active Directory groups.
-- **One-way doors:** the paging and filter API, the first use of the patterns later steps copy: a maintainer's yes.
+  - **Live:** create, list, update and delete a project and a local group in the run's scope, and add the suite's own
+    user to the group and remove it; users read only (#45: the maintainers' server takes its users from a directory,
+    so the suite makes none).
+  - **ServerOnly, by hand:** sites create and delete; Active Directory groups; a user added, updated and removed.
+- **One-way doors:** the paging and filter API, the first use of the patterns later steps copy, and the five
+  sub-clients with `FavoriteTarget`: a maintainer's yes on #45.
 - **Done when:** merged with that yes; the live suite covers the area.
 
 ### S13. Port: permissions, tags, metadata
@@ -1459,14 +1492,14 @@ Status: `todo`, `done` (with the PR) or `wontfix` (with the reason). No finding 
 | F10 | Schedule create: 201, `HH:mm:ss`, a checked time, `monthDay` | S15 | yes | todo |
 | F11 | Extract refresh task lists by item type, empty when empty | S15 | yes | todo |
 | F12 | Get Extract Refresh Task on its documented path | S15 | yes | todo |
-| F13 | Active Directory group updates carry the group id | S12 | no | todo |
+| F13 | Active Directory group updates carry the group id | S12 | no | done (#46): `GroupsClient.UpdateFromActiveDirectoryAsync` and its job form PUT to `groups/{id}` |
 | F14 | An unknown enum value never fails a response | S8 | yes: the missing values added | done |
 | F15 | Any 2xx is success; the Cloud subscription form | S15 | yes: any 2xx | todo |
 | F16 | Server and Cloud modelled; no silent version cap; Cloud and Server gates | S9 | no | done |
 | F17 | Downloads streamed, under their own timeout, without a Content-Type crash, the response disposed | S10 | no | done: `TableauDownload`; the download methods come with their areas |
 | F18 | One `HttpClient` per client, injectable, from `IHttpClientFactory`; disposable | S9 | no | done |
 | F19 | Retries for idempotent calls only; 429 and `Retry-After` honoured and exposed | S10 | no | done |
-| F20 | Lists never null; a missing element names the endpoint | S9 | no | done: the missing element; the lists with S12's paging |
+| F20 | Lists never null; a missing element names the endpoint | S9 | no | done: the missing element; the lists with S12's paging, `Page<T>.Items` never null |
 | F21 | A `CancellationToken` last on every method, Vizportal included | S9 | no | done: the conventions test; Vizportal built to it in S16 |
 | F22 | One naming scheme and return shape, guarded by the conventions test; the name map | S9 | no | done |
 | F23 | Models generated from a checked-in xsd by a repeatable generator; no hand edits | S8 | no | done |
@@ -1479,7 +1512,7 @@ Status: `todo`, `done` (with the PR) or `wontfix` (with the reason). No finding 
 | F30 | Chunks read from any stream, asynchronously | S17 | no | todo |
 | F31 | Add Workbook to Schedule returns the task; Add Data Source to Schedule | S15 | no; a known issue | todo |
 | F32 | Updates omit nested elements the caller did not set | S14 | no (Q5) | todo |
-| F33 | Update User sends the documented attributes | S12 | no | todo |
+| F33 | Update User sends the documented attributes | S12 | no | done (#46): `UsersClient.UpdateAsync` sends the set members of a `User`, the reference's nine among them |
 | F34 | A session lifecycle: expiry, signing in again, no token in `ToString` | S11 | no | done (#44): the session manager |
 | F35 | One exception type with the details (D8) | S9 | no | done |
 | F36 | Logging without secrets or noise; Abstractions only | S9 | no | done |
@@ -1796,6 +1829,9 @@ and start the steps", and on the owner calls they have answered since (Q7 to Q9)
 | 2026-10-31 | S10 | Done: PR #42 merged as `54b6764`, closing #41, with its doors and their departures agreed on #41. |
 | 2026-10-31 | S11 | Built on `43-sessions-live-suite` for #43, from `origin/main` at `54b6764`; @serionist agreed on #43 to its door, the credentials and session API, and chose his own Tableau Server for the live suite over a Developer Program site. **Sessions** (Design, Sessions and sign-in): `TableauCredentials` with its five kinds and their vault overloads; `TableauSession`; `client.Sessions` (`SessionsClient`) and `client.WithSession`; credentials on `Create`, the `HttpClient` constructor and `UseCredentials`; the session manager, `Pipeline/TableauSessions.cs`; eight descriptors (Sign In by kind, Sign Out, Switch Site), `NeedsSession`, `KeepsBody` and `{siteId}` in the pipeline. `TableauApiClient`'s `SignIn`, `SignInWithPAT`, `SignOut` and `SwitchSite` are deleted: three more breaks in the ledger (22), `SignInWithPAT`'s 1.2.5 signature being listed already; the old files name `Models.TableauSession`, since a `TableauSession` in `Tableau.Api` would otherwise bind every old method to the new record. **Looked up:** the REST reference's Sign In, Sign Out and Switch Site (bodies, `isUat` from 3.27, impersonation Server only, Switch Site 2.6 and Server only, a token valid 240 minutes on Server and 120 on Cloud); `estimatedTimeToExpiration` is a PAT's own lifetime, `DAYS:HH:MM`, returned to a PAT sign-in alone, and the live server sent `363:10:35`; the direct-trust JWT's header and claims, Server and Cloud; connected-app scopes (none for sign-in and sign-out from 2023.2; `tableau:content:read` for reads, `tableau:projects:*` for projects); unified access tokens; `HMACSHA256.HashData`, `Base64Url`, `IHttpClientFactory`'s handler lifetimes, and `ServiceProvider.Dispose` throwing on a service that is `IAsyncDisposable` alone. **The live suite:** `live.yml` (by hand from `main`, nightly once `TABLEAU_LIVE_NIGHTLY` is `true`, in `tableau-live`, one run at a time); `LiveSite.cs` (the settings, the sign-in, the run's project and its sweep); `FixtureRecorder.cs` (`TABLEAU_RECORD=1`); `ServerOnlySessionTests` for impersonation and Switch Site by hand; one `[AssemblyCleanup]`, `SuiteCleanup`, which deletes the run's project, then checks every log line, a live secret's counted and never shown. **Live check,** Tableau Server 2025.1 (REST API 3.25), the default site, a PAT from outside the clone: the four `Live` tests passed, sign-outs checked by a refused token; the run's project made, listed and deleted. It showed that a PAT's two sessions end each other, so the session tests run one at a time, and that the server lists a project a second behind a create and minutes behind a delete. A recording run wrote 19 fixtures, none holding the secret, the token's name, the host, a LUID, an email or a token. Not run: Switch Site (one site) and the password sign-ins (no password); the first direct-trust run comes from `main` after the merge. **Tests:** 475 to 551; coverage 95.01% of lines and 94.56% of branches on Windows; the line floor rises to 95%. The native AOT app signs in through its fixtures, mints a JWT, binds a session and signs out: published natively on win-x64 with no warning, 16 MB. **Departures,** in the PR's door list: `ExpiresAt` takes a PAT's `estimatedTimeToExpiration` only when sooner than the deployment's lifetime; `TableauSession`'s six members are `required` init, so a test can make one, and `WithSession` refuses one without a token; `Jwt` and `UnifiedAccessToken` take only a delegate; `UseCredentials` keeps the last given; a DI name's session is never signed out, the container's disposal included; sign-in descriptors are idempotent. |
 | 2026-11-01 | S11 | Draft PR #44. review-code round 1: no blocker or major, eleven minors, all fixed, and the maintainer took all fifteen improvements; @serionist agreed on #43 to the eight departures and to a narrower eighth, a JWT's sign-in never retried. **Fixes:** a JWT's or a unified access token's sign-in is never sent twice, since Tableau refuses a `jti` it has seen; PAT impersonation needs REST API 3.11 (Tableau Server 2021.1, `tsm authentication pat-impersonation enable`), and an impersonating sign-in that comes back as another user is signed out and refused; a session is renewed by its own lifetime, its `ExpiresAt` still showing a PAT's sooner end, which comes as a 401, so a token's last minutes don't sign in on every call; the half-life rule goes with it; a cancelled sign-in is pinned as no failure for the callers waiting; the live suite keeps every token its clients carry, renewals included, through one `HttpClient` disposed after the cleanup signs out; in a run that reached a site the log check counts lines and shows none; the sweep deletes only a top-level project with the suite's description and a run's exact name; the recorder fails closed, takes secret keys by pattern and the run's settings everywhere, writes nothing for a body that isn't JSON, and the suite's end deletes and names a file still holding a live value; the migration guide and CHANGELOG say an area not yet ported can't get a session on `main`. **Improvements:** `TableauRequest` prints no token; a sign-in a caller's handler sent elsewhere says to rotate the credentials; a renewal that fails before `ExpiresAt` leaves the call in its session and is tried again a minute later; the sign-out of a sent token keeps its caller's time, so a dispose stays within ten seconds; tests of `Dispose` under a single-threaded context, of the sweep's rules and of the scrubber over the schema's 13 secrets. Tests 551 to 577. |
+| 2026-11-01 | S11 | Done: PR #44 merged as `eb79b4b`, closing #43, with its door and its departures agreed on #43. |
+| 2026-11-01 | S12 | Built on `45-port-sites-projects-users-groups-favorites` for #45, from `origin/main` at `eb79b4b`; @serionist agreed on #45 to both doors, the paging and filter API and the five sub-clients with `FavoriteTarget`, and to deleting the old methods. **The client:** `client.Sites`, `.Projects`, `.Users`, `.Groups` and `.Favorites`, classes with virtual methods and protected constructors, string LUIDs checked before anything is sent, the token last; 46 descriptors in `Endpoints`, each method, path, version and deployment from the reference (Create Group and Update Group at 3.9, where their bodies took a minimum site role; Delete Group 2.1; Get Groups for a User 3.7; each kind of favorite from its own version), `Idempotent` by what the call does: creates, an import, Add User to Site and a synchronisation from Active Directory, which can outlast an attempt, are sent once; updates, deletes, Add User to Group (a second answers 409 when the first got through) and a favorite's PUT may be sent again. **Paging and filters** (Design, Paging and filters): `Page<T>`, `ListAsync` through the virtual `ListPageAsync`, the options records, `TableauField` in `ProjectField`, `UserField` and `GroupField`, `TableauFilter` and `TableauSort`. **F13:** the Active Directory updates PUT to `groups/{id}`, at once and as a job. **F33:** Update User sends a `User`'s set members, the reference's nine among them. **The old client:** the Sites, Projects, UsersAndGroups and Favorites partials deleted with `DeleteProject2`, 40 more breaks in the ledger (62), each a row of the migration guide's name map; `QueryViewsForSite` moved to the views partial until S14; `OldPublicTypes` unchanged at 232, since the XML types stay with `XmlSchema.cs`; the four files out of TableauLegacy; the old client's tests that used the deleted methods moved to Query Data Sources and Initiate File Upload. **Looked up:** the reference's Sites, Projects, Users and Groups and Favorites pages and its filtering page; Tableau's Python client for Delete Flow from Favorites, whose reference URI repeats the data source's. **Read-only probes of the live server,** Tableau Server 2025.1 (REST API 3.25), outside the clone, shapes and status codes only: Query Sites refuses every filter, the reference's `id:eq` included (400065), and ignores any sort; projects refuse a sort on `id`, `luid` and `parentProjectId`, users and groups on `luid` (400066), and users refuse `isLocal` in a filter; `createdAt:asc,name:asc` and `name:asc,domainName:asc` sort, though the default for users and groups is `name:asc` alone, since nothing here reaches Tableau Cloud, where a user's domain names how they sign in; a comma escaped as `%2C` in a filter value fails to parse (400065); a page past the end answers 400006 for groups and a user's groups, 400117 for projects, and an empty page with a total of 0 for users; a case-insensitive filter on users answered a total of 1 with no users; Get Favorites for User sends no pagination and an empty page past the end; a user who never signed in has no `lastLogin`; page size 1,001 answers 403014. **Live check,** the same server, the default site, a personal access token from outside the clone, mapped to the suite's settings in the test process alone: the seven `Live` tests passed, the three new ones among them, before and after the default sort of users and groups became their name alone: a nested project named `R&D C++ #1 100%` made in the run's project, found by an `eq` filter on its name and parent, updated and deleted; a local group made, found, renamed, given the suite's own user, listed among the user's groups and its users, emptied and deleted, a 404 after; users read two a page, the suite's own by id and by a `luid` filter, and its groups. The run's project and group were deleted and every session signed out; the first run recorded 52 scrubbed bodies, and those read, the projects', the groups' and the users', matched the synthetic fixtures' shapes; none is committed. Not run: Update Site, which changes the site, so a JSON number for `revisionLimit` is left to the `ServerOnly` site test, by hand; the `ServerOnly` tests (a site made, updated on it and deleted; an Active Directory group imported and synchronised, at once and as a job; a user added, updated and removed). **Tests:** 577 to 686; coverage 96.04% of lines and 94.77% of branches on Windows, five runs in a row the same; the line floor rises to 96%. The native AOT app lists projects page by page with a filter and the stable sort, published natively on win-x64 with no warning, 16.3 MB. **Departures,** in the PR's door list: `SiteListOptions` holds a page size alone and no `SiteField` is made, since the server refuses the reference's one site filter and ignores a sort; Delete Flow from Favorites goes to `flows/`; no metric favorite, retired in REST API 3.22, below the floor; the choices the words left open. |
+| 2026-11-01 | S12 | Draft PR #46. review-code round 1: no blocker or major, six minors, all fixed, and the maintainer took every improvement; @serionist agreed on #45 to the five departures and to `Eq` and `In` taking the generated enumerations. **Fixes:** `TableauFilter` and `TableauSort` compare by their expression and fields, so list options built alike are equal; a date filter is tested under th-TH (Buddhist years) and fi-FI (dotted times), and both rows fail without the invariant culture; each field's summary gives the reference's operators for it, `parentProjectId` taking `in`; the `ServerOnly` tests delete the site and the import job's group they made, finding that group by its name, domain and a new id, or name what is left; a table pins every descriptor's retry rule, and each call sent once stays one request after a 503 with no wait, where an update is sent again; a list fails as `InvalidResponse` when the server answers an earlier page, or for favorites, which carry no pagination, a page that starts like the one before, where it would repeat without end. A read-only probe on Tableau Server 2025.1 showed favorites page by `pageNumber`: a page of one, then the second favorite, then none. **Improvements:** a caller's sort is followed by the default's fields it doesn't name; users sort by name and domain on Tableau Server and by name alone on Tableau Cloud, where nothing shows a domain sorts; `Eq` and `In` take `SiteRole`, the enumeration S12's fields hold, a later area adding its own; a refusal names the C# member; Delete Site is sent once; CHANGELOG names what is sent once; the nightly users test reads three pages of two at most; the list tests that claimed pages serve two; the docs of Update User's attributes give their versions, and Delete Site's says a site, as the reference does. Tests 686 to 705. The `Live` tests passed again on Tableau Server 2025.1, the run's project and group deleted and every session signed out. |
 
 ## For the maintainers
 
@@ -1841,6 +1877,15 @@ What the session cannot do, first what closes a security exposure. Kept current 
 - [ ] Run `live.yml` by hand on `main`, the first direct-trust run. If the sign-in is refused, check the user's name as
   the server shows it, a domain included for Active Directory or LDAP.
 - [ ] Then set the repository variable `TABLEAU_LIVE_NIGHTLY` to `true`, which turns the nightly run on.
+
+**After S12 merges:**
+
+- [ ] Run `live.yml` by hand on `main`: the JWT now asks for `tableau:groups:*` and `tableau:users:read` too, for the
+  run's group, the suite's own user in it, and the users it reads. If the connected app refuses them, allow them.
+- [ ] Run the new `ServerOnly` tests by hand (`ServerOnlyAreaTests`): a site made with a revision limit, which shows
+  Tableau takes the JSON number, updated on it and deleted; an Active Directory group, with
+  `TABLEAU_SERVER_ONLY_AD_GROUP` and `TABLEAU_SERVER_ONLY_AD_DOMAIN`, whose users join the site and stay; and a user,
+  `TABLEAU_SERVER_ONLY_NEW_USER`, added, updated and removed.
 
 **Settings:**
 
