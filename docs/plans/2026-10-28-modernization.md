@@ -611,6 +611,41 @@ As S13 built it (#48, both doors agreed there, `TableauContent` replacing S12's 
   `pageInfo`. `TableauPaging.CursorListAsync` pages by any cursor, Vizportal's page tokens to come, and fails a page
   that says more follow without a new cursor.
 
+### Workbooks, views and data sources (S14)
+
+As S14 built it (#56, its door agreed there):
+
+- **The sub-clients:** `client.Workbooks`, `client.Views` and `client.DataSources`, S12's pattern: string LUIDs checked
+  before anything is sent, the token last, lists through the virtual `ListPageAsync`. Workbooks and data sources share
+  their revisions, connections, extract refresh and download in `Pipeline/TableauContentCalls.cs`. A sub-list that takes
+  no options (a user's workbooks, a workbook's views, connections) comes in Tableau's order, 100 a page or from one call.
+- **36 descriptors** (166), each method, path, version and deployment from the reference: a revision's remove of a
+  workbook at 2.0, as the reference gives it, the list it removes from at 2.3; an option above its export's version is
+  its own descriptor, so the gates refuse it before sending: Query View Image at a size and Download Workbook PDF with
+  view filters from 3.23, Download Workbook PDF at a size from 3.26. Every call may be sent again but Update Workbook Now
+  and Update Data Source Now, an extract refresh each. Every file is `TransferKind.Download`.
+- **`ExportOptions`,** one record for the five exports, `ExportQuery` the one place it becomes a query: each option
+  checked against what the reference lists for the export, then written in one order, the view filters last, each
+  `vf_` and the name unless the name starts `vf_` by an ordinal comparison (F5). Data takes filters alone (the reference
+  lists no `maxAge` for it); an image filters, its age, `resolution=high` and `vizWidth` and `vizHeight`; a view's PDF
+  and a workbook's filters, age, size, `type` and `orientation`; a crosstab filters and age. The width and the height go
+  together; an age is a minute at least; `PageType` and `PageOrientation` are written as the reference writes them.
+- **Updates** (F32): `WorkbookUpdate` (name, description, show tabs, recently viewed, extract encryption, project,
+  owner, data freshness policy), `DataSourceUpdate` (name, certification and its note, extract encryption, project,
+  owner) and `ConnectionUpdate` (server address and port, authentication type, user name, password, embed password),
+  the reference's members less the retired: data acceleration, Ask Data and query tagging. A project or an owner goes
+  by its LUID, checked, and only when set; a refresh sends `{}`, the reference's body before REST API 3.28.
+- **Stable order:** workbooks and data sources `createdAt:asc,name:asc`, views `createdAt:asc,workbookName:asc,name:asc`.
+  Tableau Server 2025.1 refuses a sort on `contentUrl`, which no two share, on each, on a workbook's `projectName` and
+  `tags`, on a view's `viewUrlName` and `tags`, and on a data source's `tags`; it refuses `hasAlerts`,
+  `connectedWorkbookType`, `databaseUserName`, `isDefaultPort`, `serverName` and `serverPort` altogether. Each field
+  says so.
+- **Tags:** a batch names each content by its type and LUID (`Workbook`, `Datasource`, ...), as Tableau's Python client
+  does: the server refused the reference's body, by LUID alone, with 409004. Batch Delete Tags stays the reference's
+  `DELETE tags:BatchDelete` with that body, which the server took.
+- **The live suite** makes the run's project with `publishSamples=true`: Tableau Server 2025.1 publishes two sample
+  workbooks and their data source before it answers, and lists them at once.
+
 ### Models and the generator (S8)
 
 **What the research found:**
@@ -864,8 +899,8 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
 | S10 | main | Resilience and downloads | F17 F19 F42 | #41 | #42 | done: squash `54b6764` |
 | S11 | main | Sessions and the live suite | F27 F34 | #43 | #44 | done: squash `eb79b4b` |
 | S12 | main | Port: server, sites, projects, users, groups, favorites; paging and filters | F13 F33 | #45 | #46 | done: squash `3433e9b` |
-| S13 | main | Port: permissions, tags, metadata (REST and GraphQL) | F8 F44 | #48 | #52 | in review |
-| S14 | main | Port: workbooks, views, data sources, revisions | F5 F7 F32 | | | todo |
+| S13 | main | Port: permissions, tags, metadata (REST and GraphQL) | F8 F44 | #48 | #52 | done: squash `4cd20b8` |
+| S14 | main | Port: workbooks, views, data sources, revisions | F5 F7 F32 | #56 | | in review |
 | S15 | main | Port: jobs, tasks, schedules, subscriptions, Server and Cloud | F9 F10 F11 F12 F15 F31 | | | todo |
 | S16 | main | Vizportal | F29 F41 F49 | | | todo |
 | S17 | main | Publishing, and the last old code | F30 F43 F45 | | | todo |
@@ -1316,7 +1351,8 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
   - from S13 (#52): Tableau Server 2025.1 sends a catalog asset's location type as `PROJECT`, where the schema's
     `LocationType` value is `Project`, so `location.Type == LocationType.Project` is false; a workbook's and a data
     source's `location` likely meet the same, which a live read shows. The generator's enumerations might later
-    compare case aside, a change to the public model shape.
+    compare case aside, a change to the public model shape. The live read (#56): a workbook's and a view's come as
+    `Project`, the schema's text; a published data source comes with no location.
 - **Findings:** F5, F7, F32.
 - **Tests:**
   - `vf_` on every export from one helper;
@@ -1324,7 +1360,10 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
   - an update sends no empty nested object (golden bodies);
   - downloads stream;
   - live: list, get and download a published sample; export view data, an image and a PDF.
-- **One-way doors:** the export options type: a maintainer's yes.
+  - live, from #56 (the maintainer widened it): the run's project made with Tableau's samples, and every S14 call on
+    them; tags with a space and a comma, one content at a time and in a batch, which S13 left to S17; what Tableau
+    sends for each file's `Content-Disposition` and `Content-Type`.
+- **One-way doors:** the export options type, the three sub-clients and the update records: @serionist's yes on #56.
 - **Done when:** merged with that yes.
 
 ### S15. Port: jobs, tasks, schedules, subscriptions
@@ -1386,8 +1425,8 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
   - the AOT app's packages locked: `KnownILCompilerPack` pinned, as `src/Directory.Build.targets` pins the ILLink pack,
     and a lock file beside it;
   - AGENTS.md's Traps rows whose guards were the deleted code (How the work runs, Rule files);
-  - the duplicates S9 left beside the old client: `TableauHttp.BasePath` (now `RequestUri.BasePath`) and the old
-    `appendQueryValue`, which go with it.
+  - the duplicate S9 left beside the old client: `TableauHttp.BasePath` (now `RequestUri.BasePath`), which goes with
+    it; S14 took the old `appendQueryValue` out, its filter and sort branch dead once the lists that sent them went.
 - **Findings:** F30, F43, F45 (its endpoint list goes to the steps and follow-ups in the Research tracker).
 - **Tests:**
   - one request at 64 MB and below, chunks above (set small in tests);
@@ -1397,10 +1436,6 @@ pre-encoded filters, failed redirects, any 2xx accepted, a time outside a day re
   - `asJob` returns a job;
   - golden payloads;
   - live: publish and delete a small workbook and data source, and one over a chunk;
-  - live, from S13 (#52), once the suite has content of its own: tags with a space and with a comma added and
-    deleted, one content at a time and in a batch, so the quoting of a body's labels is seen on a site; and Batch
-    Delete Tags' method, path and body, the reference's `DELETE tags:BatchDelete` with the content by id, against
-    Tableau's Python client's `PUT tags:batchDelete` with a content type, to learn which the server takes;
   - live, from S13 (#52): a group set's permission added on the run's project and deleted, since the delete's
     `permissions/groupSets/{id}/...` comes from Tableau's Python client's generic `tag_name + "s"`, and the reference
     documents `users` and `groups` alone. It needs a maintainer's yes for the suite to make and delete a group set of
@@ -1541,9 +1576,9 @@ Status: `todo`, `done` (with the PR) or `wontfix` (with the reason). No finding 
 | F2 | Every path segment validated and escaped: ids, tag names, site names | S3 | yes | done |
 | F3 | Credentials and bodies never go to another host on a redirect; auth on each request | S3 | yes | done |
 | F4 | Version and deployment gates that run, from descriptors, without reflection | S9 | no | done |
-| F5 | View filters with `vf_` on every export, from one helper; `maxAge` | S14 | yes: data, image, and PDF without filters | todo |
+| F5 | View filters with `vf_` on every export, from one helper; `maxAge` | S14 | yes: data, image, and PDF without filters | done (#56): `ExportOptions.Filters` through one helper, `ExportQuery`, on the five exports, a name that starts `vf_` by an ordinal comparison sent as it is; `MaxAge` where the reference lists it |
 | F6 | Every query key and value escaped; filter and sort escaped between separators | S3 | yes | done |
-| F7 | Revision lists send their paging | S14 | yes | todo |
+| F7 | Revision lists send their paging | S14 | yes | done (#56): `ListRevisionsAsync` and `ListRevisionsPageAsync` of workbooks and data sources send `pageSize` and `pageNumber` |
 | F8 | Database and table lists paged | S13 | no | done (#52): `MetadataClient.ListDatabasesAsync` and `ListTablesAsync` read every page, `ListDatabasesPageAsync` and `ListTablesPageAsync` one |
 | F9 | Update Schedule with PUT on the schedule's id | S15 | refused before sending, since it would create a second schedule | todo |
 | F10 | Schedule create: 201, `HH:mm:ss`, a checked time, `monthDay` | S15 | yes | todo |
@@ -1568,7 +1603,7 @@ Status: `todo`, `done` (with the PR) or `wontfix` (with the reason). No finding 
 | F29 | The Vizportal schedule check sends camelCase | S16 | n/a | todo |
 | F30 | Chunks read from any stream, asynchronously | S17 | no | todo |
 | F31 | Add Workbook to Schedule returns the task; Add Data Source to Schedule | S15 | no; a known issue | todo |
-| F32 | Updates omit nested elements the caller did not set | S14 | no (Q5) | todo |
+| F32 | Updates omit nested elements the caller did not set | S14 | no (Q5) | done (#56): `WorkbookUpdate`, `DataSourceUpdate` and `ConnectionUpdate` send what is set, a project and an owner by their LUIDs only when set |
 | F33 | Update User sends the documented attributes | S12 | no | done (#46): `UsersClient.UpdateAsync` sends the set members of a `User`, the reference's nine among them |
 | F34 | A session lifecycle: expiry, signing in again, no token in `ToString` | S11 | no | done (#44): the session manager |
 | F35 | One exception type with the details (D8) | S9 | no | done |
@@ -1893,6 +1928,8 @@ and start the steps", and on the owner calls they have answered since (Q7 to Q9)
 | 2026-11-01 | S13 | Built on `48-port-permissions-tags-metadata` for #48, from `origin/main` at `3433e9b`; @serionist agreed on #48 to both doors, the generic content reference and the three sub-clients, to `TableauContent` replacing `FavoriteTarget`, and to deleting the old methods. **The client** (Design, Permissions, tags and metadata): `TableauContent` and `TableauContentKind`, taken by `client.Favorites` too; `client.Permissions` (`PermissionsClient`, with `PermissionGrantee` and `DefaultPermissionsKind`), `client.Tags` (`TagsClient`) and `client.Metadata` (`MetadataClient`, with `DatabaseListOptions`, `TableListOptions` and `CursorPage<T>`); 84 more descriptors (130), each method, path, version and deployment from the reference: permissions per kind from 2.0 to 3.23, defaults 2.1 and virtual connections' 3.23, tags 1.0, 3.9 and 3.23, the catalog's calls 3.5, a column's warnings 3.16, GraphQL 3.5; every call may be sent again but Add Data Quality Warning, which a second would add again. `Rest/Models/Catalog.cs` writes `Column` and the catalog's lists by hand, which the 3.29 schema lacks. **F8:** databases and tables page. **F44:** Delete Data Quality Warning by Content, Batch Delete Tags, and a tag deleted from a table or a column, with their siblings. **The old client:** the Permissions and Metadata partials and the six tag methods deleted, 35 more breaks in the ledger (97) and a guide row for each of the 36, `QueryViewPermissions` never released; `AddWorkbookToSchedule` moved to the jobs partial; `OldPublicTypes` stays at 232, `MetadataContentType` and `DataQualityWarningType` unused until the old client goes; the two files out of TableauLegacy. **Looked up:** the reference's permissions, metadata, flow, virtual connection, workbooks and views, and data sources pages, and the Metadata API's get-started, authentication, errors and pagination pages; Tableau's Python client sends `contentType` in a batch and PUTs `tags:batchDelete`, where the reference documents neither, so the client follows the reference. **Read-only probes of the live server,** Tableau Server 2025.1, outside the clone, shapes and codes only: databases and tables answer their pagination beside the list, and a page past the end 400006; a table's columns answer no pagination and refuse every second page (400006); a project's defaults list for data roles and lenses answers 405 and for metrics 200; a database's or a table's permissions answer 400120 without a published data source; warnings by content take `virtualconnection`; the Metadata API answered 403 from its service to every query, by POST, GET and `application/graphql`. **Live check,** the same server, a personal access token from outside the clone mapped to the suite's settings in the test process alone: eight of the nine `Live` tests passed, the new permissions test among them; the GraphQL test failed with that 403. The run's project and groups were deleted and every session signed out; the recorded permission bodies matched the synthetic fixture's shape, none committed. **Tests:** 705 to 818; coverage 96.84% of lines and 94.86% of branches on Windows. The native AOT app lists and adds permissions and queries GraphQL through its own `JsonTypeInfo<T>`, a connection paged by its cursor: published natively on win-x64 with no warning, 16.8 MB. **Departures,** in the PR's door list: a delete's capability is a `CapabilityName`; no default permissions for lenses and metrics, retired at the floor; a table's columns from one call of 1,000; `Column` written by hand in the models' namespace. |
 | 2026-11-01 | S13 | Draft PR #52. review-code round 1: one major and eight minors, all fixed; @serionist agreed on #48 to the departures and to three changes after review. **The major:** Tableau splits an unquoted tag label at whitespace and commas (tableau/server-client-python#1738), so Add Tags, Batch Add Tags and Batch Delete Tags now send such a label in double quotes, one already quoted as it is; Delete Tag's path stays unquoted, as Tableau stores the tag. **Fixes:** the favorites tests check each kind's own add and delete, by the call a failure names and by its own version; the cancellation test counts the nodes read; a query that asks for no `endCursor` fails saying so; a table's columns fail when the answer counts more than it holds, and the docs say the list stops at 1,000; Add Data Quality Warning's reason for being sent once is the reference's (a second adds again, or, up to Tableau Server 2024.2, fails); Update Data Quality Warning says an unset `IsActive` becomes true; `live.yml` names the seven scopes; the plan names #52. **Agreed changes:** a GraphQL `errors` entry whose `extensions.severity` is `WARNING` is logged at Warning and the data returned, any other still fails (DataHub's Tableau source shows the shape, `NODE_LIMIT_EXCEEDED` among its warnings); `==` and `!=` on `TableauContent` and `PermissionGrantee`; `PermissionGrantee.Kind`, a user, a group or a group set, in place of `IsGroup`, as the schema's rules name a group set and Tableau's Python client deletes one's permission under `groupSets`. **Improvements taken:** a GraphQL failure reads the same whatever its status (`RATE_EXCEEDED` `RateLimited`, the other entries in `Detail`, the request id kept); the catalog's updates send the reference's members alone; an add's body names a workbook, a view, a data source and a flow too, as the reference's bodies do; a read-only probe found the live server sends a location's type as `PROJECT` (14 databases and 79 tables), where the schema's enumeration has `Project`, and the fixtures follow it. **Later:** a database's own default permissions (#53); S17 checks tags with spaces and commas, and Batch Delete Tags, on a site. Tests 818 to 843. The `Live` tests ran again on Tableau Server 2025.1: eight of nine passed, the GraphQL test failing with the same 403, and the run's project and group were deleted and every session signed out. |
 | 2026-11-01 | S13 | review-code round 2: four minors and two improvements, all taken; no round 3. **Fixes:** a GraphQL answer holding warnings and no data, or data that doesn't read, fails under the first warning's code and logs nothing, where it logged each warning and then lost its code; the `ErrorCode` and summary of a failed answer come from its first entry that isn't a warning; the delete of a group set's permission, `permissions/groupSets/{id}/...`, has not run on a site, which the PR says and S17's live list now holds, waiting for a maintainer's yes for a group set of the run's own; the permissions docs name group sets beside users and groups. **Improvements:** `GetDatabaseAsync` and `GetTableAsync` say a location's type comes as `PROJECT`, not `LocationType.Project`, and S14's scope notes a workbook's location may too; the maintainer item for turning the Metadata API on checks, during the backfill, that `BACKFILL_RUNNING` arrives as a warning. Tests 843 to 846; the branch floor rose to 95%. The `Live` tests ran again: eight of nine passed, the GraphQL test still answered 403. A maintainer then turned the Metadata API on, and after the restart all nine passed, the GraphQL test on partial data: every query answered 200 with a `BACKFILL_RUNNING` entry whose `extensions.severity` is `WARNING` (and an `extensions.properties` object), the shape the client takes, and its data. Each run's project and group were deleted and every session signed out. |
+| 2026-11-01 | S13 | Done: PR #52 merged as `4cd20b8`, closing #48, with its doors, its departures and the changes after review agreed on #48. |
+| 2026-11-01 | S14 | Built on `56-port-workbooks-views-datasources` for #56, from `origin/main` at `4cd20b8`; @serionist agreed on #56 to its door, the three sub-clients, `ExportOptions` and the update records, to deleting the old methods, and to the live suite's scope, which he widened during the build to every S14 call on the suite's own samples, destructive ones included. **The client** (Design, Workbooks, views and data sources): `client.Workbooks`, `client.Views` and `client.DataSources`; 36 more descriptors (166), each method, path, version and deployment from the reference, every file a `TransferKind.Download`, an extract refresh sent once; `ExportOptions` with `ImageResolution`, `PageType` and `PageOrientation` through one helper, `ExportQuery` (F5); revision lists with their paging (F7); `WorkbookUpdate`, `DataSourceUpdate` and `ConnectionUpdate` (F32); `WorkbookField`, `ViewField` and `DataSourceField`; `Pipeline/TableauContentCalls.cs`. **The old client:** the WorkbooksAndViews, Datasources and Revisions partials deleted with `QueryViewsForSite`, the `Orientation` and `TableauImageWidth` enumerations with them (`OldPublicTypes` 232 to 230); 30 more breaks in the ledger (127) and a guide row for each of the 33 methods, `QueryView` and `QueryViewCrosstabExcel` never released; the old client's tests that used them moved to the subscription and publishing methods; `appendQueryValue`'s filter and sort branch and `checkEmptyArrays`, dead once their callers went, deleted; the three files out of TableauLegacy. **Looked up:** the reference's workbooks and views, data sources, revisions, filtering and what's-new pages; Tableau's Python client's export options and batch tags. **Read-only probes,** Tableau Server 2025.1, outside the clone, a filter on a project no one has: the server refuses a sort on `contentUrl` for all three, on a workbook's `projectName` and `tags`, a view's `viewUrlName` and `tags` and a data source's `tags`, and refuses `hasAlerts`, `connectedWorkbookType`, `databaseUserName`, `isDefaultPort`, `serverName` and `serverPort` altogether, so the stable sorts are `createdAt` then the name. **Live check,** the same server, a personal access token from outside the clone: the 13 `Live` tests passed, the four new ones among them, on what Tableau published into the run's project before it answered Create Project, two sample workbooks and their data source, listed at once: workbooks listed a page of one and sorted, got, downloaded with and without extracts (the same 1.6 MB: the samples hold none), their preview image (empty, no thumbnail drawn yet) and PDF with a page, an orientation, an age and a view filter, a PDF at a size refused before sending at 3.25; revisions listed, the one current revision refused for download (400057) and removal (403055); a workbook updated; its connection's update read and refused, an excel-direct connection not editable (400039); its extract refresh read and refused, the samples holding no extract (403180); the user's own workbooks read until a sample came; views listed two a page and for their workbook with their usage, got, exported as data with and without a view filter on `Country/Region` (9 of 58 rows), an image at high resolution and 800 by 600, a PDF and a crosstab; the data source listed, got, downloaded, certified, its connection given a port as a JSON number, which the server took, refreshed (403180) and deleted; tags with a space and a comma added, each held once, and deleted, then batch-added on two samples and batch-deleted once the batch body named each content's type; a sample deleted. The headers: a workbook `application/octet-stream` with `name="tableau_workbook"; filename="<name>.twbx"`, a data source the same with `tableau_datasource` and `.tdsx`; the exports `text/csv`, `image/png`, `application/pdf` and `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`, and the preview images `image/png`, with no Content-Disposition. A workbook's and a view's location type is `Project`, the schema's; a data source has none. Every run's project, its samples and groups were deleted and every session signed out; a recording run's bodies matched the synthetic fixtures' shapes, a revision's `sizeInBytes` a number, and none is committed. **Tests:** 846 to 957; coverage 97.60% of lines and 95.04% of branches, three runs in a row the same on Windows; the line floor rises to 97%. The native AOT app exports a view's image through `ExportOptions` with a view filter and downloads a workbook through its sub-client: published natively on win-x64 with no warning, 17.0 MB, its 74 checks passed. **Departures,** in the PR's door list: `includeUsageStatistics` on `GetAsync`, `ListForWorkbookAsync` and `ViewListOptions`, and `ownedOnly` on `ListForUserAsync`, as 1.2.5 had them; the choices the words left open. |
 
 ## For the maintainers
 
@@ -1970,6 +2007,17 @@ What the session cannot do, first what closes a security exposure. Kept current 
 - [ ] Run `live.yml` by hand on `main`: the JWT now asks for `tableau:permissions:read`, `tableau:permissions:update`
   and `tableau:permissions:delete` too, for the permission on the run's project; the GraphQL query needs
   `tableau:content:read`, which it asks already. If the connected app refuses them, allow them.
+
+**After S14 merges:**
+
+- [ ] Run `live.yml` by hand on `main`: the run's project is made with Tableau's samples, and the JWT now asks for
+  `tableau:workbooks:update`, `tableau:workbooks:download`, `tableau:workbooks:delete`, `tableau:views:download`,
+  `tableau:datasources:update`, `tableau:datasources:download`, `tableau:datasources:delete`, `tableau:tasks:run`,
+  `tableau:workbook_tags:update`, `tableau:workbook_tags:delete`, `tableau:tags:batch_create` and
+  `tableau:tags:batch_delete` too, from the reference's "Required scope" lines; the tag and revision scopes came in
+  REST API 3.27, which Tableau Server 2025.1 predates. If the connected app refuses them, allow them. The suite's
+  `ListForUserAsync` test reads the JWT user's own workbooks, which Query Workbooks for User can't filter, until it
+  meets a sample: a user of the suite's own, who owns nothing else, keeps it to the run's content.
 
 **Settings:**
 

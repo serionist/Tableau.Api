@@ -133,8 +133,9 @@ and [the migration guide](docs/migration-2.0.md) lists every change from 1.2.5 a
     `CapabilityName` and `CapabilityMode`. An add names the content beside its rules where the reference's body does.
   - **Tags:** `client.Tags` adds and deletes tags on workbooks, views, data sources, virtual connections, databases,
     tables and columns, a tag escaped as one segment of the path, and in a batch over databases, tables, columns, data
-    sources, workbooks and flows, Batch Delete Tags a DELETE with its body, as the reference documents it. In a body, a
-    tag with whitespace or a comma goes in double quotes, since Tableau splits an unquoted one there into several.
+    sources, workbooks and flows, Batch Delete Tags a DELETE with its body, as the reference documents it, each content
+    named by its type and LUID, as Tableau Server 2025.1 asks. In a body, a tag with whitespace or a comma goes in
+    double quotes, since Tableau splits an unquoted one there into several.
   - **Metadata:** `client.Metadata` lists Tableau Catalog's databases and tables page by page, gets, updates and
     deletes one, lists a table's columns (one call of up to 1,000, as Tableau Server 2025.1 refuses their second page),
     updates and deletes a column, and adds, updates, lists and deletes data quality warnings, by id or by content.
@@ -149,6 +150,23 @@ and [the migration guide](docs/migration-2.0.md) lists every change from 1.2.5 a
     returned; any other throws `TableauException`, the first entry that isn't a warning giving `ErrorCode` and
     `Summary`, `RateLimited` for `RATE_EXCEEDED` whatever the status; warnings with no data throw too, under the
     first warning's code; a 403 says the Metadata API may be off.
+  - **Workbooks, views and data sources:** `client.Workbooks` lists the site's workbooks and a user's, gets, updates
+    and deletes one, lists and updates its connections, runs its extract refresh, and downloads its file, with or
+    without its extract, its preview image and its PDF; `client.Views` lists the site's views, with their usage if
+    asked, and a workbook's, gets one, and exports one as data (CSV), an image (PNG), a PDF or a crosstab (an .xlsx),
+    and downloads its preview image; `client.DataSources` lists, gets, updates and deletes published data sources,
+    lists and updates their connections, runs their extract refresh and downloads their file. Workbooks and data
+    sources list, download and remove their revisions, a revision list sending its page size and number. Lists filter
+    and sort over `WorkbookField`, `ViewField` and `DataSourceField`, and come oldest first, then by name, a view by
+    its workbook's name first.
+  - **`ExportOptions`** holds every export's options: view filters by field name, sent as `vf_` and the name on every
+    export; how many minutes old a cached export may be; an image's resolution (`ImageResolution`); a width and a
+    height; a PDF's page (`PageType`) and orientation (`PageOrientation`). An export refuses an option it doesn't take,
+    and one below its REST API version, before anything is sent, such as a workbook PDF's size below 3.26.
+  - **Updates** take `WorkbookUpdate`, `DataSourceUpdate` and `ConnectionUpdate`, records of the reference's members
+    for each, and send what is set and no element for what isn't. A `ConnectionUpdate` prints its password as `***`.
+  - Every file comes as a `TableauDownload`, streamed. An extract refresh is sent once; every other call of the three
+    may be sent again after a failure, as a read is.
 - **The library builds with the trim and native AOT analyzers on** (`IsAotCompatible`), and the models pass them: they
   read and write JSON through System.Text.Json's source generator, with no reflection, and CI runs them in a native
   AOT app. The 1.x client is exempt: its `XmlSerializer` and Newtonsoft.Json code doesn't work trimmed or under native
@@ -162,7 +180,7 @@ and [the migration guide](docs/migration-2.0.md) lists every change from 1.2.5 a
   2.0.0's release candidate. Every break of 1.2.5's public API is in the migration guide; so far, five methods whose
   parameters or return type `main` had changed, the `capabilityTypeName` members renumbered by the capabilities added
   among them, and the old client's Server Info, sign-in, sites, projects, users, groups, favorites, permissions,
-  metadata and tag methods.
+  metadata, tag, workbook, view, data source and revision methods.
 - **Values in paths and queries are escaped,** so a value the caller had already URL-encoded is encoded twice.
 - **The base URL's path is used,** by the REST and the Vizportal clients alike, so a server behind a path prefix,
   such as `https://example.com/tableau/`, is reachable. A base URL must be the server's address, not a site's or a
@@ -175,7 +193,11 @@ and [the migration guide](docs/migration-2.0.md) lists every change from 1.2.5 a
   and Vizportal's, can't get a session from the library on `main`; 2.0.0 ships with every area moved.
 - **`TableauApiClient`'s sites, projects, users, groups and favorites methods are gone,** `DeleteProject2` with them:
   use `client.Sites`, `client.Projects`, `client.Users`, `client.Groups` and `client.Favorites` (the migration guide
-  maps each). `QueryViewsForSite` stays until views move.
+  maps each).
+- **`TableauApiClient`'s workbooks, views, data sources and revisions methods are gone,** `QueryViewsForSite` with
+  them, and the `Orientation` and `TableauImageWidth` enumerations: use `client.Workbooks`, `client.Views` and
+  `client.DataSources` (the migration guide maps each). A view's data now keeps its filters' `vf_` prefix, which 1.2.5
+  stripped, and a view's PDF works without filters.
 - **The package depends on Microsoft.Extensions' abstractions,** 10.0.14: Logging.Abstractions, Options,
   DependencyInjection.Abstractions and Http, in place of Microsoft.Extensions.Logging 2.2.0; and on Polly.Core 8.9.0,
   for the retries, which brings no other package.
