@@ -85,6 +85,15 @@ internal static partial class LiveSite
     private static bool _groupsSwept;
     private static string? _recorded;
 
+    /// <summary>
+    /// What the live clients' calls answered, by the site test that made each, for the matrix's nightly check: every live
+    /// client logs through it, and it passes each line on to <see cref="Fixtures.Log"/>, which the log check reads.
+    /// </summary>
+    public static CallRecord Record { get; } = new(Fixtures.Log);
+
+    /// <summary>The name the suite's own setup calls under in <see cref="Record"/>.</summary>
+    public const string SetupName = "LiveSite";
+
     /// <summary>The run's name: CI's run and attempt, or the time and a random part here.</summary>
     public static string Run { get; } = Environment.GetEnvironmentVariable("GITHUB_RUN_ID") is { Length: > 0 } run
         ? $"{run}-{Environment.GetEnvironmentVariable("GITHUB_RUN_ATTEMPT") ?? "1"}"
@@ -153,7 +162,7 @@ internal static partial class LiveSite
     /// when disposed, as one from <see cref="TableauClient.Create"/> does.
     /// </summary>
     public static TableauClient Client(TableauCredentials? credentials, TableauClientOptions? options = null) =>
-        new(_http.Value, options ?? Options(), credentials, Fixtures.Log.Factory);
+        new(_http.Value, options ?? Options(), credentials, Record.Factory);
 
     /// <summary>Keeps a session's token for the log check, and returns the session.</summary>
     public static TableauSession Saw(TableauSession session)
@@ -214,10 +223,13 @@ internal static partial class LiveSite
         try
         {
             if (_projectId is { } id) return id;
-            await SweepAsync(client, cancellationToken);
-            var made = await client.Projects.CreateAsync(new Project { Name = ProjectName, Description = ProjectDescription }, publishSamples: true,
-                cancellationToken);
-            return _projectId = made.Id ?? throw new InvalidOperationException("Create Project answered no id.");
+            return _projectId = await Record.AsAsync(SetupName, async () =>
+            {
+                await SweepAsync(client, cancellationToken);
+                var made = await client.Projects.CreateAsync(new Project { Name = ProjectName, Description = ProjectDescription }, publishSamples: true,
+                    cancellationToken);
+                return made.Id ?? throw new InvalidOperationException("Create Project answered no id.");
+            });
         }
         finally
         {
@@ -235,7 +247,7 @@ internal static partial class LiveSite
         try
         {
             // Found once a run, so a test that deletes a sample leaves the others' list as it was.
-            return _samples ??= await PublishedSamplesAsync(client, cancellationToken);
+            return _samples ??= await Record.AsAsync(SetupName, () => PublishedSamplesAsync(client, cancellationToken));
         }
         finally
         {

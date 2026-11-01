@@ -21,6 +21,8 @@
     <None Include="Fixtures\GraphQL\*.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- The native AOT app's root list, which the test of public types reads. -->
     <EmbeddedResource Include="..\Tableau.Api.Aot\roots.xml" LogicalName="roots.xml" />
+    <!-- The live-coverage matrix, which LiveCoverageTests holds to the code and the live suite's cleanup to a run. -->
+    <EmbeddedResource Include="..\..\docs\live-coverage.md" LogicalName="live-coverage.md" />
   </ItemGroup>
 
 </Project>

@@ -22,6 +22,9 @@
 # - The suite's log check fails on any log line holding a setting's secret or a token any of its clients carried, and
 #   on one holding an invented secret or a query value; in a run that reached a site it counts such lines and shows
 #   none, since a line may hold a live value no list names, such as a JWT the client minted, and this log is public.
+# - TABLEAU_LIVE_MATRIX=1 holds docs/live-coverage.md to the run: the suite's cleanup fails the run, naming the row, when
+#   a call a row says is live wasn't answered so by its tests, or one it says isn't was answered. A local run of one
+#   class leaves it unset.
 name: Live
 
 on:
@@ -64,6 +67,7 @@ jobs:
       - name: The Live tests
         env:
           TABLEAU_LIVE: "1"
+          TABLEAU_LIVE_MATRIX: "1"
           TABLEAU_LIVE_SERVER_URL: ${{ secrets.TABLEAU_LIVE_SERVER_URL }}
           TABLEAU_LIVE_SITE: ${{ secrets.TABLEAU_LIVE_SITE }}
           TABLEAU_LIVE_PAT_NAME: ${{ secrets.TABLEAU_LIVE_PAT_NAME }}

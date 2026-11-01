@@ -198,6 +198,31 @@ public sealed class TableauSiteTests
         Assert.IsEmpty(problems, string.Join("\n", problems));
     }
 
+    [TestMethod]
+    public void AClassWithASiteTestRunsItsTestsOneAtATime()
+    {
+        Assert.AreEqual("T has a SiteTest and no [DoNotParallelize]: a site test runs one at a time", TableauSite.OrderProblem("T", true, false));
+        Assert.IsNull(TableauSite.OrderProblem("T", true, true));
+        Assert.IsNull(TableauSite.OrderProblem("T", false, false), "an offline class runs in parallel");
+    }
+
+    [TestMethod]
+    public void EveryClassWithASiteTestInTheSuiteRunsItsTestsOneAtATime()
+    {
+        var classes = typeof(TableauSiteTests).Assembly.GetTypes()
+            .Where(type => type.GetCustomAttribute<TestClassAttribute>() is not null)
+            .ToList();
+        var problems = classes
+            .Select(type => TableauSite.OrderProblem(type.Name,
+                type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly).Any(method => method.GetCustomAttribute<SiteTestAttribute>() is not null),
+                type.GetCustomAttribute<DoNotParallelizeAttribute>() is not null))
+            .OfType<string>()
+            .ToList();
+
+        Assert.IsEmpty(problems, string.Join("\n", problems));
+        Assert.IsTrue(classes.Contains(typeof(ServerInfoSiteTests)) && classes.Contains(typeof(LiveContentTests)), "the scan finds the site test classes");
+    }
+
     private static Func<string, string?> Variables(Dictionary<string, string?> variables) =>
         name => variables.GetValueOrDefault(name);
 

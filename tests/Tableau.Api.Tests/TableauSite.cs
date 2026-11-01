@@ -103,6 +103,13 @@ internal static class TableauSite
     private static string Described(LiveSignIn signIn) =>
         signIn == LiveSignIn.Token ? "the personal access token" : "the connected app";
 
+    /// <summary>
+    /// What is wrong with a test class's order: one with a site test runs its tests one at a time, as every other site
+    /// test does, so a token's sign-in never ends another test's session and each call answered is its own test's.
+    /// </summary>
+    public static string? OrderProblem(string type, bool hasSiteTest, bool doNotParallelize) =>
+        hasSiteTest && !doNotParallelize ? $"{type} has a SiteTest and no [DoNotParallelize]: a site test runs one at a time" : null;
+
     /// <summary>What is wrong with a test's marks: a site test without its category, or the reverse.</summary>
     public static IEnumerable<string> MarkProblems(string test, SiteTestAttribute? site, IEnumerable<string> categories)
     {
@@ -119,7 +126,8 @@ internal static class TableauSite
 
 /// <summary>
 /// [TestMethod] for a test on a Tableau site: before the test runs, it checks the category's switch and the settings
-/// named, and ends the test inconclusive or failed as <see cref="TableauSite.Check"/> says.
+/// named, and ends the test inconclusive or failed as <see cref="TableauSite.Check"/> says. While the test runs, it is
+/// the one that calls in <see cref="LiveSite.Record"/>, which keeps how it ended too.
 /// </summary>
 [AttributeUsage(AttributeTargets.Method, Inherited = false)]
 internal sealed class SiteTestAttribute(
@@ -135,10 +143,21 @@ internal sealed class SiteTestAttribute(
     /// <summary>The sign-in the test needs, whose settings it needs besides its own; none by default.</summary>
     public LiveSignIn SignsIn { get; set; }
 
-    public override Task<TestResult[]> ExecuteAsync(ITestMethod testMethod) =>
-        Ended(TableauSite.Check(Category, Settings, Environment.GetEnvironmentVariable, SignsIn)) is { } ended
-            ? Task.FromResult<TestResult[]>([ended])
-            : base.ExecuteAsync(testMethod);
+    public override async Task<TestResult[]> ExecuteAsync(ITestMethod testMethod)
+    {
+        var name = $"{testMethod.MethodInfo.DeclaringType!.Name}.{testMethod.TestMethodName}";
+        var check = TableauSite.Check(Category, Settings, Environment.GetEnvironmentVariable, SignsIn);
+        if (Ended(check) is { } ended)
+        {
+            if (check.Outcome == SiteOutcome.Fail) LiveSite.Record.Ended(name, passed: false);
+            return [ended];
+        }
+        TestResult[] results;
+        using (LiveSite.Record.As(name))
+            results = await base.ExecuteAsync(testMethod);
+        LiveSite.Record.Ended(name, results.All(result => result.Outcome == UnitTestOutcome.Passed));
+        return results;
+    }
 
     /// <summary>The result a check ends the test with, or null when it runs.</summary>
     public static TestResult? Ended(SiteCheck check) => check.Outcome switch
