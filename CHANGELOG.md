@@ -60,7 +60,7 @@ and [the migration guide](docs/migration-2.0.md) lists every change from 1.2.5 a
     scheme, host and port, at most five; no cookies kept; any 2xx a success. Handlers an app gives every
     `HttpClient` with `ConfigureHttpClientDefaults` don't reach the client's.
   - **Logging** at Debug, through `ILogger`, with no token, password, body or query value; warnings only for an option
-    that weakens the client.
+    that weakens the client, and for a Metadata API answer whose data may be partial.
   - **Retries:** a call that is safe to send twice, such as a read, is sent again after a 408, a 429, a 5xx, a
     connection that failed or an attempt longer than `RequestTimeout`: `MaxRetries` times, three by default, 0 for
     none, with jittered back-off. A publish, a create or a run is sent once. After a 429 or a 503 the client waits as
@@ -123,27 +123,31 @@ and [the migration guide](docs/migration-2.0.md) lists every change from 1.2.5 a
     earlier page than the one asked for fails the list with `InvalidResponse`, where reading on would repeat it.
   - **`TableauContent`** names one piece of content by its kind (`TableauContentKind`) and LUID, such as
     `TableauContent.Workbook(id)` or `TableauContent.Column(tableId, columnId)`, for favorites, permissions, tags and data
-    quality warnings; two that name the same content are equal. Each call takes the kinds the reference gives it and
-    refuses another before anything is sent.
+    quality warnings; two that name the same content are equal, with `==` too. Each call takes the kinds the reference
+    gives it and refuses another before anything is sent.
   - **Permissions:** `client.Permissions` lists, adds and deletes permissions on projects, workbooks, views, data
     sources, flows, virtual connections, collections, databases and tables, each kind from its own REST API version,
     and a project's default permissions for workbooks, data sources, data roles, flows, virtual connections, databases
-    and tables. A rule is a `GranteeCapabilities` naming its user or group by id; a delete names its grantee with
-    `PermissionGrantee.User(id)` or `.Group(id)`, and its capability and mode with `CapabilityName` and `CapabilityMode`.
+    and tables. A rule is a `GranteeCapabilities` naming its user, group or group set by id; a delete names its grantee
+    with `PermissionGrantee.User(id)`, `.Group(id)` or `.GroupSet(id)`, and its capability and mode with
+    `CapabilityName` and `CapabilityMode`. An add names the content beside its rules where the reference's body does.
   - **Tags:** `client.Tags` adds and deletes tags on workbooks, views, data sources, virtual connections, databases,
     tables and columns, a tag escaped as one segment of the path, and in a batch over databases, tables, columns, data
-    sources, workbooks and flows, Batch Delete Tags a DELETE with its body, as the reference documents it.
+    sources, workbooks and flows, Batch Delete Tags a DELETE with its body, as the reference documents it. In a body, a
+    tag with whitespace or a comma goes in double quotes, since Tableau splits an unquoted one there into several.
   - **Metadata:** `client.Metadata` lists Tableau Catalog's databases and tables page by page, gets, updates and
     deletes one, lists a table's columns (one call of up to 1,000, as Tableau Server 2025.1 refuses their second page),
     updates and deletes a column, and adds, updates, lists and deletes data quality warnings, by id or by content.
-    `Column`, which Tableau's schema lacks, is written by hand in `Tableau.Api.Rest.Models`. Adding a data quality
-    warning is sent once; every other call of the three may be sent again after a failure.
+    `Column`, which Tableau's schema lacks, is written by hand in `Tableau.Api.Rest.Models`. An update sends the
+    members the reference lists and no others. A column list whose answer counts more columns than it holds fails.
+    Adding a data quality warning is sent once; every other call of the three may be sent again after a failure.
   - **The Metadata API:** `client.Metadata.QueryAsync` posts a GraphQL query to `api/metadata/graphql` in the client's
     session and returns its `data` as JSON, or through a `JsonTypeInfo<T>` of your own, so it runs under native AOT;
     `ListNodesAsync` reads a connection page by page by its `pageInfo`'s `endCursor` until `hasNextPage` is false, and
-    `QueryPageAsync` returns one `CursorPage<T>`. An answer with `errors`, a warning of partial data among them, throws
-    `TableauException`, its first code as `ErrorCode`, `RateLimited` for `RATE_EXCEEDED`; a 403 says the Metadata API
-    may be off.
+    `QueryPageAsync` returns one `CursorPage<T>`. An `errors` entry Tableau marks a warning, such as
+    `BACKFILL_RUNNING` or `NODE_LIMIT_EXCEEDED`, which comes with partial data, is logged at Warning and the data
+    returned; any other throws `TableauException`, its first code as `ErrorCode`, `RateLimited` for `RATE_EXCEEDED`
+    whatever the status; a 403 says the Metadata API may be off.
 - **The library builds with the trim and native AOT analyzers on** (`IsAotCompatible`), and the models pass them: they
   read and write JSON through System.Text.Json's source generator, with no reflection, and CI runs them in a native
   AOT app. The 1.x client is exempt: its `XmlSerializer` and Newtonsoft.Json code doesn't work trimmed or under native

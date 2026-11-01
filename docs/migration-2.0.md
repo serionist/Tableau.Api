@@ -255,12 +255,15 @@ What changes for a caller:
   each kind is gated by the REST API version it came in.
 - **Capabilities:** `CapabilityName` and `CapabilityMode` in place of `capabilityTypeName` and `capabilityTypeMode`,
   such as `CapabilityName.Read`; a capability Tableau adds later is `new CapabilityName("...")`. A delete names its user
-  or group with `PermissionGrantee.User(id)` or `.Group(id)`, where 1.2.5 had a method for each.
+  or group with `PermissionGrantee.User(id)` or `.Group(id)`, where 1.2.5 had a method for each; a group set's is
+  `.GroupSet(id)`, new.
 - **Rules:** `GranteeCapabilities` with its `User` or `Group` by id, where 1.2.5 took `granteeCapabilitiesType[]`; the
   client sends each grantee's id and each capability's name and mode, nothing else.
 - **Lists:** databases and tables page themselves, where 1.2.5 returned the first page alone; a table's columns come
   from one call of up to 1,000, as Tableau Server 2025.1 refuses the second page of them.
-- **Tags** are escaped as one segment of the request's path, so a tag with `/`, `#` or `%` is deleted as written.
+- **Tags** are escaped as one segment of the request's path, so a tag with `/`, `#` or `%` is deleted as written. In
+  a body, a tag with whitespace or a comma goes in double quotes, so Tableau keeps it one tag, where 1.2.5 sent it as
+  written and Tableau split it; delete it by its text, unquoted.
 - **Data quality warnings** take a `DataQualityWarning` with its `Type` as text, such as `"WARNING"`, where 1.2.5 took
   `DataQualityWarningType` and `MetadataContentType`, which stay, unused, until the old client goes.
 - **New:** default permissions for every kind, permissions on views, flows, virtual connections, collections, databases
