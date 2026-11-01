@@ -8,13 +8,15 @@ namespace Tableau.Api.Tests.Fakes;
 
 /// <summary>
 /// An ILogger that keeps every line the library logs, its level and its exception's text included, with a logger
-/// factory that hands it out, for the 2.0 client, which takes a factory. Every one made is kept in <see cref="All"/>,
-/// which the suite's cleanup reads, so no line any test logs escapes the check for secrets.
+/// factory that hands it out, for the 2.0 client, which takes a factory; and each line's event and properties, as a
+/// structured reader would see them. Every one made is kept in <see cref="All"/>, which the suite's cleanup reads, so no
+/// line any test logs escapes the check for secrets.
 /// </summary>
 internal sealed class RecordingLogger : ILogger
 {
     private static readonly ConcurrentQueue<RecordingLogger> _all = new();
     private readonly ConcurrentQueue<string> _lines = new();
+    private readonly ConcurrentQueue<LogEntry> _entries = new();
 
     public RecordingLogger()
     {
@@ -30,14 +32,26 @@ internal sealed class RecordingLogger : ILogger
 
     public IReadOnlyList<string> Lines => [.. _lines];
 
+    /// <summary>Each line's level, event id and properties, in the order logged.</summary>
+    public IReadOnlyList<LogEntry> Entries => [.. _entries];
+
     public IDisposable BeginScope<TState>(TState state)
         where TState : notnull => NoScope.Instance;
 
     public bool IsEnabled(LogLevel logLevel) => true;
 
     public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
-        Func<TState, Exception?, string> formatter) =>
+        Func<TState, Exception?, string> formatter)
+    {
         _lines.Enqueue($"{logLevel}: {formatter(state, exception)}{(exception is null ? "" : "\n" + exception)}");
+        _entries.Enqueue(new LogEntry(logLevel, eventId.Id, Properties(state), exception));
+    }
+
+    /// <summary>A line's properties by name, as a structured logger reads them; none for a state that has no list of them.</summary>
+    public static IReadOnlyDictionary<string, object?> Properties<TState>(TState state) =>
+        state is IReadOnlyList<KeyValuePair<string, object?>> pairs
+            ? pairs.GroupBy(pair => pair.Key, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.First().Value, StringComparer.Ordinal)
+            : new Dictionary<string, object?>(StringComparer.Ordinal);
 
     /// <summary>The lines that hold any of secrets.</summary>
     public IEnumerable<string> LinesHolding(IEnumerable<string> secrets) =>
@@ -69,3 +83,10 @@ internal sealed class RecordingLogger : ILogger
         }
     }
 }
+
+/// <summary>One line as a structured logger receives it.</summary>
+/// <param name="Level">Its level.</param>
+/// <param name="EventId">Its event's id.</param>
+/// <param name="Properties">Its properties by name, the message template's <c>{OriginalFormat}</c> among them.</param>
+/// <param name="Exception">The exception it was logged with, or null.</param>
+internal sealed record LogEntry(LogLevel Level, int EventId, IReadOnlyDictionary<string, object?> Properties, Exception? Exception);

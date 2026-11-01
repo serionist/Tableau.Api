@@ -11,18 +11,22 @@ namespace Tableau.Api.Pipeline;
 /// No line holds a token, a password, a secret, a JWT, a cookie, an <c>X-Tableau-Auth</c> header or a body; a sign-in
 /// names the kind of credentials, never the user.
 /// </summary>
+/// <remarks>
+/// A request's lines, sending, answered and failed, name its call as the reference does, in <c>Call</c>: the path alone
+/// can't say which, since Sign In is one path for every kind of credentials and Query Site one for its three keys.
+/// </remarks>
 internal static partial class TableauLog
 {
-    [LoggerMessage(EventId = 1, Level = LogLevel.Debug, Message = "Tableau client {Client}: {Method} {RequestPath}")]
-    public static partial void Sending(ILogger logger, string client, HttpMethod method, string requestPath);
+    [LoggerMessage(EventId = 1, Level = LogLevel.Debug, Message = "Tableau client {Client}: {Call}: {Method} {RequestPath}")]
+    public static partial void Sending(ILogger logger, string client, string call, HttpMethod method, string requestPath);
 
     [LoggerMessage(EventId = 2, Level = LogLevel.Debug,
-        Message = "Tableau client {Client}: {Method} {RequestPath} answered {StatusCode} in {ElapsedMilliseconds:F0} ms")]
-    public static partial void Answered(ILogger logger, string client, HttpMethod method, string requestPath, int statusCode,
+        Message = "Tableau client {Client}: {Call}: {Method} {RequestPath} answered {StatusCode} in {ElapsedMilliseconds:F0} ms")]
+    public static partial void Answered(ILogger logger, string client, string call, HttpMethod method, string requestPath, int statusCode,
         double elapsedMilliseconds);
 
-    [LoggerMessage(EventId = 3, Level = LogLevel.Debug, Message = "Tableau client {Client}: {Method} {RequestPath} failed: {Kind}")]
-    public static partial void Failed(ILogger logger, string client, HttpMethod method, string requestPath, TableauErrorKind kind,
+    [LoggerMessage(EventId = 3, Level = LogLevel.Debug, Message = "Tableau client {Client}: {Call}: {Method} {RequestPath} failed: {Kind}")]
+    public static partial void Failed(ILogger logger, string client, string call, HttpMethod method, string requestPath, TableauErrorKind kind,
         Exception exception);
 
     [LoggerMessage(EventId = 4, Level = LogLevel.Debug, Message = "Tableau client {Client}: {Method} {RequestPath} was cancelled by its caller")]

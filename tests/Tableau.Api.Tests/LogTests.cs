@@ -87,6 +87,46 @@ public sealed partial class LogTests
     }
 
     [TestMethod]
+    public async Task EachRequestLineNamesItsCallInItsTextAndAsItsCallProperty()
+    {
+        using var server = AreaFixtures.Server();
+        server.Map("GET", AreaFixtures.SitePath + "/projects", FakeResponse.Fixture(200, "projects-page.json"));
+        server.Map("DELETE", AreaFixtures.SitePath + "/projects/" + AreaFixtures.ProjectId,
+            FakeResponse.Json(404, """{"error":{"code":"404005","summary":"Resource Not Found"}}"""));
+        var log = new RecordingLogger();
+        await using (var client = TableauClient.CreateWithClock(SessionFixtures.Options(server), SessionFixtures.Pat(), log.Factory, null))
+        {
+            await client.Projects.ListPageAsync(1);
+            await ClientFixtures.FailsAsync(TableauErrorKind.NotFound, () => client.Projects.DeleteAsync(AreaFixtures.ProjectId));
+        }
+
+        var projects = $"/api/3.25/sites/{Fixtures.SiteId}/projects";
+        var debug = log.At(Microsoft.Extensions.Logging.LogLevel.Debug);
+        string[] expected =
+        [
+            "Debug: Tableau client (default): Sign In with a personal access token: POST /api/3.25/auth/signin",
+            "Debug: Tableau client (default): Sign In with a personal access token: POST /api/3.25/auth/signin answered 200 in ",
+            $"Debug: Tableau client (default): Query Projects: GET {projects}?pageSize=***&pageNumber=***&sort=***",
+            $"Debug: Tableau client (default): Query Projects: GET {projects}?pageSize=***&pageNumber=***&sort=*** answered 200 in ",
+            $"Debug: Tableau client (default): Delete Project: DELETE {projects}/{AreaFixtures.ProjectId}",
+            $"Debug: Tableau client (default): Delete Project: DELETE {projects}/{AreaFixtures.ProjectId} failed: NotFound",
+            "Debug: Tableau client (default): Sign Out: POST /api/3.25/auth/signout",
+        ];
+        foreach (var line in expected)
+            Assert.IsTrue(debug.Any(logged => logged.StartsWith(line, StringComparison.Ordinal)), $"no line starts '{line}':\n{string.Join("\n", log.Lines)}");
+        var calls = log.Entries.Where(entry => entry.EventId is 1 or 2 or 3).ToList();
+        Assert.IsTrue(calls.All(entry => entry.Properties.TryGetValue("Call", out var call) && call is string { Length: > 0 }),
+            "every request line has its Call");
+        CollectionAssert.AreEqual(new[] { (1, "Query Projects"), (2, "Query Projects"), (1, "Delete Project"), (3, "Delete Project") },
+            calls.Where(entry => entry.Properties["Call"] is "Query Projects" or "Delete Project")
+                .Select(entry => (entry.EventId, (string)entry.Properties["Call"]!)).ToArray());
+        Assert.IsTrue(log.Entries.Where(entry => entry.EventId is not (1 or 2 or 3)).All(entry => !entry.Properties.ContainsKey("Call")),
+            "only a request's lines name a call");
+        Assert.IsEmpty(log.LinesHolding([.. Fixtures.Secrets, SessionFixtures.PatName]).ToList());
+        Assert.IsEmpty(QueryValuesShown(log.Lines).ToList());
+    }
+
+    [TestMethod]
     public async Task ARedirectIsLoggedWithItsTargetsQueryValuesHidden()
     {
         using var server = FakeTableauServer.Start();
