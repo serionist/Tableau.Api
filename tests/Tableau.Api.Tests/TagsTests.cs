@@ -61,12 +61,34 @@ public sealed class TagsTests
 
         var calls = AreaFixtures.Calls(server);
         CollectionAssert.AreEqual(new[] { $"PUT {tags}", $"DELETE {tags}/{AwkwardEscaped}" }, calls.Select(call => $"{call.Method} {call.Target}").ToArray());
-        Assert.AreEqual(AreaFixtures.Json($$$"""{"tags":{"tag":[{"label":"Finance"},{"label":"{{{Awkward}}}"}]}}"""), AreaFixtures.Json(calls[0].BodyText));
+        // A tag with a space goes in double quotes in the body, so Tableau keeps it one tag; the path names it as stored.
+        Assert.AreEqual(AreaFixtures.Json($$$"""{"tags":{"tag":[{"label":"Finance"},{"label":"\"{{{Awkward}}}\""}]}}"""), AreaFixtures.Json(calls[0].BodyText));
         Assert.IsEmpty(calls[1].Body);
         CollectionAssert.AreEqual(new[] { "Noteworthy", "PII" }, added.Select(tag => tag.Label).ToArray());
 
         await PermissionsTests.AssertGatedAsync(from, $"Add Tags to {name}", client => client.Tags.AddAsync(content, ["Finance"]));
         await PermissionsTests.AssertGatedAsync(from, $"Delete Tag from {name}", client => client.Tags.DeleteAsync(content, "Finance"));
+    }
+
+    [TestMethod]
+    [DataRow("Finance", "Finance")]
+    [DataRow("Yearly Sales", "\"Yearly Sales\"")]
+    [DataRow("Sales,Marketing", "\"Sales,Marketing\"")]
+    [DataRow("Q1\tSales", "\"Q1\tSales\"")]
+    [DataRow("Q1 Sales", "\"Q1 Sales\"")]
+    [DataRow("\"Yearly Sales\"", "\"Yearly Sales\"")]
+    [DataRow("C++#1", "C++#1")]
+    [DataRow("\"", "\"")]
+    public async Task ABodysLabelIsQuotedWhenItHoldsWhitespaceOrACommaAndIsntQuotedAlready(string tag, string sent)
+    {
+        using var server = AreaFixtures.Server();
+        server.Map("PUT", $"{Site}/workbooks/{AreaFixtures.ItemId}/tags", FakeResponse.Fixture(200, "tags.json"));
+        await using var client = AreaFixtures.Client(server);
+
+        await client.Tags.AddAsync(TableauContent.Workbook(AreaFixtures.ItemId), [tag]);
+
+        Assert.AreEqual(sent, System.Text.Json.Nodes.JsonNode.Parse(AreaFixtures.Calls(server).Single().BodyText)!["tags"]!["tag"]![0]!["label"]!.GetValue<string>());
+        Assert.AreEqual(sent, TagsClient.Label(tag));
     }
 
     [TestMethod]
@@ -76,7 +98,7 @@ public sealed class TagsTests
         server.Map("PUT", $"{Site}/tags:batchCreate", FakeResponse.Json(200, "{}"));
         await using var client = AreaFixtures.Client(server);
 
-        await client.Tags.AddBatchAsync(["PII", "Noteworthy"], _batch);
+        await client.Tags.AddBatchAsync(["PII", "Yearly Sales"], _batch);
 
         AssertBatch(server, $"PUT {Site}/tags:batchCreate");
         await PermissionsTests.AssertGatedAsync("3.9", "Batch Add Tags", client => client.Tags.AddBatchAsync(["PII"], _batch));
@@ -89,7 +111,7 @@ public sealed class TagsTests
         server.Map("DELETE", $"{Site}/tags:BatchDelete", FakeResponse.Empty(204));
         await using var client = AreaFixtures.Client(server);
 
-        await client.Tags.DeleteBatchAsync(["PII", "Noteworthy"], _batch);
+        await client.Tags.DeleteBatchAsync(["PII", "Yearly Sales"], _batch);
 
         var call = AssertBatch(server, $"DELETE {Site}/tags:BatchDelete");
         Assert.AreEqual(call.Body.Length.ToString(System.Globalization.CultureInfo.InvariantCulture), call.Header("Content-Length"));

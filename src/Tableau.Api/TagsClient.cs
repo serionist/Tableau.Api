@@ -17,8 +17,14 @@ namespace Tableau.Api;
 /// it doesn't take, such as a project, is refused before anything is sent.
 /// </para>
 /// <para>
-/// A tag is sent as written. Tableau's own Python client wraps a tag with a space or a comma in double quotes, saying
-/// the server splits one that isn't at those characters.
+/// In the bodies of Add Tags, Batch Add Tags and Batch Delete Tags, a tag that holds whitespace or a comma is sent in
+/// double quotes, <c>"Yearly Sales"</c>: Tableau splits an unquoted label at whitespace and commas into several tags, so
+/// <c>Yearly Sales</c> as written would add <c>Yearly</c> and <c>Sales</c>. Tableau's own Python client quotes such a
+/// tag the same way, and this library's Vizportal client quotes every tag. A tag already in double quotes is sent as it
+/// is, and any other as written. A <c>"</c> inside a tag is undefined: Tableau documents nothing for it.
+/// </para>
+/// <para>
+/// Delete Tag names the tag in its path, unquoted, as Tableau stores it and <see cref="AddAsync"/> returns it.
 /// </para>
 /// </remarks>
 public class TagsClient
@@ -42,7 +48,7 @@ public class TagsClient
 
     /// <summary>Add Tags: tags the content; a tag it has already stays once.</summary>
     /// <param name="content">The content, such as <c>TableauContent.Workbook(id)</c>.</param>
-    /// <param name="tags">The tags, one at least.</param>
+    /// <param name="tags">The tags, one at least; one with whitespace or a comma is sent in double quotes, so it stays one tag.</param>
     /// <param name="cancellationToken">Cancels the call.</param>
     /// <returns>The content's tags as Tableau answers them, empty, never null, when it lists none.</returns>
     /// <exception cref="ArgumentException">
@@ -67,7 +73,10 @@ public class TagsClient
 
     /// <summary>Delete Tag: removes one tag from the content.</summary>
     /// <param name="content">The content, such as <c>TableauContent.Table(id)</c>.</param>
-    /// <param name="tag">The tag, as written: it is escaped as one segment of the request's path.</param>
+    /// <param name="tag">
+    /// The tag as Tableau stores it, as <see cref="AddAsync"/> returns it: unquoted, such as <c>Yearly Sales</c>. It is
+    /// escaped as one segment of the request's path, and never quoted, since a quoted one names a tag with the quotes in it.
+    /// </param>
     /// <param name="cancellationToken">Cancels the call.</param>
     /// <exception cref="ArgumentException">
     /// <paramref name="content"/> is of a kind that isn't tagged one at a time, or <paramref name="tag"/> is empty or only
@@ -137,11 +146,22 @@ public class TagsClient
         return new TsRequest { TagBatch = new TagBatch { Tags = labels, Contents = ids } };
     }
 
+    // The labels a body sends, each as Label writes it.
     private static List<Tag> Labels(IEnumerable<string> tags, string parameter)
     {
         ArgumentNullException.ThrowIfNull(tags, parameter);
-        var labels = tags.Select(tag => string.IsNullOrEmpty(tag) ? throw new ArgumentException("A tag is empty.", parameter) : new Tag { Label = tag })
+        var labels = tags.Select(tag => string.IsNullOrEmpty(tag) ? throw new ArgumentException("A tag is empty.", parameter) : new Tag { Label = Label(tag) })
             .ToList();
         return labels.Count > 0 ? labels : throw new ArgumentException("It takes one tag at least.", parameter);
+    }
+
+    /// <summary>
+    /// A tag as a body sends it: in double quotes when it holds whitespace or a comma, at which Tableau splits an unquoted
+    /// label into several tags, unless it is in them already; as written otherwise.
+    /// </summary>
+    internal static string Label(string tag)
+    {
+        var quoted = tag.Length >= 2 && tag[0] == '"' && tag[^1] == '"';
+        return !quoted && tag.Any(character => char.IsWhiteSpace(character) || character == ',') ? $"\"{tag}\"" : tag;
     }
 }
