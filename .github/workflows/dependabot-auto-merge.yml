@@ -1,10 +1,15 @@
 # Dependabot's updates merge themselves once the required checks pass. This job only turns on GitHub's auto-merge when
 # Dependabot opens or updates a PR; GitHub then waits for CI and PR text, the checks the main ruleset requires, and
 # squash-merges. A minor or patch update merges itself, the .NET SDK's included; so does a major one of a test's, a
-# tool's or an action's package. A major update of a package the library ships with waits for a maintainer: it changes
-# what every app that uses Tableau.Api must reference. Those are the packages in the library's own lock file,
-# src/Tableau.Api/packages.lock.json on the PR's base branch, directly or through another package, read from the base
-# branch through the API so nothing of the PR's is read. The SDK's majors never come: dependabot.yml ignores them.
+# tool's or an action's package.
+#
+# A major update of a package the library ships with waits for a maintainer: it changes what every app that uses
+# Tableau.Api must reference. Those are the packages in the library's own lock file, src/Tableau.Api/packages.lock.json
+# on the PR's base branch, directly or through another package, MinVer among them, which sets the package's version.
+# Each package's own update type decides, so a PR of several can't hide one, and one whose type Dependabot couldn't tell
+# counts as a major. The lock file is read from the base branch through the API, so the PR can't change what is held.
+# An update the job holds, or can't judge, has its auto-merge turned off, should an earlier run have turned it on. The
+# SDK's majors never come, since dependabot.yml ignores them, and the job holds one should they.
 #
 # Auto-merge waits only for the checks a ruleset requires. With none, GitHub merges at once, before CI has run, so the
 # job turns auto-merge on only where a ruleset on the PR's base branch requires CI, and fails otherwise.
@@ -57,37 +62,47 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Turn on auto-merge, but for a major update of the library's own dependencies
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
           PR_URL: ${{ github.event.pull_request.html_url }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          ECOSYSTEM: ${{ steps.metadata.outputs.package-ecosystem }}
           UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
           UPDATED: ${{ steps.metadata.outputs.updated-dependencies-json }}
         run: |
+          # Leaves the update to a maintainer, with auto-merge off, so a later push's green CI can't merge it.
+          hold() {
+            echo "::notice::$1"
+            if [ "$(gh pr view "$PR_URL" --json autoMergeRequest --jq '.autoMergeRequest != null')" = true ]; then
+              gh pr merge --disable-auto "$PR_URL"
+            fi
+            exit 0
+          }
           case "$UPDATE_TYPE" in
-            version-update:semver-minor | version-update:semver-patch) ;;
-            version-update:semver-major)
-              # NuGet ids ignore case, so both sides are compared in lower case. A lock file that can't be read holds
-              # the update for a maintainer rather than merging it unchecked.
-              if ! shipped=$(gh api "repos/$GITHUB_REPOSITORY/contents/src/Tableau.Api/packages.lock.json?ref=$BASE_REF" \
-                -H "Accept: application/vnd.github.raw" | jq -c '[.dependencies[] | keys[] | ascii_downcase] | unique'); then
-                echo "::warning::The library's lock file on $BASE_REF couldn't be read, so this major update waits for a maintainer."
-                exit 0
-              fi
-              held=$(jq -r --argjson shipped "$shipped" \
-                '[.[].dependencyName | select(ascii_downcase as $name | $shipped | index($name))] | join(", ")' <<<"$UPDATED")
-              if [ -n "$held" ]; then
-                echo "::notice::$held: a major update of a package the library ships with waits for a maintainer."
-                exit 0
-              fi
-              ;;
-            *)
-              echo "::notice::Dependabot gave no update type ('$UPDATE_TYPE'), so this update waits for a maintainer."
-              exit 0
-              ;;
+            version-update:semver-minor | version-update:semver-patch | version-update:semver-major) ;;
+            *) hold "Dependabot gave no update type, so this update waits for a maintainer." ;;
           esac
+          if [ "$ECOSYSTEM" = dotnet-sdk ] && [ "$UPDATE_TYPE" = version-update:semver-major ]; then
+            hold "A major update of the .NET SDK waits for a maintainer: its major moves with the target framework."
+          fi
+          # The packages moving by a major, or by an update Dependabot couldn't tell; NuGet ids ignore case.
+          majors=$(jq -c '[.[] | select((.updateType // "") as $type
+            | $type == "" or $type == "version-update:semver-major") | .dependencyName]' <<<"$UPDATED")
+          if [ "$majors" != "[]" ]; then
+            lock="repos/$GITHUB_REPOSITORY/contents/src/Tableau.Api/packages.lock.json?ref=$BASE_REF"
+            if ! shipped=$(gh api "$lock" -H "Accept: application/vnd.github.raw" \
+              | jq -c '[.dependencies[] | keys[] | ascii_downcase] | unique'); then
+              hold "The library's lock file on $BASE_REF couldn't be read, so this update waits for a maintainer."
+            fi
+            held=$(jq -r --argjson shipped "$shipped" \
+              '[.[] | select(ascii_downcase as $name | any($shipped[]; . == $name))] | join(", ")' <<<"$majors")
+            if [ -n "$held" ]; then
+              hold "$held: a major update of a package the library ships with waits for a maintainer."
+            fi
+          fi
           required=$(gh api "repos/$GITHUB_REPOSITORY/rules/branches/$BASE_REF" \
             --jq '[.[] | select(.type == "required_status_checks") | .parameters.required_status_checks[].context]')
           if ! jq -e 'any(.[]; . == "CI")' <<<"$required" >/dev/null; then
