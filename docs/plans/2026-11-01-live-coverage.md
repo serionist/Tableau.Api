@@ -544,9 +544,9 @@ roles.
 | Q4 | `ServerOnly` keeps only the password sign-ins, the rest folded into the nightly and deleted | Yes | As recommended, with P5's fix |
 | Q5 | Impersonation acts as the directory user, made a `Viewer` for the test's length (a user licence, briefly); or as the token's own user, which proves less | The directory user | As recommended; if Tableau refuses, the row is pinned `refused`, with no fall back to the token's own user |
 | Q6 | The nightly's matrix check runs only with `TABLEAU_LIVE_MATRIX=1`, set by `live.yml`, so a local run of one class isn't failed | Yes | As recommended |
-| Q7 | How are the technical directory accounts set up, which decides whether they can be imported and impersonated? | none: raised in this round and answered directly | They are enabled, each with a random password nobody holds |
-| Q8 | Does the live suite still claim Tableau Cloud, now that it makes a site per run? | none: raised in this round and answered directly | Tableau Server only: `TableauSite.cs` and `AGENTS.md` say so, the matrix's lead line names Tableau Server 2025.1.5 and says Cloud isn't run, and the modernization plan's R3, Tableau Cloud checked by hand, stands |
-| Q9 | Where does the Vizportal client go in the matrix? | none: raised in this round and answered directly | A table of its own in `docs/live-coverage.md`, filled by S16 |
+| Q7 | Are the technical directory accounts disabled, or enabled without a way to sign in? Tableau may refuse to add, import or impersonate a disabled account (O1, O4) | Enabled, with no way to sign in | They are enabled, each with a random password nobody holds |
+| Q8 | Every content test needs Create Site, which Tableau Cloud doesn't offer: does the live suite become Tableau Server only? | Yes, said in `TableauSite.cs` and `AGENTS.md`, and in the matrix's lead line, which S18 publishes | Tableau Server only: `TableauSite.cs` and `AGENTS.md` say so, the matrix's lead line names Tableau Server 2025.1.5 and says Cloud isn't run, and the modernization plan's R3, Tableau Cloud checked by hand, stands |
+| Q9 | The Goal says S15 to S17 add rows: does S16's Vizportal client, not a sub-client, get rows? | Say which: a table of its own, or not covered | A table of its own in `docs/live-coverage.md`, filled by S16 |
 
 **Improvements:**
 
