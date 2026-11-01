@@ -23,8 +23,8 @@ public sealed record UserListOptions
     public TableauFilter? Filter { get; init; }
 
     /// <summary>
-    /// Their order, over <see cref="UserField"/>'s fields; null for by name, then by domain, an order that doesn't
-    /// change from page to page.
+    /// Their order, over <see cref="UserField"/>'s fields; null for by name, an order that doesn't change from page to
+    /// page.
     /// </summary>
     public TableauSort? Sort { get; init; }
 
@@ -39,8 +39,8 @@ public sealed record GroupListOptions
     public TableauFilter? Filter { get; init; }
 
     /// <summary>
-    /// Their order, over <see cref="GroupField"/>'s fields; null for by name, then by domain, an order that doesn't
-    /// change from page to page.
+    /// Their order, over <see cref="GroupField"/>'s fields; null for by name, an order that doesn't change from page to
+    /// page.
     /// </summary>
     public TableauSort? Sort { get; init; }
 

@@ -545,7 +545,7 @@ As S12 built it (#45, both doors agreed there):
   with a total of 0 for users. Page size 1 to 1,000 (403014 above), 100 by default, checked before sending; the page
   number from 1. Lists are never null; a list wrapper missing from a 2xx body is an empty list (F20).
 - **Stable order:** a list the caller doesn't sort sends a sort on fields that don't change from page to page, which
-  Tableau Server 2025.1 took: projects `createdAt:asc,name:asc`, users and groups `name:asc,domainName:asc`. It refused
+  Tableau Server 2025.1 took: projects `createdAt:asc,name:asc`, users and groups `name:asc`, the one field the reference's example sorts users by, and which a group holds alone in a site (two users from two directory domains may share a name). It refused
   `luid`, `id` and `parentProjectId` in a sort. Query Sites ignores any sort, so sites come in Tableau's order. The
   sub-lists that take no options (a user's groups, a group's users, favorites) come in Tableau's order, 100 a page.
 - **Options records,** one per resource: `ProjectListOptions`, `UserListOptions`, `GroupListOptions` with `Filter`,

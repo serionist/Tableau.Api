@@ -19,7 +19,7 @@ public sealed class GroupsTests
     private const string Group = Groups + "/" + AreaFixtures.GroupId;
 
     [TestMethod]
-    public async Task ListPageSortsByNameThenDomainUnlessToldAndReadsTheGroups()
+    public async Task ListPageSortsByNameUnlessToldAndReadsTheGroups()
     {
         using var server = AreaFixtures.Server();
         server.Map("GET", Groups, FakeResponse.Fixture(200, "groups-page.json"));
@@ -27,7 +27,7 @@ public sealed class GroupsTests
 
         var page = await client.Groups.ListPageAsync(1);
 
-        AreaFixtures.Sent(server, $"GET {Groups}?pageSize=100&pageNumber=1&sort=name:asc,domainName:asc");
+        AreaFixtures.Sent(server, $"GET {Groups}?pageSize=100&pageNumber=1&sort=name:asc");
         Assert.AreEqual(3, page.TotalAvailable);
         var local = page.Items[1];
         Assert.AreEqual((SiteRole.Explorer, ImportDirectiveGrantLicenseMode.OnLogin), (local.MinimumSiteRole, local.Import?.GrantLicenseMode));

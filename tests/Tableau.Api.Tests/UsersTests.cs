@@ -31,7 +31,7 @@ public sealed class UsersTests
     }
 
     [TestMethod]
-    public async Task ListPageSortsByNameThenDomainUnlessToldAndReadsTheUsers()
+    public async Task ListPageSortsByNameUnlessToldAndReadsTheUsers()
     {
         using var server = AreaFixtures.Server();
         server.Map("GET", Users, FakeResponse.Fixture(200, "users-page.json"));
@@ -39,7 +39,7 @@ public sealed class UsersTests
 
         var page = await client.Users.ListPageAsync(2, new UserListOptions { PageSize = 1 });
 
-        AreaFixtures.Sent(server, $"GET {Users}?pageSize=1&pageNumber=2&sort=name:asc,domainName:asc");
+        AreaFixtures.Sent(server, $"GET {Users}?pageSize=1&pageNumber=2&sort=name:asc");
         Assert.AreEqual((2, 1, 2), (page.PageNumber, page.PageSize, page.TotalAvailable));
         Assert.AreEqual("ada", page.Items.Single().Name);
     }

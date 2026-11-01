@@ -16,8 +16,9 @@ public class UsersClient
 {
     private const string Resource = "users";
 
-    // Made once and never changed: a user's name is the site's own within a domain, so pages don't shift between requests.
-    private static readonly TableauSort _stable = TableauSort.Asc(UserField.Name).Then(TableauSort.Asc(UserField.DomainName));
+    // Made once and never changed: a user's name is the site's own within a domain, and the reference's own example sorts
+    // users by it, so pages don't shift between requests.
+    private static readonly TableauSort _stable = TableauSort.Asc(UserField.Name);
 
     private readonly TableauPipeline? _pipeline;
 
@@ -48,8 +49,9 @@ public class UsersClient
     /// pages through <see cref="ListPageAsync"/>, so a mock that overrides that serves this too.
     /// </summary>
     /// <remarks>
-    /// Without a sort they come by name, then by domain, so the pages of a list that doesn't change neither skip nor repeat
-    /// a user; one added, removed or renamed while you read can still be missed or met twice.
+    /// Without a sort they come by name, so the pages of a list that doesn't change neither skip nor repeat a user, but for
+    /// two users of one name from two directory domains, who may change places; one added, removed or renamed while you
+    /// read can still be missed or met twice.
     /// </remarks>
     /// <param name="options">The filter, the sort and the page size; null for every user, 100 a page.</param>
     /// <param name="cancellationToken">Stops the list, between users and between pages.</param>

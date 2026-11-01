@@ -169,7 +169,7 @@ What changes for a caller:
   `GroupField`), which a list refuses for another resource before sending. Write values as they are: the client
   escapes them. A filter you wrote by hand is `TableauFilter.FromString(filterExpression)`. A value can't hold a comma,
   which Tableau refuses even escaped. A list you don't sort comes in an order that doesn't change from page to page:
-  projects oldest first, then by name; users and groups by name, then domain. Query Sites takes no filter or sort, as
+  projects oldest first, then by name; users and groups by name. Query Sites takes no filter or sort, as
   Tableau Server 2025.1 refuses the first, the reference's one included, and ignores the second.
 - **Updates** take a model with only what changes set, such as `new Project { Name = "Finance" }`, where 1.2.5 took
   one parameter for each.

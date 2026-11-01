@@ -17,8 +17,9 @@ public class GroupsClient
 {
     private const string Resource = "groups";
 
-    // Made once and never changed: a group's name is the site's own within a domain, so pages don't shift between requests.
-    private static readonly TableauSort _stable = TableauSort.Asc(GroupField.Name).Then(TableauSort.Asc(GroupField.DomainName));
+    // Made once and never changed: Tableau keeps a group's name the site's own, case aside, so pages don't shift between
+    // requests.
+    private static readonly TableauSort _stable = TableauSort.Asc(GroupField.Name);
 
     // The query that runs an import or a synchronisation as a job.
     private static readonly IReadOnlyList<KeyValuePair<string, string?>> _asJob = [new("asJob", "true")];
@@ -42,8 +43,8 @@ public class GroupsClient
     /// pages through <see cref="ListPageAsync"/>, so a mock that overrides that serves this too.
     /// </summary>
     /// <remarks>
-    /// Without a sort they come by name, then by domain, so the pages of a list that doesn't change neither skip nor repeat
-    /// a group; one made, deleted or renamed while you read can still be missed or met twice.
+    /// Without a sort they come by name, which no two groups of a site share, so the pages of a list that doesn't change
+    /// neither skip nor repeat a group; one made, deleted or renamed while you read can still be missed or met twice.
     /// </remarks>
     /// <param name="options">The filter, the sort and the page size; null for every group, 100 a page.</param>
     /// <param name="cancellationToken">Stops the list, between groups and between pages.</param>
