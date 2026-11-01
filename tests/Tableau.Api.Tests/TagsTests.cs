@@ -118,7 +118,7 @@ public sealed class TagsTests
             var added = await AreaFixtures.RefusedAsync<ArgumentException>(server, () => client.Tags.AddAsync(content, ["Finance"]));
             var deleted = await AreaFixtures.RefusedAsync<ArgumentException>(server, () => client.Tags.DeleteAsync(content, "Finance"));
             Assert.AreEqual(("content", "content"), (added.ParamName, deleted.ParamName));
-            Assert.StartsWith("Tags takes a workbook, a view, a data source, a virtual connection, a database, a table or a column, not a ", added.Message);
+            Assert.StartsWith("Tags take a workbook, a view, a data source, a virtual connection, a database, a table or a column, not a ", added.Message);
         }
         foreach (var content in new[]
                  {

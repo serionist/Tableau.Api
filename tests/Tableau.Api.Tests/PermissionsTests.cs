@@ -152,7 +152,7 @@ public sealed class PermissionsTests
             PermissionGrantee.User(AreaFixtures.OtherUserId), CapabilityName.Read, CapabilityMode.Allow));
 
         Assert.AreEqual("content", listed.ParamName);
-        Assert.StartsWith("Permissions takes a project, a workbook, a view, a data source, a flow, a virtual connection, a collection, a database "
+        Assert.StartsWith("Permissions take a project, a workbook, a view, a data source, a flow, a virtual connection, a collection, a database "
             + "or a table, not a column.", listed.Message);
     }
 

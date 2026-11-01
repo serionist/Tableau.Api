@@ -142,8 +142,11 @@ public sealed class TableauContent : IEquatable<TableauContent>
     /// <see cref="ArgumentException"/> naming <paramref name="parameter"/>, for a kind the call can't take: what it takes,
     /// so the caller sees why before anything is sent.
     /// </summary>
-    internal ArgumentException Refused(string call, string takes, string parameter) =>
-        new($"{call} takes {takes}, not a {Words(Kind)}.", parameter);
+    /// <param name="what">What takes the content, with its verb: <c>A favorite takes</c>, <c>Tags take</c>.</param>
+    /// <param name="takes">The kinds it takes, in words.</param>
+    /// <param name="parameter">The parameter the content came in.</param>
+    internal ArgumentException Refused(string what, string takes, string parameter) =>
+        new($"{what} {takes}, not a {Words(Kind)}.", parameter);
 
     /// <summary>The kind in words, as a message names it: <c>data source</c>.</summary>
     internal static string Words(TableauContentKind kind) => kind switch

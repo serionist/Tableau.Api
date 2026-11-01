@@ -448,7 +448,7 @@ public class MetadataClient
         TableauContentKind.DataSource => "datasource",
         TableauContentKind.Flow => "flow",
         TableauContentKind.VirtualConnection => "virtualconnection",
-        _ => throw content.Refused("A data quality warning", WarnedTakes, nameof(content)),
+        _ => throw content.Refused("A data quality warning takes", WarnedTakes, nameof(content)),
     };
 
     // A warning as the reference's bodies write it: its type, required, and its message, severity and state.

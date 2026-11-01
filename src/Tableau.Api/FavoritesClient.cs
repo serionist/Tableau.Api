@@ -115,7 +115,7 @@ public class FavoritesClient
         TableauContentKind.DataSource => (Endpoints.AddDataSourceToFavorites, Endpoints.DeleteDataSourceFromFavorites),
         TableauContentKind.Project => (Endpoints.AddProjectToFavorites, Endpoints.DeleteProjectFromFavorites),
         TableauContentKind.Flow => (Endpoints.AddFlowToFavorites, Endpoints.DeleteFlowFromFavorites),
-        _ => throw content.Refused("A favorite", Takes, nameof(content)),
+        _ => throw content.Refused("A favorite takes", Takes, nameof(content)),
     };
 
     // The favorite Add Favorite sends: its label, and the content by its id.

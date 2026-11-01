@@ -116,7 +116,7 @@ public class TagsClient
         TableauContentKind.Database => Endpoints.DatabaseTags,
         TableauContentKind.Table => Endpoints.TableTags,
         TableauContentKind.Column => Endpoints.ColumnTags,
-        _ => throw content.Refused("Tags", TakesOne, nameof(content)),
+        _ => throw content.Refused("Tags take", TakesOne, nameof(content)),
     };
 
     // The batch's body as the reference writes it: the tags by their labels, the content by its LUID alone.
@@ -130,7 +130,7 @@ public class TagsClient
             if (content is null) throw new ArgumentException("A content is null.", nameof(contents));
             if (content.Kind is not (TableauContentKind.Database or TableauContentKind.Table or TableauContentKind.Column
                 or TableauContentKind.DataSource or TableauContentKind.Workbook or TableauContentKind.Flow))
-                throw content.Refused("A batch of tags", TakesBatch, nameof(contents));
+                throw content.Refused("A batch of tags takes", TakesBatch, nameof(contents));
             ids.Add(new ContentTypeAndId { Id = content.Id });
         }
         if (ids.Count == 0) throw new ArgumentException("A batch takes one content at least.", nameof(contents));

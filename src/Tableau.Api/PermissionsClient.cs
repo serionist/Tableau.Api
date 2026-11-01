@@ -182,7 +182,7 @@ public class PermissionsClient
         TableauContentKind.Collection => Endpoints.CollectionPermissions,
         TableauContentKind.Database => Endpoints.DatabasePermissions,
         TableauContentKind.Table => Endpoints.TablePermissions,
-        _ => throw content.Refused("Permissions", Takes, nameof(content)),
+        _ => throw content.Refused("Permissions take", Takes, nameof(content)),
     };
 
     private static PermissionCalls Defaults(DefaultPermissionsKind kind) => kind switch
