@@ -1,0 +1,18 @@
+{
+  "data": {
+    "databasesConnection": {
+      "nodes": [
+        {
+          "id": "fcd0f91e-8c8d-45c4-848a-0aa3b42990c6",
+          "name": "invented.json",
+          "connectionType": "semistructpassivestore-direct"
+        }
+      ],
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "aW52ZW50ZWQtY3Vyc29yLTM="
+      },
+      "totalCount": 3
+    }
+  }
+}

@@ -189,14 +189,21 @@ public sealed class ClientOptionsTests
     {
         await using var bare = new BareClient();
 
-        foreach (var area in new Func<object>[] { () => bare.Sites, () => bare.Projects, () => bare.Users, () => bare.Groups, () => bare.Favorites })
+        foreach (var area in new Func<object>[]
+                 {
+                     () => bare.Sites, () => bare.Projects, () => bare.Users, () => bare.Groups, () => bare.Favorites, () => bare.Permissions,
+                     () => bare.Tags, () => bare.Metadata,
+                 })
             Assert.ThrowsExactly<InvalidOperationException>(area);
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => new BareSites().GetAsync(Fixtures.SiteId));
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => new BareProjects().DeleteAsync(Fixtures.SiteId));
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => new BareUsers().GetAsync(Fixtures.UserId));
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => new BareGroups().DeleteAsync(Fixtures.SiteId));
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(
-            () => new BareFavorites().RemoveAsync(Fixtures.UserId, FavoriteTarget.Project(Fixtures.SiteId)));
+            () => new BareFavorites().RemoveAsync(Fixtures.UserId, TableauContent.Project(Fixtures.SiteId)));
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => new BarePermissions().GetAsync(TableauContent.Project(Fixtures.SiteId)));
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => new BareTags().DeleteAsync(TableauContent.Workbook(Fixtures.SiteId), "x"));
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => new BareMetadata().GetDatabaseAsync(Fixtures.SiteId));
     }
 
     private sealed class MockClient : TableauClient
@@ -213,6 +220,12 @@ public sealed class ClientOptionsTests
     private sealed class BareGroups : GroupsClient;
 
     private sealed class BareFavorites : FavoritesClient;
+
+    private sealed class BarePermissions : PermissionsClient;
+
+    private sealed class BareTags : TagsClient;
+
+    private sealed class BareMetadata : MetadataClient;
 
     private sealed class MockServerClient : ServerClient
     {

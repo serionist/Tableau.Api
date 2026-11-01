@@ -1,0 +1,23 @@
+{
+  "data": {
+    "databasesConnection": {
+      "nodes": [
+        {
+          "id": "b749a80e-43eb-4805-9e6d-44c615ee10e2",
+          "name": "invented-airlines",
+          "connectionType": "sqlserver"
+        },
+        {
+          "id": "522f8295-5a07-4ba7-89be-cbbd9617928d",
+          "name": "invented.xlsx",
+          "connectionType": "excel"
+        }
+      ],
+      "pageInfo": {
+        "hasNextPage": true,
+        "endCursor": "aW52ZW50ZWQtY3Vyc29yLTI="
+      },
+      "totalCount": 3
+    }
+  }
+}

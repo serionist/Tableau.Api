@@ -109,11 +109,16 @@ internal sealed record PathSegment(string Text, PathSegmentKind Kind)
         return segments;
     }
 
+    // A literal may hold a colon, which a path segment carries as it is: the batch tag calls are tags:batchCreate and
+    // tags:BatchDelete. A parameter's name may not.
     private static readonly SearchValues<char> _literalCharacters =
+        SearchValues.Create("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._:");
+
+    private static readonly SearchValues<char> _nameCharacters =
         SearchValues.Create("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._");
 
     private static bool IsName(string name) =>
-        name.Length > 0 && char.IsAsciiLetter(name[0]) && name.AsSpan().IndexOfAnyExcept(_literalCharacters) < 0;
+        name.Length > 0 && char.IsAsciiLetter(name[0]) && name.AsSpan().IndexOfAnyExcept(_nameCharacters) < 0;
 }
 
 /// <summary>What a template segment holds.</summary>
@@ -341,6 +346,175 @@ internal static class Endpoints
     /// </summary>
     public static readonly Endpoint DeleteFlowFromFavorites = DeleteFavorite("Delete Flow from Favorites", "flows", 3, 3);
 
+    // Permissions, each kind of content's own calls from its own version: listing them is a read; adding capabilities
+    // twice grants them once; deleting one twice leaves it deleted, the second answering 404. Databases and tables are
+    // Tableau Catalog's assets, on the reference's metadata page.
+
+    /// <summary>Projects' permissions (REST API 2.0).</summary>
+    public static readonly PermissionCalls ProjectPermissions = Permissions("Project", "projects", 2, 0);
+
+    /// <summary>Workbooks' permissions (REST API 2.0).</summary>
+    public static readonly PermissionCalls WorkbookPermissions = Permissions("Workbook", "workbooks", 2, 0);
+
+    /// <summary>Views' permissions (REST API 3.2).</summary>
+    public static readonly PermissionCalls ViewPermissions = Permissions("View", "views", 3, 2);
+
+    /// <summary>Published data sources' permissions (REST API 2.0).</summary>
+    public static readonly PermissionCalls DataSourcePermissions = Permissions("Data Source", "datasources", 2, 0);
+
+    /// <summary>Flows' permissions (REST API 3.3).</summary>
+    public static readonly PermissionCalls FlowPermissions = Permissions("Flow", "flows", 3, 3);
+
+    /// <summary>Virtual connections' permissions (REST API 3.23).</summary>
+    public static readonly PermissionCalls VirtualConnectionPermissions = Permissions("Virtual Connection", "virtualconnections", 3, 23);
+
+    /// <summary>Collections' permissions (REST API 3.12).</summary>
+    public static readonly PermissionCalls CollectionPermissions = Permissions("Collection", "collections", 3, 12);
+
+    /// <summary>Database assets' permissions (REST API 3.5), whose delete the reference names in the plural.</summary>
+    public static readonly PermissionCalls DatabasePermissions = Permissions("Database", "databases", 3, 5, "Delete Database Permissions");
+
+    /// <summary>Table assets' permissions (REST API 3.5), whose delete the reference names in the plural.</summary>
+    public static readonly PermissionCalls TablePermissions = Permissions("Table", "tables", 3, 5, "Delete Table Permissions");
+
+    // A project's default permissions, one set per kind of content it holds: REST API 2.1, virtual connections' 3.23.
+
+    /// <summary>A project's default permissions for workbooks.</summary>
+    public static readonly PermissionCalls DefaultWorkbookPermissions = DefaultPermissions("Workbooks", "workbooks", 2, 1);
+
+    /// <summary>A project's default permissions for published data sources.</summary>
+    public static readonly PermissionCalls DefaultDataSourcePermissions = DefaultPermissions("Data Sources", "datasources", 2, 1);
+
+    /// <summary>A project's default permissions for data roles.</summary>
+    public static readonly PermissionCalls DefaultDataRolePermissions = DefaultPermissions("Data Roles", "dataroles", 2, 1);
+
+    /// <summary>A project's default permissions for flows.</summary>
+    public static readonly PermissionCalls DefaultFlowPermissions = DefaultPermissions("Flows", "flows", 2, 1);
+
+    /// <summary>A project's default permissions for virtual connections (REST API 3.23).</summary>
+    public static readonly PermissionCalls DefaultVirtualConnectionPermissions =
+        DefaultPermissions("Virtual Connections", "virtualconnections", 3, 23);
+
+    /// <summary>A project's default permissions for database assets.</summary>
+    public static readonly PermissionCalls DefaultDatabasePermissions = DefaultPermissions("Databases", "databases", 2, 1);
+
+    /// <summary>A project's default permissions for table assets.</summary>
+    public static readonly PermissionCalls DefaultTablePermissions = DefaultPermissions("Tables", "tables", 2, 1);
+
+    // Tags, each kind of content's own calls: adding a tag twice tags the content once, and deleting it twice leaves it
+    // deleted. The batch calls take content of several kinds at once; Batch Delete Tags is a DELETE with a body.
+
+    /// <summary>Workbooks' tags (REST API 1.0).</summary>
+    public static readonly TagCalls WorkbookTags = Tags("Workbook", "workbooks", 1, 0);
+
+    /// <summary>Views' tags (REST API 1.0).</summary>
+    public static readonly TagCalls ViewTags = Tags("View", "views", 1, 0);
+
+    /// <summary>Published data sources' tags (REST API 1.0).</summary>
+    public static readonly TagCalls DataSourceTags = Tags("Data Source", "datasources", 1, 0);
+
+    /// <summary>Virtual connections' tags (REST API 3.23).</summary>
+    public static readonly TagCalls VirtualConnectionTags = Tags("Virtual Connection", "virtualconnections", 3, 23);
+
+    /// <summary>Database assets' tags (REST API 3.9).</summary>
+    public static readonly TagCalls DatabaseTags = Tags("Database", "databases", 3, 9);
+
+    /// <summary>Table assets' tags (REST API 3.9).</summary>
+    public static readonly TagCalls TableTags = Tags("Table", "tables", 3, 9);
+
+    /// <summary>Column assets' tags (REST API 3.9), by the column's LUID alone.</summary>
+    public static readonly TagCalls ColumnTags = Tags("Column", "columns", 3, 9);
+
+    /// <summary>Batch Add Tags (REST API 3.9): a PUT of the tags and the content.</summary>
+    public static readonly Endpoint BatchAddTags = Write("Batch Add Tags", HttpMethod.Put, "{version}/sites/{siteId}/tags:batchCreate", 3, 9,
+        idempotent: true);
+
+    /// <summary>Batch Delete Tags (REST API 3.9): a DELETE whose body names the tags and the content.</summary>
+    public static readonly Endpoint BatchDeleteTags = Write("Batch Delete Tags", HttpMethod.Delete, "{version}/sites/{siteId}/tags:BatchDelete", 3, 9,
+        idempotent: true);
+
+    // Tableau Catalog's assets: databases, tables and their columns (REST API 3.5). Updating one sets what it is given,
+    // so twice sets it once; deleting one removes the asset from Catalog's index.
+
+    /// <summary>Query Databases (REST API 3.5).</summary>
+    public static readonly Endpoint QueryDatabases = Read("Query Databases", "{version}/sites/{siteId}/databases", 3, 5);
+
+    /// <summary>Query Database (REST API 3.5).</summary>
+    public static readonly Endpoint QueryDatabase = Read("Query Database", "{version}/sites/{siteId}/databases/{id:luid}", 3, 5);
+
+    /// <summary>Update Database (REST API 3.5).</summary>
+    public static readonly Endpoint UpdateDatabase = Write("Update Database", HttpMethod.Put, "{version}/sites/{siteId}/databases/{id:luid}", 3, 5,
+        idempotent: true);
+
+    /// <summary>Delete Database (REST API 3.5).</summary>
+    public static readonly Endpoint DeleteDatabase = Write("Delete Database", HttpMethod.Delete, "{version}/sites/{siteId}/databases/{id:luid}", 3, 5,
+        idempotent: true);
+
+    /// <summary>Query Tables (REST API 3.5).</summary>
+    public static readonly Endpoint QueryTables = Read("Query Tables", "{version}/sites/{siteId}/tables", 3, 5);
+
+    /// <summary>Query Table (REST API 3.5).</summary>
+    public static readonly Endpoint QueryTable = Read("Query Table", "{version}/sites/{siteId}/tables/{id:luid}", 3, 5);
+
+    /// <summary>Update Table (REST API 3.5).</summary>
+    public static readonly Endpoint UpdateTable = Write("Update Table", HttpMethod.Put, "{version}/sites/{siteId}/tables/{id:luid}", 3, 5,
+        idempotent: true);
+
+    /// <summary>Delete Table (REST API 3.5).</summary>
+    public static readonly Endpoint DeleteTable = Write("Delete Table", HttpMethod.Delete, "{version}/sites/{siteId}/tables/{id:luid}", 3, 5,
+        idempotent: true);
+
+    /// <summary>Query Columns in a Table (REST API 3.5).</summary>
+    public static readonly Endpoint QueryColumns = Read("Query Columns in a Table", "{version}/sites/{siteId}/tables/{tableId:luid}/columns", 3, 5);
+
+    /// <summary>Update Column (REST API 3.5): its description.</summary>
+    public static readonly Endpoint UpdateColumn = Write("Update Column", HttpMethod.Put, "{version}/sites/{siteId}/tables/{tableId:luid}/columns/{id:luid}",
+        3, 5, idempotent: true);
+
+    /// <summary>Delete Column (REST API 3.5).</summary>
+    public static readonly Endpoint DeleteColumn = Write("Delete Column", HttpMethod.Delete,
+        "{version}/sites/{siteId}/tables/{tableId:luid}/columns/{id:luid}", 3, 5, idempotent: true);
+
+    // Data quality warnings (REST API 3.5; on a column, 3.16), by the content's type and LUID or by the warning's own
+    // LUID. Adding one is sent once: an asset holds one warning, and a second add fails.
+
+    /// <summary>Add Data Quality Warning (REST API 3.5).</summary>
+    public static readonly Endpoint AddDataQualityWarning = Write("Add Data Quality Warning", HttpMethod.Post, WarningsOfContent, 3, 5,
+        idempotent: false);
+
+    /// <summary>Add Data Quality Warning to a column (REST API 3.16).</summary>
+    public static readonly Endpoint AddColumnDataQualityWarning = Write("Add Data Quality Warning to a column", HttpMethod.Post, WarningsOfContent,
+        3, 16, idempotent: false);
+
+    /// <summary>Update Data Quality Warning (REST API 3.5).</summary>
+    public static readonly Endpoint UpdateDataQualityWarning = Write("Update Data Quality Warning", HttpMethod.Put,
+        "{version}/sites/{siteId}/dataQualityWarnings/{id:luid}", 3, 5, idempotent: true);
+
+    /// <summary>Query Data Quality Warning by Content (REST API 3.5).</summary>
+    public static readonly Endpoint QueryDataQualityWarnings = Read("Query Data Quality Warning by Content", WarningsOfContent, 3, 5);
+
+    /// <summary>Query Data Quality Warning by Content, of a column (REST API 3.16).</summary>
+    public static readonly Endpoint QueryColumnDataQualityWarnings = Read("Query Data Quality Warning by Content, of a column", WarningsOfContent, 3, 16);
+
+    /// <summary>Delete Data Quality Warning by ID (REST API 3.5).</summary>
+    public static readonly Endpoint DeleteDataQualityWarning = Write("Delete Data Quality Warning by ID", HttpMethod.Delete,
+        "{version}/sites/{siteId}/dataQualityWarnings/{id:luid}", 3, 5, idempotent: true);
+
+    /// <summary>Delete Data Quality Warning by Content (REST API 3.5).</summary>
+    public static readonly Endpoint DeleteDataQualityWarnings = Write("Delete Data Quality Warning by Content", HttpMethod.Delete, WarningsOfContent,
+        3, 5, idempotent: true);
+
+    /// <summary>Delete Data Quality Warning by Content, of a column (REST API 3.16).</summary>
+    public static readonly Endpoint DeleteColumnDataQualityWarnings = Write("Delete Data Quality Warning by Content, of a column", HttpMethod.Delete,
+        WarningsOfContent, 3, 16, idempotent: true);
+
+    /// <summary>
+    /// A query of the Metadata API, Tableau's GraphQL endpoint, outside the versioned paths: from Tableau Server 2019.3
+    /// (REST API 3.5). A query reads and changes nothing, so it is sent again like any read.
+    /// </summary>
+    public static readonly Endpoint MetadataQuery = new("Metadata API query", HttpMethod.Post, "metadata/graphql", new Version(3, 5),
+        TableauDeployments.Both, Idempotent: true, TransferKind.None);
+
     /// <summary>Every descriptor, for the tests that hold each to the rules.</summary>
     public static IReadOnlyList<Endpoint> All { get; } =
     [
@@ -354,7 +528,22 @@ internal static class Endpoints
         GetFavoritesForUser, AddWorkbookToFavorites, AddViewToFavorites, AddDataSourceToFavorites, AddProjectToFavorites,
         AddFlowToFavorites, DeleteWorkbookFromFavorites, DeleteViewFromFavorites, DeleteDataSourceFromFavorites,
         DeleteProjectFromFavorites, DeleteFlowFromFavorites,
+        .. ProjectPermissions.All, .. WorkbookPermissions.All, .. ViewPermissions.All, .. DataSourcePermissions.All,
+        .. FlowPermissions.All, .. VirtualConnectionPermissions.All, .. CollectionPermissions.All, .. DatabasePermissions.All,
+        .. TablePermissions.All,
+        .. DefaultWorkbookPermissions.All, .. DefaultDataSourcePermissions.All, .. DefaultDataRolePermissions.All,
+        .. DefaultFlowPermissions.All, .. DefaultVirtualConnectionPermissions.All, .. DefaultDatabasePermissions.All,
+        .. DefaultTablePermissions.All,
+        .. WorkbookTags.All, .. ViewTags.All, .. DataSourceTags.All, .. VirtualConnectionTags.All, .. DatabaseTags.All,
+        .. TableTags.All, .. ColumnTags.All, BatchAddTags, BatchDeleteTags,
+        QueryDatabases, QueryDatabase, UpdateDatabase, DeleteDatabase, QueryTables, QueryTable, UpdateTable, DeleteTable,
+        QueryColumns, UpdateColumn, DeleteColumn,
+        AddDataQualityWarning, AddColumnDataQualityWarning, UpdateDataQualityWarning, QueryDataQualityWarnings,
+        QueryColumnDataQualityWarnings, DeleteDataQualityWarning, DeleteDataQualityWarnings, DeleteColumnDataQualityWarnings,
+        MetadataQuery,
     ];
+
+    private const string WarningsOfContent = "{version}/sites/{siteId}/dataQualityWarnings/{contentType}/{contentId:luid}";
 
     /// <summary>Whether a descriptor is a Sign In's, whose body holds credentials.</summary>
     public static bool IsSignIn(Endpoint endpoint) => endpoint.Template == SignInTemplate;
@@ -378,4 +567,54 @@ internal static class Endpoints
 
     private static Endpoint DeleteFavorite(string name, string kind, int major, int minor) =>
         Write(name, HttpMethod.Delete, $"{{version}}/sites/{{siteId}}/favorites/{{userId:luid}}/{kind}/{{id:luid}}", major, minor, idempotent: true);
+
+    // A kind of content's permissions, under its own path: {grantee} is users or groups.
+    private static PermissionCalls Permissions(string content, string segment, int major, int minor, string? deleteName = null)
+    {
+        var permissions = $"{{version}}/sites/{{siteId}}/{segment}/{{id:luid}}/permissions";
+        return new PermissionCalls(
+            Read($"List {content} Permissions", permissions, major, minor),
+            Write($"Add {content} Permissions", HttpMethod.Put, permissions, major, minor, idempotent: true),
+            Write(deleteName ?? $"Delete {content} Permission", HttpMethod.Delete, permissions + "/{grantee}/{granteeId:luid}/{capability}/{mode}",
+                major, minor, idempotent: true));
+    }
+
+    // A project's default permissions for one kind of content it holds.
+    private static PermissionCalls DefaultPermissions(string content, string segment, int major, int minor)
+    {
+        var defaults = $"{{version}}/sites/{{siteId}}/projects/{{projectId:luid}}/default-permissions/{segment}";
+        return new PermissionCalls(
+            Read($"List Default Permissions for {content}", defaults, major, minor),
+            Write($"Add Default Permissions for {content}", HttpMethod.Put, defaults, major, minor, idempotent: true),
+            Write($"Delete Default Permission for {content}", HttpMethod.Delete, defaults + "/{grantee}/{granteeId:luid}/{capability}/{mode}",
+                major, minor, idempotent: true));
+    }
+
+    // A kind of content's tags: {tag} is the tag's text, escaped as one segment.
+    private static TagCalls Tags(string content, string segment, int major, int minor)
+    {
+        var tags = $"{{version}}/sites/{{siteId}}/{segment}/{{id:luid}}/tags";
+        return new TagCalls(
+            Write($"Add Tags to {content}", HttpMethod.Put, tags, major, minor, idempotent: true),
+            Write($"Delete Tag from {content}", HttpMethod.Delete, tags + "/{tag}", major, minor, idempotent: true));
+    }
+}
+
+/// <summary>The calls of one set of permissions: list them, add capabilities, delete one grantee's capability.</summary>
+/// <param name="List">The list's descriptor, a GET of the permissions.</param>
+/// <param name="Add">The add's descriptor, a PUT of grantees and their capabilities.</param>
+/// <param name="Delete">The delete's descriptor, of one grantee's capability in one mode.</param>
+internal sealed record PermissionCalls(Endpoint List, Endpoint Add, Endpoint Delete)
+{
+    /// <summary>The three, for <see cref="Endpoints.All"/>.</summary>
+    public IReadOnlyList<Endpoint> All => [List, Add, Delete];
+}
+
+/// <summary>The calls of one kind of content's tags: add tags, delete one.</summary>
+/// <param name="Add">The add's descriptor, a PUT of the tags.</param>
+/// <param name="Delete">The delete's descriptor, of one tag by its text.</param>
+internal sealed record TagCalls(Endpoint Add, Endpoint Delete)
+{
+    /// <summary>The two, for <see cref="Endpoints.All"/>.</summary>
+    public IReadOnlyList<Endpoint> All => [Add, Delete];
 }

@@ -31,7 +31,7 @@ public sealed class EveryModelTests
     [TestMethod]
     public void TheModelsAreAllHere()
     {
-        Assert.HasCount(199, _records, "197 public records and the two envelopes");
+        Assert.HasCount(200, _records, "197 generated public records, the column written by hand while the schema lacks it, and the two envelopes");
         Assert.HasCount(50, _enums);
     }
 

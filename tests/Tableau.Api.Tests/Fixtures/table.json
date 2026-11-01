@@ -1,0 +1,14 @@
+{
+  "table": {
+    "site": {
+      "id": "0f4b9e1c-3a52-4d6e-9c8b-1a2b3c4d5e6f"
+    },
+    "tags": {},
+    "id": "6a9b6058-671d-44bc-ad6d-c58b225f5d4c",
+    "name": "Culture",
+    "description": "Invented cultures",
+    "isEmbedded": false,
+    "isCertified": true,
+    "schema": "invented"
+  }
+}

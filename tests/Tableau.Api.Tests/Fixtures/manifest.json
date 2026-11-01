@@ -144,6 +144,84 @@
       "body": "response",
       "call": "GET /api/{version}/sites/{site-id}/workbooks/{workbook-id}",
       "source": "synthetic, from the reference's Query Workbook response; the live server sent the same shape, an empty dataAccelerationConfig and a view's empty tags included"
+    },
+    {
+      "file": "permissions.json",
+      "body": "response",
+      "call": "GET /api/{version}/sites/{site-id}/projects/{project-id}/permissions, and the other kinds' and the defaults' lists and adds",
+      "source": "synthetic, from the reference's List Project Permissions response; the live server sent the same shape, granteeCapabilities an array and each capability list in its wrapper"
+    },
+    {
+      "file": "permissions-request.json",
+      "body": "request",
+      "call": "PUT /api/{version}/sites/{site-id}/projects/{project-id}/permissions, and the other kinds' and the defaults' adds",
+      "source": "synthetic, from the reference's Add Project Permissions request"
+    },
+    {
+      "file": "permissions-none.json",
+      "body": "response",
+      "call": "GET /api/{version}/sites/{site-id}/databases/{database-id}/permissions, for a database with no explicit permissions",
+      "source": "synthetic, from the reference's List Database Permissions response without explicit permissions; the live server sent the same shape for a project's default permissions for databases"
+    },
+    {
+      "file": "tags.json",
+      "body": "response",
+      "call": "PUT /api/{version}/sites/{site-id}/columns/{column-id}/tags, and the other kinds' tag adds",
+      "source": "synthetic, from the reference's Add Tags to Column response"
+    },
+    {
+      "file": "tag-batch-request.json",
+      "body": "request",
+      "call": "PUT /api/{version}/sites/{site-id}/tags:batchCreate, and DELETE /api/{version}/sites/{site-id}/tags:BatchDelete",
+      "source": "synthetic, from the reference's Batch Add Tags and Batch Delete Tags requests: the content by its id alone"
+    },
+    {
+      "file": "databases-page.json",
+      "body": "response",
+      "call": "GET /api/{version}/sites/{site-id}/databases?pageSize=2&pageNumber=1",
+      "source": "synthetic, from the reference's Query Databases response; the live server sent the same shape, its pagination beside the list, not in it as the reference's example has it, and an empty tag list as {\"tag\":[]}"
+    },
+    {
+      "file": "database.json",
+      "body": "response",
+      "call": "GET and PUT /api/{version}/sites/{site-id}/databases/{database-id}",
+      "source": "synthetic, from the reference's Query Database and Update Database responses; the live server sent the same shape"
+    },
+    {
+      "file": "tables-page.json",
+      "body": "response",
+      "call": "GET /api/{version}/sites/{site-id}/tables?pageSize=100&pageNumber=1",
+      "source": "synthetic, from the reference's Query Tables response; the live server sent the same shape, with pagination"
+    },
+    {
+      "file": "table.json",
+      "body": "response",
+      "call": "GET and PUT /api/{version}/sites/{site-id}/tables/{table-id}",
+      "source": "synthetic, from the reference's Query Table and Update Table responses; the live server sent the same shape"
+    },
+    {
+      "file": "columns.json",
+      "body": "response",
+      "call": "GET /api/{version}/sites/{site-id}/tables/{table-id}/columns?pageSize=1000",
+      "source": "synthetic, from the reference's Query Columns in a Table response; the live server sent the same shape, no pagination, and nullable, which the reference doesn't list"
+    },
+    {
+      "file": "column.json",
+      "body": "response",
+      "call": "PUT /api/{version}/sites/{site-id}/tables/{table-id}/columns/{column-id}",
+      "source": "synthetic, from the reference's Update Column response; the live server sent the same shape to Query Column"
+    },
+    {
+      "file": "data-quality-warning.json",
+      "body": "response",
+      "call": "POST /api/{version}/sites/{site-id}/dataQualityWarnings/{content-type}/{content-id}, and PUT /api/{version}/sites/{site-id}/dataQualityWarnings/{id}",
+      "source": "synthetic, from the reference's Add Data Quality Warning response"
+    },
+    {
+      "file": "data-quality-warnings.json",
+      "body": "response",
+      "call": "GET /api/{version}/sites/{site-id}/dataQualityWarnings/{content-type}/{content-id}",
+      "source": "synthetic, from the reference's Query Data Quality Warning by Content response; the live server sent an empty list as {}"
     }
   ]
 }

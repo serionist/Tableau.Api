@@ -14,6 +14,9 @@
 //   by hand prints no token and serves a bound client, which signs it out when told;
 // - a list read through its sub-client, page by page until the total, with a filter escaped and the stable sort on the
 //   wire;
+// - a project's permissions listed and added, over a TableauContent;
+// - a Metadata API query, its data read through the caller's own source-generated JsonTypeInfo, and a connection read
+//   page by page by its cursor, from the GraphQL fixtures;
 // - the client from DI, its options bound from configuration by the binder's source generator, its primary handler
 //   configured and a handler of the caller's in its chain, and bad options refused at start-up by the options
 //   validation source generator's code.
@@ -30,6 +33,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
@@ -150,6 +154,32 @@ try
                     "?pageSize=3&pageNumber=1&filter=topLevelProject:eq:true,name:in:%5BR%26D,C%2B%2B%5D&sort=createdAt:asc,name:asc",
                     "?pageSize=3&pageNumber=2&filter=topLevelProject:eq:true,name:in:%5BR%26D,C%2B%2B%5D&sort=createdAt:asc,name:asc",
                 ]));
+
+            var quarterly = TableauContent.Project("33333333-4444-4555-8666-777777777777");
+            var listed = await signing.Permissions.GetAsync(quarterly);
+            var granted = await signing.Permissions.AddAsync(quarterly,
+            [
+                new GranteeCapabilities
+                {
+                    Group = new Group { Id = "4a1b2c3d-0002-4e5f-8a9b-0c1d2e3f4a5b" },
+                    Capabilities = [new Capability { Name = CapabilityName.Read, Mode = CapabilityMode.Allow }],
+                },
+            ]);
+            Check("a project's permissions are listed and added over a TableauContent",
+                listed.GranteeCapabilities is [{ Group.Id: "4a1b2c3d-0002-4e5f-8a9b-0c1d2e3f4a5b", Capabilities: [{ Mode.Value: "Allow" }, _] }, _]
+                && granted.Project?.Name == "Quarterly reports"
+                && FixtureHandler.Sent[^1] == "PUT /api/3.25/sites/0f4b9e1c-3a52-4d6e-9c8b-1a2b3c4d5e6f/projects/33333333-4444-4555-8666-777777777777/permissions invented-session-token");
+
+            const string Databases = "query($first: Int, $after: String) { databasesConnection(first: $first, after: $after) { nodes { id name } "
+                + "pageInfo { hasNextPage endCursor } totalCount } }";
+            var data = await signing.Metadata.QueryAsync(Databases, null, AotJson.Default.AotDatabasesData);
+            var names = new List<string>();
+            await foreach (var database in signing.Metadata.ListNodesAsync(Databases, "databasesConnection", AotJson.Default.AotDatabaseNode, pageSize: 2))
+                names.Add(database.Name);
+            Check("a Metadata API query reads its data through the caller's JsonTypeInfo, and a connection pages by its cursor",
+                data.DatabasesConnection is { TotalCount: 3, Nodes.Count: 2 }
+                && names.SequenceEqual(["invented-airlines", "invented.xlsx", "invented.json"])
+                && FixtureHandler.Paths.Count(path => path == "/api/metadata/graphql") == 3);
         }
         Check("disposing the client signs its session out", FixtureHandler.Sent[^1] == "POST /api/3.25/auth/signout invented-session-token");
 
@@ -285,6 +315,17 @@ internal sealed class FixtureHandler : HttpMessageHandler
             return new HttpResponseMessage(HttpStatusCode.NoContent) { RequestMessage = request };
         if (path == "/api/3.25/sites/0f4b9e1c-3a52-4d6e-9c8b-1a2b3c4d5e6f/items")
             return Json(request, HttpStatusCode.OK, Fixture("server-info.json"));
+        if (path == "/api/3.25/sites/0f4b9e1c-3a52-4d6e-9c8b-1a2b3c4d5e6f/projects/33333333-4444-4555-8666-777777777777/permissions")
+            return Json(request, HttpStatusCode.OK, Fixture("permissions.json"));
+        if (path == "/api/metadata/graphql")
+        {
+            // The first page for a query with no cursor, the second after the first page's.
+            using var query = JsonDocument.Parse(request.Content!.ReadAsStringAsync().GetAwaiter().GetResult());
+            var after = query.RootElement.TryGetProperty("variables", out var variables) && variables.TryGetProperty("after", out var cursor)
+                ? cursor.GetString()
+                : null;
+            return Json(request, HttpStatusCode.OK, Fixture(after is null ? "GraphQL/databases-page-1.json" : "GraphQL/databases-page-2.json"));
+        }
         if (path == "/api/3.25/sites/0f4b9e1c-3a52-4d6e-9c8b-1a2b3c4d5e6f/projects")
         {
             return Json(request, HttpStatusCode.OK,
@@ -327,3 +368,23 @@ internal sealed class FixtureAnswers : DelegatingHandler
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
         Task.FromResult(FixtureHandler.Answer(request));
 }
+
+/// <summary>A database as the app's Metadata API query asks for it.</summary>
+/// <param name="Id">Its LUID.</param>
+/// <param name="Name">Its name.</param>
+internal sealed record AotDatabaseNode(string Id, string Name);
+
+/// <summary>The data of the app's databases query.</summary>
+/// <param name="DatabasesConnection">The connection.</param>
+internal sealed record AotDatabasesData(AotDatabasesConnection DatabasesConnection);
+
+/// <summary>A databases connection: its nodes and its total.</summary>
+/// <param name="Nodes">The nodes.</param>
+/// <param name="TotalCount">How many there are in all.</param>
+internal sealed record AotDatabasesConnection(IReadOnlyList<AotDatabaseNode> Nodes, int TotalCount);
+
+/// <summary>The app's own source-generated JSON, as a caller's AOT app would have for its queries.</summary>
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(AotDatabaseNode))]
+[JsonSerializable(typeof(AotDatabasesData))]
+internal sealed partial class AotJson : JsonSerializerContext;

@@ -24,12 +24,13 @@ public sealed class ConventionsTests
 
     /// <summary>
     /// The verbs of the sub-clients that have their own: the explicit session API's, on <see cref="SessionsClient"/>
-    /// alone, and a group's import from Active Directory beside the common verbs.
+    /// alone, a group's import from Active Directory beside the common verbs, and a Metadata API query beside them.
     /// </summary>
     private static readonly Dictionary<Type, string[]> _ownVerbs = new()
     {
         [typeof(SessionsClient)] = ["SignIn", "SwitchSite", "SignOut"],
         [typeof(GroupsClient)] = [.. _verbs, "Import"],
+        [typeof(MetadataClient)] = [.. _verbs, "Query"],
     };
 
     private static readonly HashSet<string> _objectMembers = new(StringComparer.Ordinal)
@@ -89,6 +90,9 @@ public sealed class ConventionsTests
                 problems.Add($"{name}: starts with none of {string.Join(", ", verbs)}");
                 continue;
             }
+            // A sub-client of several resources names the one a page is of: ListDatabasesPageAsync is a ListPage method.
+            if (verb == "List" && method.Name.EndsWith("PageAsync", StringComparison.Ordinal))
+                verb = "ListPage";
             var returns = method.ReturnType;
             var shape = verb switch
             {

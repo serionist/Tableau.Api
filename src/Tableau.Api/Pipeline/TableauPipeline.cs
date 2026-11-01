@@ -24,12 +24,17 @@ namespace Tableau.Api.Pipeline;
 /// null for a call made in the client's session, or in none.
 /// </param>
 /// <param name="SiteId">The site that fills <c>{siteId}</c> with <paramref name="Token"/>; the session's otherwise.</param>
+/// <param name="Json">
+/// A JSON body of the call's own, sent as it is, for a call outside Tableau's <c>tsRequest</c>, such as a Metadata API
+/// query; null for <paramref name="Body"/>'s.
+/// </param>
 internal readonly record struct TableauRequest(
     IReadOnlyList<string>? PathValues = null,
     IReadOnlyList<KeyValuePair<string, string?>>? Query = null,
     TsRequest? Body = null,
     string? Token = null,
-    string? SiteId = null)
+    string? SiteId = null,
+    byte[]? Json = null)
 {
     // The members a record prints, but the token, as ***: a request in a debugger or an assertion's message shows none.
     private bool PrintMembers(StringBuilder builder)
@@ -38,7 +43,8 @@ internal readonly record struct TableauRequest(
             .Append(", Query = ").Append(Query)
             .Append(", Body = ").Append(Body)
             .Append(", Token = ").Append(Token is null ? null : "***")
-            .Append(", SiteId = ").Append(SiteId);
+            .Append(", SiteId = ").Append(SiteId)
+            .Append(", Json = ").Append(Json is null ? null : $"{Json.Length} bytes");
         return true;
     }
 }
@@ -117,6 +123,23 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
         await CallAsync(endpoint, version, request, static (_, _, _) => Task.FromResult(true), cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Sends a call whose answer is JSON of its own, outside Tableau's <c>tsResponse</c>, such as a Metadata API query's,
+    /// after the gates, and returns what <paramref name="read"/> makes of the whole answer. An exception
+    /// <paramref name="read"/> throws is the call's failure, logged as the pipeline's own are.
+    /// </summary>
+    /// <param name="endpoint">The call's descriptor.</param>
+    /// <param name="request">What it sends, its body in <see cref="TableauRequest.Json"/>.</param>
+    /// <param name="read">What the call returns, from the answer's bytes and the request's path as a message names it.</param>
+    /// <param name="cancellationToken">The caller's token.</param>
+    public async Task<T> SendForJsonAsync<T>(Endpoint endpoint, TableauRequest request, Func<byte[], string, T> read,
+        CancellationToken cancellationToken)
+    {
+        var version = await GatesAsync(endpoint, cancellationToken).ConfigureAwait(false);
+        return await CallAsync(endpoint, version, request, async (response, path, token) =>
+            read(await response.Content.ReadAsByteArrayAsync(token).ConfigureAwait(false), path), cancellationToken).ConfigureAwait(false);
+    }
+
     // One call: its session, then its request, sent once more in a new session when the server refused the first with a
     // 401, for a call whose body can be sent again. A sign-in's failure is the call's, logged where it happened.
     private async Task<T> CallAsync<T>(Endpoint endpoint, Version version, TableauRequest request,
@@ -139,7 +162,7 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
                 if (renewed || !Renewable(endpoint, request, session, response))
                 {
                     if (!response.IsSuccessStatusCode)
-                        throw await ErrorAsync(endpoint, response, path, Hint(request, session, renewed, response), token).ConfigureAwait(false);
+                        throw await ErrorAsync(endpoint, response, path, Hint(endpoint, request, session, renewed, response), token).ConfigureAwait(false);
                     var result = await read(response, path, token).ConfigureAwait(false);
                     var elapsed = Stopwatch.GetElapsedTime(started);
                     TableauLog.Answered(state.Logger, state.DisplayName, endpoint.Method, path, (int)response.StatusCode, elapsed.TotalMilliseconds);
@@ -176,9 +199,15 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
         response.StatusCode == HttpStatusCode.Unauthorized && request.Token is null && session is not null && bound is null
         && state.Sessions.Credentials is not null && endpoint.Transfer != TransferKind.Upload;
 
-    // What a 401's message adds, for a call made in a session.
-    private string? Hint(TableauRequest request, TableauSession? session, bool renewed, HttpResponseMessage response)
+    // What a 401's message adds, for a call made in a session; and a Metadata API query's 403, which a Tableau Server
+    // 2025.1 answered to every query, from its metadata service, with no reason given.
+    private string? Hint(Endpoint endpoint, TableauRequest request, TableauSession? session, bool renewed, HttpResponseMessage response)
     {
+        if (endpoint == Endpoints.MetadataQuery && response.StatusCode == HttpStatusCode.Forbidden)
+        {
+            return "If the Metadata API is off, a Tableau Server administrator turns it on with tsm maintenance metadata-services enable; "
+                + "on Tableau Cloud it needs Data Management.";
+        }
         if (response.StatusCode != HttpStatusCode.Unauthorized || request.Token is not null || session is null) return null;
         if (bound is not null)
             return "The session given to WithSession has ended or was signed out; a client bound to one never signs in, so sign in again and bind the new session.";
@@ -219,7 +248,7 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
                     if (renewed || !Renewable(endpoint, request, session, response))
                     {
                         if (!response.IsSuccessStatusCode)
-                            throw await ErrorAsync(endpoint, response, path, Hint(request, session, renewed, response), transfer.Token).ConfigureAwait(false);
+                            throw await ErrorAsync(endpoint, response, path, Hint(endpoint, request, session, renewed, response), transfer.Token).ConfigureAwait(false);
                         var call = new DownloadCall(this, endpoint, path, cancellationToken, transfer.Token);
                         var download = await TableauDownload.OpenAsync(response, transfer, call).ConfigureAwait(false);
                         var elapsed = Stopwatch.GetElapsedTime(started);
@@ -290,7 +319,7 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
     private (Uri Uri, string Path, byte[]? Body) Prepare(Endpoint endpoint, Version version, TableauRequest request, string? siteId)
     {
         var uri = RequestUri.Build(state.ServerUrl, endpoint, version, request.PathValues, request.Query, siteId);
-        var body = request.Body is null ? null : JsonSerializer.SerializeToUtf8Bytes(request.Body, TableauJsonContext.Default.TsRequest);
+        var body = request.Body is null ? request.Json : JsonSerializer.SerializeToUtf8Bytes(request.Body, TableauJsonContext.Default.TsRequest);
         return (uri, RequestUri.Redacted(uri), body);
     }
 
@@ -541,7 +570,8 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
     }
 
     // Tableau's error JSON: {"error":{"code":"404004","summary":...,"detail":...}}, the code a string or a number; the
-    // resource-versioned endpoints under api/- answer {"httpErrorCode":404,"message":...}.
+    // resource-versioned endpoints under api/- answer {"httpErrorCode":404,"message":...}; GraphQL's
+    // {"errors":[{"message":...,"extensions":{"code":...}}]}.
     private static (string? Code, string? Summary, string? Detail) TableauError(byte[] bytes, int length)
     {
         try
@@ -551,6 +581,8 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
             if (root.ValueKind != JsonValueKind.Object) return default;
             if (root.TryGetProperty("error", out var error) && error.ValueKind == JsonValueKind.Object)
                 return (Text(error, "code"), Text(error, "summary"), Text(error, "detail"));
+            if (TableauGraphQL.Errors(root) is [var first, ..])
+                return (first.Code, first.Message, null);
             return (Text(root, "httpErrorCode"), Text(root, "message"), null);
         }
         catch (Exception e) when (e is JsonException or InvalidOperationException)
@@ -584,8 +616,8 @@ internal sealed class TableauPipeline(HttpMessageInvoker http, TableauClientStat
         return (buffer, length);
     }
 
-    // The first 4 KB of a body as text, cut where a character starts, so no half of one is kept.
-    private static string Kept(byte[] bytes, int length)
+    /// <summary>The first 4 KB of a body as text, cut where a character starts, so no half of one is kept.</summary>
+    internal static string Kept(byte[] bytes, int length)
     {
         var cut = Math.Min(length, BodyKept);
         while (cut < length && cut > 0 && (bytes[cut] & 0xC0) == 0x80) cut--;
