@@ -1,9 +1,9 @@
 ---
 title: Live-test almost every 2.0 method, with a site per run and a live-coverage matrix
 issue: "#57"
-status: draft
-approved_by:
-approved_at:
+status: approved
+approved_by: serionist
+approved_at: 2026-11-01
 ---
 
 # Live-test almost every 2.0 method, with a site per run and a live-coverage matrix
@@ -501,8 +501,7 @@ roles.
   repo, not the CI log. No blocker or major is open, every owner call has its answer, and the plan names its checks
   and docs and ends each PR with `finish-work` and `review-code`. No round 2.
 - **Now:** every finding below is fixed in the plan, the answers to Q1 to Q9 are folded into its design and steps, and
-  every improvement is taken, in the commit "Apply plan review round 1". The frontmatter's `status` stays `draft`
-  until a maintainer approves the plan.
+  every improvement is taken, in the commit "Apply plan review round 1". @serionist approved the plan on 2026-11-01.
 
 | # | Sev | Finding | Status |
 |---|---|---|---|
