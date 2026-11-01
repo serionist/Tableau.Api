@@ -15,10 +15,11 @@
 #   job as skipped.
 # - TABLEAU_LIVE_SITE is optional: GitHub keeps no empty secret, and an unset one reaches the tests as the empty string,
 #   which is the default site.
-# - One run at a time: the suite makes a project, with Tableau's samples published into it, and local groups named
-#   after the run and deletes them at the end, and deletes what an earlier run left behind more than a day ago. The
-#   connected app's JWT asks for the scope tableau:content:read alone, for the page of projects its tests read
-#   (LiveSite.cs).
+# - One run at a time: the suite makes a site named after the run, works in it, with Tableau's samples published into
+#   a project there, and deletes it at the end, everything in it with it; before it makes one, it deletes the run sites
+#   an earlier run left behind more than a day ago, and names any it can't. So it needs a Tableau Server, and a server
+#   administrator's token. The connected app's JWT asks for the scope tableau:content:read alone, for the page of
+#   projects its tests read on TABLEAU_LIVE_SITE (LiveSite.cs).
 # - The suite's log check fails on any log line holding a setting's secret or a token any of its clients carried, and
 #   on one holding an invented secret or a query value; in a run that reached a site it counts such lines and shows
 #   none, since a line may hold a live value no list names, such as a JWT the client minted, and this log is public.
@@ -50,7 +51,8 @@ jobs:
     if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || vars.TABLEAU_LIVE_NIGHTLY == 'true')
     runs-on: ubuntu-latest
     environment: tableau-live
-    timeout-minutes: 20
+    # A site made and deleted, and the waits for a new site's index.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

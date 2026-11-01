@@ -13,8 +13,9 @@ public sealed class SuiteCleanup
     public const string Name = nameof(SuiteCleanup);
 
     /// <summary>
-    /// The live run's project deleted, if a live test made it, and the suite's HttpClient disposed once that client has
-    /// signed out through it. With TABLEAU_LIVE_MATRIX=1, the live-coverage matrix held to what the run's calls answered
+    /// The run's site deleted, if a live test made it, everything in it with it, and the run failed, naming each, for a
+    /// site the cleanup or the sweep couldn't delete (<see cref="LiveSite.CleanupAsync"/>); the suite's HttpClient disposed
+    /// once that client has signed out through it. With TABLEAU_LIVE_MATRIX=1, the live-coverage matrix held to what the run's calls answered
     /// (<see cref="LiveCoverage.NightlyProblems"/>), each row it fails named. Then the fixtures a recording wrote scanned
     /// for every live secret and setting, a file holding one deleted and named, never the value. Then every log line the
     /// suite took checked, the cleanup's own among them; in a run that reached a site, a failure counts the lines and

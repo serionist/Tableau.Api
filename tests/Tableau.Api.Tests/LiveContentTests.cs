@@ -11,14 +11,14 @@ using Tableau.Api.Rest.Models;
 namespace Tableau.Api.Tests;
 
 /// <summary>
-/// Workbooks, views, data sources and tags on a Tableau site (<see cref="LiveSite"/> has the settings), on the sample
-/// workbooks and the data source Tableau publishes into the run's project alone: listed, got, downloaded, updated, a
-/// connection of each updated, refreshed, their revisions listed, downloaded and removed, as Tableau allows a sample's
-/// one revision; the workbooks' views listed and exported as data, an image, a PDF and a crosstab, with a view filter; a
-/// workbook tagged and untagged with a label holding a space and one holding a comma, one at a time and in a batch; a
-/// workbook and the data source deleted. A list is filtered by the run's project's name, so the suite reads no content
-/// it didn't make, but the user's own workbooks, which Query Workbooks for User can't filter, read only until a sample
-/// comes. What Tableau sends for each file's Content-Type and Content-Disposition, and each outcome Tableau refuses, the
+/// Workbooks, views, data sources and tags in the run's site (<see cref="LiveSite"/> has the settings), on the sample
+/// workbooks and the data source Tableau publishes into a project of the suite's alone: listed, got, downloaded, updated
+/// and changed back, a connection of each updated, refreshed, their revisions listed, downloaded and removed, as Tableau
+/// allows a sample's one revision; the workbooks' views listed and exported as data, an image, a PDF and a crosstab, with
+/// a view filter; a workbook tagged and untagged with a label holding a space and one holding a comma, one at a time and
+/// in a batch; a workbook and the data source deleted. The tests that read share the run's project's samples; the two
+/// that delete take samples of their own (<see cref="LiveSite.OwnSamplesAsync"/>). A list is filtered by its project's
+/// name. What Tableau sends for each file's Content-Type and Content-Disposition, and each outcome Tableau refuses, the
 /// test output records. One at a time, as the other live tests.
 /// </summary>
 [TestClass]
@@ -32,7 +32,7 @@ public sealed partial class LiveContentTests
     [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = LiveSignIn.Token), TestCategory(TableauSite.Live)]
     public async Task SampleWorkbooksAreListedGotDownloadedAndUpdated()
     {
-        await using var client = LiveSite.Client(LiveSite.Credentials());
+        await using var client = await LiveSite.RunClientAsync();
         var project = await LiveSite.ProjectAsync(client);
         var samples = await LiveSite.SamplesAsync(client);
         var sample = samples[0];
@@ -106,6 +106,8 @@ public sealed partial class LiveContentTests
             Description = "Updated by Tableau.Api's live suite.",
             ShowTabs = showTabs,
         });
+        // A shared sample is changed back in the test that changed it.
+        var restored = await client.Workbooks.UpdateAsync(sample.Id!, new WorkbookUpdate { Description = got.Description ?? "", ShowTabs = !showTabs });
         // The sample's connections reach files packaged with it, which Tableau Server 2025.1 doesn't let a workbook's
         // update change (400039, its class not editable), once it has read the body's attributes: with embedPassword
         // alone it answers that there are none to change.
@@ -136,10 +138,9 @@ public sealed partial class LiveContentTests
         Record($"a workbook's location type: {got.Location?.Type?.Value ?? "(none)"}; its project's id {(got.Location?.Id == project ? "is" : "isn't")} the location's");
         Record($"a workbook's revisions: {revisions.Count}, the last current: {revisions.LastOrDefault()?.Current}");
         Record($"a workbook's download: {withoutExtract} bytes without its extract, {whole} with it; its preview image {previewLength} bytes");
-        // Another test of the run deletes the last sample, before or after this one.
         Assert.HasCount(byOne.Count, byOne.Select(workbook => workbook.Id).Distinct(), "no workbook twice across pages of one");
-        CollectionAssert.IsSubsetOf(byOne.Select(workbook => workbook.Id).ToList(), samples.Select(workbook => workbook.Id).ToList());
-        CollectionAssert.Contains(byOne.Select(workbook => workbook.Id).ToList(), sample.Id);
+        CollectionAssert.AreEquivalent(samples.Select(workbook => workbook.Id).ToList(), byOne.Select(workbook => workbook.Id).ToList(),
+            "the run's project holds its samples, which no test deletes");
         CollectionAssert.AreEqual(byOne.Select(workbook => workbook.Name).OrderByDescending(name => name, StringComparer.Ordinal).ToArray(),
             page.Items.Select(workbook => workbook.Name).ToArray());
         Assert.AreEqual((sample.Id, project), (got.Id, got.Project?.Id));
@@ -150,6 +151,7 @@ public sealed partial class LiveContentTests
         Assert.IsNotEmpty(revisions, "the site keeps revision history");
         Assert.AreEqual((revisions.Count, (int?)revisions.Count), (revisionPage.Items.Count, revisionPage.TotalAvailable));
         Assert.AreEqual(("Updated by Tableau.Api's live suite.", showTabs ? "true" : "false"), (updated.Description, updated.ShowTabs));
+        Assert.AreEqual((got.Description ?? "", got.ShowTabs), (restored.Description ?? "", restored.ShowTabs), "the sample is as it was");
         Assert.IsNotNull(owned, "the user's own workbooks hold a sample of the run");
         Assert.IsTrue(connectionUpdate == "connection answered" || connectionUpdate.Contains(" 400039 ", StringComparison.Ordinal), connectionUpdate);
         Assert.IsTrue(sized.StartsWith("Pdf, %PDF-", StringComparison.Ordinal) || sized.StartsWith("refused: UnsupportedApiVersion", StringComparison.Ordinal),
@@ -163,12 +165,13 @@ public sealed partial class LiveContentTests
     [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = LiveSignIn.Token), TestCategory(TableauSite.Live)]
     public async Task ThePublishedSampleDataSourceIsReadDownloadedUpdatedAndDeleted()
     {
-        await using var client = LiveSite.Client(LiveSite.Credentials());
-        var project = await LiveSite.ProjectAsync(client);
-        await LiveSite.SamplesAsync(client);
-        var inProject = new DataSourceListOptions { Filter = TableauFilter.Eq(DataSourceField.ProjectName, LiveSite.ProjectName), PageSize = 1 };
+        await using var client = await LiveSite.RunClientAsync();
+        // The test deletes the data source, so it takes samples of its own.
+        var own = await LiveSite.OwnSamplesAsync(client, "data source");
+        var project = own.ProjectId;
+        var inProject = new DataSourceListOptions { Filter = TableauFilter.Eq(DataSourceField.ProjectName, own.ProjectName), PageSize = 1 };
 
-        // Tableau Server 2025.1 publishes a sample's data source beside the samples: the suite's own too.
+        // Tableau Server 2025.1 publishes a sample's data source beside the samples.
         var listed = await LiveSite.EventuallyAsync(async () => (await AreaFixtures.AllAsync(client.DataSources.ListAsync(inProject)))
             .FirstOrDefault(found => found.Project?.Id == project), "The sample's data source");
         var page = await client.DataSources.ListPageAsync(1, inProject);
@@ -269,7 +272,7 @@ public sealed partial class LiveContentTests
     [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = LiveSignIn.Token), TestCategory(TableauSite.Live)]
     public async Task ASampleViewIsListedGotAndExportedWithAViewFilter()
     {
-        await using var client = LiveSite.Client(LiveSite.Credentials());
+        await using var client = await LiveSite.RunClientAsync();
         var samples = await LiveSite.SamplesAsync(client);
         var sample = samples[0];
 
@@ -342,9 +345,9 @@ public sealed partial class LiveContentTests
     [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = LiveSignIn.Token), TestCategory(TableauSite.Live)]
     public async Task SamplesAreTaggedWithASpaceAndACommaOneAtATimeAndInABatchAndOneIsDeleted()
     {
-        await using var client = LiveSite.Client(LiveSite.Credentials());
-        var samples = await LiveSite.SamplesAsync(client);
-        // The last two by name, so the tests that read the first never meet the one deleted here.
+        await using var client = await LiveSite.RunClientAsync();
+        // The test deletes a workbook, so it takes samples of its own.
+        var samples = (await LiveSite.OwnSamplesAsync(client, "tags")).Workbooks;
         var (first, second) = (TableauContent.Workbook(samples[^2].Id!), TableauContent.Workbook(samples[^1].Id!));
         async Task<string[]> LabelsAsync(TableauContent workbook) =>
             [.. (await client.Workbooks.GetAsync(workbook.Id)).Tags?.Select(tag => tag.Label ?? "") ?? []];

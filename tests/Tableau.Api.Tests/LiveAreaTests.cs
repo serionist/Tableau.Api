@@ -8,13 +8,13 @@ using Tableau.Api.Rest.Models;
 namespace Tableau.Api.Tests;
 
 /// <summary>
-/// Projects, groups, users, permissions and the Metadata API on a Tableau site (<see cref="LiveSite"/> has the
+/// Projects, groups, users, permissions and the Metadata API in the run's site (<see cref="LiveSite"/> has the
 /// settings): a project made in the run's project, found by a filter whose value Tableau must read as written, updated
 /// and deleted; a local group made, found, renamed, given the suite's own user and then without them, and deleted; users
-/// read, never changed; a capability granted to a run's group on the run's project, read back and deleted; and a
-/// read-only query of the Metadata API, paged by its cursor. Nothing is tagged, no data quality warning is set, and no
-/// database, table or column is changed. They run one at a time, with the session tests: a personal access token allows
-/// one session, so another test's sign-in would end this one's.
+/// read a page of one at a time, never changed; a capability granted to a run's group on the run's project, read back and
+/// deleted; and a read-only query of the Metadata API, once it lists the run's samples, paged by its cursor. Nothing is
+/// tagged, no data quality warning is set, and no database, table or column is changed. They run one at a time, with the
+/// session tests: a personal access token allows one session, so another test's sign-in would end this one's.
 /// </summary>
 [TestClass]
 [DoNotParallelize]
@@ -26,7 +26,7 @@ public sealed class LiveAreaTests
     [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = LiveSignIn.Token), TestCategory(TableauSite.Live)]
     public async Task AProjectIsMadeFoundByAFilterUpdatedAndDeletedInTheRunsProject()
     {
-        await using var client = LiveSite.Client(LiveSite.Credentials());
+        await using var client = await LiveSite.RunClientAsync();
         var parent = await LiveSite.ProjectAsync(client);
 
         var made = await client.Projects.CreateAsync(new Project
@@ -61,7 +61,7 @@ public sealed class LiveAreaTests
     [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = LiveSignIn.Token), TestCategory(TableauSite.Live)]
     public async Task ALocalGroupIsMadeFoundRenamedGivenTheSuitesUserAndDeleted()
     {
-        await using var client = LiveSite.Client(LiveSite.Credentials());
+        await using var client = await LiveSite.RunClientAsync();
         var group = await LiveSite.NewGroupAsync(client);
         var self = LiveSite.Saw(client.Pipeline.State.Sessions.Current!).UserId;
         var renamed = LiveSite.GroupName(DateTimeOffset.UtcNow.AddSeconds(1));
@@ -78,9 +78,8 @@ public sealed class LiveAreaTests
         await client.Groups.RemoveUserAsync(group.Id!, self);
         var left = await AreaFixtures.AllAsync(client.Groups.ListUsersAsync(group.Id!));
         await client.Groups.DeleteAsync(group.Id!);
-        LiveSite.GroupGone(group.Id!);
 
-        Assert.IsTrue(LiveSite.IsRunGroup(listed), "the sweep knows the run's group");
+        Assert.AreEqual("local", listed.Domain?.Name, "a group the suite makes is local");
         Assert.AreEqual(renamed, updated.Name);
         CollectionAssert.AreEqual(new[] { self }, members.Select(member => member.Id).ToArray());
         Assert.IsTrue(selfsGroups.Any(found => Named(found, renamed)), "the user's groups hold the group, by its new name");
@@ -91,11 +90,11 @@ public sealed class LiveAreaTests
     [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = LiveSignIn.Token), TestCategory(TableauSite.Live)]
     public async Task UsersAreListedPageByPageAndTheSuitesOwnIsReadByIdAndByFilter()
     {
-        await using var client = LiveSite.Client(LiveSite.Credentials());
+        await using var client = await LiveSite.RunClientAsync();
 
-        // Three pages of two at most, so a site with a large directory isn't read whole each night.
+        // Pages of one, since the run's site holds few users; six at most, should it hold more.
         var some = new List<User>();
-        await foreach (var user in client.Users.ListAsync(new UserListOptions { PageSize = 2 }))
+        await foreach (var user in client.Users.ListAsync(new UserListOptions { PageSize = 1 }))
         {
             some.Add(user);
             if (some.Count == 6) break;
@@ -104,7 +103,7 @@ public sealed class LiveAreaTests
         var read = await client.Users.GetAsync(self);
         var filtered = await AreaFixtures.AllAsync(client.Users.ListAsync(new UserListOptions { Filter = TableauFilter.Eq(UserField.Luid, self) }));
         var groups = await AreaFixtures.AllAsync(client.Users.ListGroupsAsync(self));
-        var firstPage = await client.Users.ListPageAsync(1, new UserListOptions { PageSize = 2 });
+        var firstPage = await client.Users.ListPageAsync(1, new UserListOptions { PageSize = 1 });
 
         Assert.HasCount(some.Count, some.Select(user => user.Id).Distinct(), "no user twice across pages");
         Assert.AreEqual(Math.Min(6, firstPage.TotalAvailable ?? 0), some.Count);
@@ -117,7 +116,7 @@ public sealed class LiveAreaTests
     [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = LiveSignIn.Token), TestCategory(TableauSite.Live)]
     public async Task ACapabilityIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted()
     {
-        await using var client = LiveSite.Client(LiveSite.Credentials());
+        await using var client = await LiveSite.RunClientAsync();
         var project = TableauContent.Project(await LiveSite.ProjectAsync(client));
         var group = await LiveSite.NewGroupAsync(client);
         static bool Grants(Permissions permissions, string groupId) =>
@@ -136,7 +135,6 @@ public sealed class LiveAreaTests
         await client.Permissions.DeleteAsync(project, PermissionGrantee.Group(group.Id!), CapabilityName.Read, CapabilityMode.Allow);
         var after = await client.Permissions.GetAsync(project);
         await client.Groups.DeleteAsync(group.Id!);
-        LiveSite.GroupGone(group.Id!);
 
         Assert.IsTrue(Grants(added, group.Id!), "the add answers with the group's Read");
         Assert.IsTrue(Grants(read, group.Id!), "the list holds the group's Read");
@@ -147,27 +145,34 @@ public sealed class LiveAreaTests
     [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = LiveSignIn.Token), TestCategory(TableauSite.Live)]
     public async Task AMetadataQueryReadsTheWorkbooksPageByPage()
     {
-        await using var client = LiveSite.Client(LiveSite.Credentials());
+        await using var client = await LiveSite.RunClientAsync();
+        var samples = await LiveSite.SamplesAsync(client);
         const string Workbooks = """
-            query workbooks($first: Int, $after: String) { workbooksConnection(first: $first, after: $after) { nodes { luid name } pageInfo { hasNextPage endCursor } totalCount } }
+            query workbooks($first: Int, $after: String, $project: String) { workbooksConnection(first: $first, after: $after, filter: { projectName: $project }) { nodes { luid name } pageInfo { hasNextPage endCursor } totalCount } }
             """;
+        const string Count = """
+            query count($project: String) { workbooksConnection(first: 1, filter: { projectName: $project }) { totalCount } }
+            """;
+        static System.Text.Json.Nodes.JsonObject InProject() => new() { ["project"] = LiveSite.ProjectName };
 
-        var total = (await client.Metadata.QueryAsync("{ workbooksConnection(first: 1) { totalCount } }"))
-            .GetProperty("workbooksConnection").GetProperty("totalCount").GetInt32();
-        // Three pages of two at most, so a site with many workbooks isn't read whole each night.
-        var some = new List<LiveWorkbookNode>();
-        await foreach (var workbook in client.Metadata.ListNodesAsync(Workbooks, "workbooksConnection", LiveJson.Default.LiveWorkbookNode, pageSize: 2))
-        {
-            some.Add(workbook);
-            if (some.Count == 6) break;
-        }
-        var first = await client.Metadata.QueryAsync(Workbooks, new System.Text.Json.Nodes.JsonObject { ["first"] = 2 },
-            LiveJson.Default.LiveWorkbooksData);
+        // The Metadata API lists a new site's samples once it has taken them in; the counts come from the run's project
+        // alone, which the projects other tests make for their own samples don't change.
+        var total = (await LiveSite.EventuallyAsync(async () =>
+            (await client.Metadata.QueryAsync(Count, InProject())).GetProperty("workbooksConnection").GetProperty("totalCount").GetInt32() is var count
+                && count >= LiveSite.Samples ? Tuple.Create(count) : null, "The run's samples, in the Metadata API", TimeSpan.FromMinutes(5))).Item1;
+        // Pages of one, so the list follows a cursor.
+        var all = await AreaFixtures.AllAsync(client.Metadata.ListNodesAsync(Workbooks, "workbooksConnection", LiveJson.Default.LiveWorkbookNode,
+            InProject(), pageSize: 1));
+        var variables = InProject();
+        variables["first"] = 1;
+        var first = await client.Metadata.QueryAsync(Workbooks, variables, LiveJson.Default.LiveWorkbooksData);
 
-        Assert.AreEqual(Math.Min(6, total), some.Count);
-        Assert.HasCount(some.Count, some.Select(workbook => workbook.Luid).Distinct(), "no workbook twice across pages");
+        Assert.AreEqual(total, all.Count);
+        Assert.HasCount(all.Count, all.Select(workbook => workbook.Luid).Distinct(), "no workbook twice across pages");
+        CollectionAssert.AreEquivalent(samples.Select(workbook => workbook.Id).ToList(), all.Select(workbook => workbook.Luid).ToList(),
+            "the run's project holds the samples alone");
         Assert.AreEqual(total, first.WorkbooksConnection.TotalCount);
-        CollectionAssert.AreEqual(some.Take(2).Select(workbook => workbook.Luid).ToArray(), first.WorkbooksConnection.Nodes.Select(workbook => workbook.Luid).ToArray());
+        CollectionAssert.AreEqual(all.Take(1).Select(workbook => workbook.Luid).ToArray(), first.WorkbooksConnection.Nodes.Select(workbook => workbook.Luid).ToArray());
     }
 }
 

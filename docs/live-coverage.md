@@ -45,11 +45,11 @@ run: it stays checked by hand.
 | `SitesClient.GetAsync` | Query Site | no | not live yet (#57) |
 | `SitesClient.GetByContentUrlAsync` | Query Site by content URL | no | not live yet (#57) |
 | `SitesClient.GetByNameAsync` | Query Site by name | no | not live yet (#57) |
-| `SitesClient.ListAsync` | Query Sites | no | not live yet (#57) |
+| `SitesClient.ListAsync` | Query Sites | yes | `LiveSite` |
 | `SitesClient.ListPageAsync` | Query Sites | no | not live yet (#57) |
-| `SitesClient.CreateAsync` | Create Site | no | not live yet (#57) |
+| `SitesClient.CreateAsync` | Create Site | yes | `LiveSite` |
 | `SitesClient.UpdateAsync` | Update Site | no | not live yet (#57) |
-| `SitesClient.DeleteAsync` | Delete Site | no | not live yet (#57) |
+| `SitesClient.DeleteAsync` | Delete Site | yes | `SuiteCleanup` |
 | `ProjectsClient.ListAsync` | Query Projects | yes | `LiveAreaTests.AProjectIsMadeFoundByAFilterUpdatedAndDeletedInTheRunsProject`, `LiveSessionTests.AClientSignsItselfInForACallAndSignsOutWhenDisposed` |
 | `ProjectsClient.ListPageAsync` | Query Projects | yes | `LiveAreaTests.AProjectIsMadeFoundByAFilterUpdatedAndDeletedInTheRunsProject`, `LiveConnectedAppTests.AClientWithTheConnectedAppSignsItselfInForAPageOfProjectsAndSignsOutWhenDisposed` |
 | `ProjectsClient.CreateAsync` | Create Project | yes | `LiveAreaTests.AProjectIsMadeFoundByAFilterUpdatedAndDeletedInTheRunsProject`, `LiveSite` |

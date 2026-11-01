@@ -8,7 +8,7 @@ using Tableau.Api.Rest.Models;
 namespace Tableau.Api.Tests;
 
 /// <summary>
-/// Sessions on a Tableau site, signed in with the live suite's personal access token (<see cref="LiveSite"/> has the
+/// Sessions on the run's site, signed in with the live suite's personal access token (<see cref="LiveSite"/> has the
 /// settings): a client signs itself in for a call and signs out when disposed; a session signed in by hand serves a
 /// bound client through its sub-clients, makes the run's project, and is signed out. Each test checks the sign-out took:
 /// the token is refused after it. They run one at a time: a personal access token allows one session, so a sign-in of
@@ -18,29 +18,31 @@ namespace Tableau.Api.Tests;
 [DoNotParallelize]
 public sealed class LiveSessionTests
 {
+    private static readonly ProjectListOptions _onePage = new() { PageSize = 1 };
+
     [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = LiveSignIn.Token), TestCategory(TableauSite.Live)]
     public async Task AClientSignsItselfInForACallAndSignsOutWhenDisposed()
     {
+        var site = await LiveSite.RunSiteAsync();
         TableauSession session;
-        await using (var client = LiveSite.Client(LiveSite.Credentials()))
+        await using (var client = await LiveSite.RunClientAsync())
         {
-            await LiveSite.SignedInAsync(LiveSignIn.Token, () => LiveSite.RunProjectsAsync(client));
+            await LiveSite.SignedInAsync(LiveSignIn.Token, () => client.Projects.ListPageAsync(1, _onePage));
             session = LiveSite.Saw(client.Pipeline.State.Sessions.Current!);
-            Assert.AreEqual(LiveSite.SiteContentUrl, session.SiteContentUrl);
-            Assert.IsTrue(Guid.TryParse(session.SiteId, out _), "the site's LUID");
+            Assert.AreEqual((site.ContentUrl, site.Id), (session.SiteContentUrl, session.SiteId), "the run's site");
             Assert.IsTrue(Guid.TryParse(session.UserId, out _), "the user's LUID");
             Assert.IsGreaterThan(DateTimeOffset.UtcNow, session.ExpiresAt);
             Assert.IsGreaterThanOrEqualTo(ApiVersions.Floor, session.ApiVersion);
         }
 
         await using var check = LiveSite.Client(null);
-        await ClientFixtures.FailsAsync(TableauErrorKind.Authentication, () => LiveSite.RunProjectsAsync(check.WithSession(session)));
+        await ClientFixtures.FailsAsync(TableauErrorKind.Authentication, () => check.WithSession(session).Projects.ListPageAsync(1, _onePage));
     }
 
     [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = LiveSignIn.Token), TestCategory(TableauSite.Live)]
     public async Task ASessionSignedInByHandServesABoundClientAcrossItsSubClients()
     {
-        await using var client = LiveSite.Client(null);
+        await using var client = LiveSite.Client(null, await LiveSite.RunOptionsAsync());
         var session = LiveSite.Saw(await LiveSite.SignedInAsync(LiveSignIn.Token, () => client.Sessions.SignInAsync(LiveSite.Credentials())));
         await using var bound = client.WithSession(session);
         ServerInfo info;
@@ -58,8 +60,8 @@ public sealed class LiveSessionTests
         }
 
         Assert.IsFalse(string.IsNullOrEmpty(info.ProductVersion?.Value));
-        Assert.AreEqual(LiveSite.ProjectName, listed.Name, "the sweep finds a run's project by its prefix");
-        var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.Authentication, () => LiveSite.RunProjectsAsync(bound));
+        Assert.AreEqual((LiveSite.ProjectName, LiveSite.ProjectDescription), (listed.Name, listed.Description));
+        var thrown = await ClientFixtures.FailsAsync(TableauErrorKind.Authentication, () => bound.Projects.ListPageAsync(1, _onePage));
         Assert.Contains("WithSession", thrown.Message, "a bound client never signs in");
     }
 }
@@ -91,7 +93,7 @@ public sealed class ServerOnlySessionTests
             LiveSite.Secret(Password), impersonated)));
         try
         {
-            await LiveSite.RunProjectsAsync(client.WithSession(session));
+            await client.WithSession(session).Projects.ListPageAsync(1, new ProjectListOptions { PageSize = 1 });
         }
         finally
         {
@@ -99,7 +101,7 @@ public sealed class ServerOnlySessionTests
         }
 
         Assert.IsTrue(string.Equals(impersonated, session.UserId, StringComparison.OrdinalIgnoreCase), "the session acts as the user impersonated");
-        await ClientFixtures.FailsAsync(TableauErrorKind.Authentication, () => LiveSite.RunProjectsAsync(client.WithSession(session)));
+        await ClientFixtures.FailsAsync(TableauErrorKind.Authentication, () => client.WithSession(session).Projects.ListPageAsync(1, new ProjectListOptions { PageSize = 1 }));
     }
 
     [SiteTest(TableauSite.ServerOnly, [ServerUrl, User, Password, OtherSite]), TestCategory(TableauSite.ServerOnly)]
@@ -112,7 +114,7 @@ public sealed class ServerOnlySessionTests
         var other = LiveSite.Saw(await client.Sessions.SwitchSiteAsync(first, TableauSite.Setting(OtherSite)));
         try
         {
-            await LiveSite.RunProjectsAsync(client.WithSession(other));
+            await client.WithSession(other).Projects.ListPageAsync(1, new ProjectListOptions { PageSize = 1 });
         }
         finally
         {
@@ -122,8 +124,8 @@ public sealed class ServerOnlySessionTests
         Assert.AreEqual(TableauSite.Setting(OtherSite), other.SiteContentUrl);
         Assert.AreNotEqual(first.SiteId, other.SiteId);
         Assert.AreEqual(first.UserName, other.UserName);
-        await ClientFixtures.FailsAsync(TableauErrorKind.Authentication, () => LiveSite.RunProjectsAsync(client.WithSession(first)));
-        await ClientFixtures.FailsAsync(TableauErrorKind.Authentication, () => LiveSite.RunProjectsAsync(client.WithSession(other)));
+        await ClientFixtures.FailsAsync(TableauErrorKind.Authentication, () => client.WithSession(first).Projects.ListPageAsync(1, new ProjectListOptions { PageSize = 1 }));
+        await ClientFixtures.FailsAsync(TableauErrorKind.Authentication, () => client.WithSession(other).Projects.ListPageAsync(1, new ProjectListOptions { PageSize = 1 }));
     }
 
     // Over the suite's HttpClient, so every token it carries is kept for the log check.
