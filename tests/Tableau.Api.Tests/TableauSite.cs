@@ -8,8 +8,9 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace Tableau.Api.Tests;
 
 /// <summary>
-/// The tests that need a Tableau site, in two categories. <see cref="Live"/> runs on Tableau Cloud or a Tableau Server;
-/// <see cref="ServerOnly"/> shows what only a Tableau Server has, run by hand. Every other test is offline. A site test
+/// The tests that need a Tableau site, in two categories. <see cref="Live"/> runs on a Tableau Server alone, as a server
+/// administrator, since it makes a site of its own for each run; Tableau Cloud stays checked by hand. <see cref="ServerOnly"/>
+/// shows what only a password's sign-in can, run by hand on a Tableau Server. Every other test is offline. A site test
 /// is marked with <see cref="SiteTestAttribute"/> in place of [TestMethod], and with its category:
 /// <code>
 /// [SiteTest(TableauSite.Live, ["TABLEAU_LIVE_SERVER_URL"]), TestCategory(TableauSite.Live)]

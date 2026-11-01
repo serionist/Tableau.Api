@@ -40,6 +40,17 @@ public sealed class LiveCoverageTests
     }
 
     [TestMethod]
+    public void NoRowOfTheTableIsLeftWaitingForALiveTest()
+    {
+        var (rows, _) = LiveCoverage.Parse(LiveCoverage.Text(), LiveCoverage.ClientSection);
+
+        var waiting = rows.Where(row => row.IsNo && row.Reason.Contains("not live yet", StringComparison.OrdinalIgnoreCase))
+            .Select(row => $"line {row.Line}, {row.Method} and {row.Call}").ToList();
+
+        Assert.IsEmpty(waiting, "a row says not live yet: make it live, or say why not\n" + string.Join("\n", waiting));
+    }
+
+    [TestMethod]
     public void TheMethodsAreTheSubClientsAndTheCredentialsFactoriesAndTheCallsTheRegistrys()
     {
         var methods = LiveCoverage.Methods();
