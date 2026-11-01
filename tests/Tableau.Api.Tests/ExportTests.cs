@@ -275,6 +275,29 @@ public sealed class ExportTests : IDisposable
         Assert.Contains(message, thrown.Message, what);
     }
 
+    // A parameter holds one value, and the positional rule is for view filters: one goes beside view filters of any
+    // count, written with its prefix or without, before them or after.
+    [TestMethod]
+    [DataRow("a parameter after a two-value filter", "vf_Region=West%2CEast&vf_Parameters.Top%20N=10")]
+    [DataRow("a prefixed parameter before two two-value filters", "vf_Parameters.Top%20N=10&vf_Region=West%2CEast&vf_Year=2025%2C2026")]
+    public async Task AParameterGoesBesideViewFiltersOfAnyCount(string what, string query)
+    {
+        var filters = what switch
+        {
+            "a parameter after a two-value filter" => new Dictionary<string, string> { ["Region"] = "West,East", ["Parameters.Top N"] = "10" },
+            _ => new Dictionary<string, string> { ["vf_Parameters.Top N"] = "10", ["Region"] = "West,East", ["Year"] = "2025,2026" },
+        };
+        using var server = AreaFixtures.Server();
+        server.Map("GET", $"{Site}/workbooks/{Id}/pdf", FakeResponse.Content(200, "application/pdf", "invented"));
+        await using var client = AreaFixtures.Client(server);
+
+        await using (await client.Workbooks.DownloadPdfAsync(Id, new ExportOptions { Filters = filters }))
+        {
+        }
+
+        CollectionAssert.AreEqual(new[] { $"{Site}/workbooks/{Id}/pdf?{query}" }, AreaFixtures.Calls(server).Select(request => request.Target).ToArray(), what);
+    }
+
     [TestMethod]
     public async Task AnExportIsSentAgainAfterA503BeforeItsContentBegins()
     {

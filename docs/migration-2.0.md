@@ -336,7 +336,8 @@ What changes for a caller:
   download's `Kind`; an export names no file, so give `SaveToFileAsync` a name of your own.
 - **Exports** take one `ExportOptions`: `Filters`, view filters by field name, sent as `vf_` and the name on every export,
   where 1.2.5 stripped the prefix from a view's data and image and failed a PDF without filters; with more than one
-  field, Tableau links their values by position, so each must hold as many, or nothing is sent; `MaxAge`,
+  field, Tableau links their values by position, so each must hold as many, or nothing is sent, a `Parameters.`
+  name, one value, aside; `MaxAge`,
   `Resolution`, `Width` and `Height`, `PageType` and `Orientation`, each where its export takes it, refused before
   sending where it doesn't. 1.2.5's PDF sent Legal and portrait unasked; 2.0 sends a page only when you set one, and
   Tableau's default is the same.

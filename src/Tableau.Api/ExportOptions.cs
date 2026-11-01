@@ -40,13 +40,15 @@ public sealed record ExportOptions
     /// <para>
     /// A value of several, comma-separated, such as <c>2025,2026</c>, keeps any of them. With more than one field,
     /// Tableau's reference links the values by position: <c>Year</c> <c>2025,2026</c> and <c>Region</c> <c>West,East</c>
-    /// keep 2025 in the west and 2026 in the east, so every field must hold as many values, and filters that don't are
-    /// refused before anything is sent. A comma a value holds as data is written <c>\,</c>, and a backslash <c>\\</c>, as
-    /// Tableau's Python client found the server reads them; the reference names neither.
+    /// keep 2025 in the west and 2026 in the east, so every view filter must hold as many values, and view filters that
+    /// don't are refused before anything is sent. A comma a value holds as data is written <c>\,</c>, and a backslash
+    /// <c>\\</c>, as Tableau's Python client found the server reads them; the reference names neither.
     /// </para>
     /// <para>
     /// A workbook parameter is <c>Parameters.</c> and its name, such as <c>Parameters.Top N</c>, sent as
-    /// <c>vf_Parameters.Top N</c>, as Tableau's Python client sends one; the reference doesn't document parameters.
+    /// <c>vf_Parameters.Top N</c>, as Tableau's Python client sends one; the reference doesn't document parameters. A
+    /// parameter holds one value, and the rule above is for view filters, not parameters: one goes beside view filters of
+    /// any count.
     /// </para>
     /// </remarks>
     public IReadOnlyDictionary<string, string>? Filters { get; init; }
@@ -162,6 +164,9 @@ internal enum ExportKind
 /// </summary>
 internal static class ExportQuery
 {
+    // A workbook parameter's query key, as Tableau's Python client writes one: vf_, Parameters. and its name.
+    private const string ParameterKey = "vf_Parameters.";
+
     /// <summary>
     /// The query of an export, or <see cref="ArgumentException"/> naming <paramref name="parameter"/> for an option it
     /// doesn't take.
@@ -203,7 +208,11 @@ internal static class ExportQuery
         foreach (var (name, value) in options.Filters ?? new Dictionary<string, string>())
         {
             if (value is null) throw new ArgumentException($"The view filter '{name}' has no value.", parameter);
-            // Tableau links the values of several fields by position, and its reference asks every field for as many.
+            var key = FilterName(name, parameter);
+            query.Add(new(key, value));
+            // Tableau links the values of several fields by position, and its reference asks every field for as many. The
+            // rule is for view filters: a parameter holds one value, and the reference documents none, so it isn't counted.
+            if (key.StartsWith(ParameterKey, StringComparison.Ordinal)) continue;
             var count = ValueCount(value);
             if (values is { } first && first != count)
             {
@@ -212,7 +221,6 @@ internal static class ExportQuery
                     + "so every field must hold as many.", parameter);
             }
             values = count;
-            query.Add(new(FilterName(name, parameter), value));
         }
         return query;
     }

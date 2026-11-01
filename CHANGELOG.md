@@ -161,11 +161,11 @@ and [the migration guide](docs/migration-2.0.md) lists every change from 1.2.5 a
     and sort over `WorkbookField`, `ViewField` and `DataSourceField`, and come oldest first, then by name, a view by
     its workbook's name first.
   - **`ExportOptions`** holds every export's options: view filters by field name, sent as `vf_` and the name on every
-    export, several fields' values linked by position, so each must hold as many; how many minutes old a cached
-    export may be; an image's resolution (`ImageResolution`); a width and a height; a PDF's page (`PageType`) and
-    orientation (`PageOrientation`). An export refuses an option it doesn't take, and one below its REST API version,
-    before anything is sent: a view image's size and a workbook PDF's view filters below 3.24, a workbook PDF's size
-    below 3.26.
+    export, several fields' values linked by position, so each must hold as many, a workbook parameter aside; how
+    many minutes old a cached export may be; an image's resolution (`ImageResolution`); a width and a height; a PDF's
+    page (`PageType`) and orientation (`PageOrientation`). An export refuses an option it doesn't take, and one below
+    its REST API version, before anything is sent: a view image's size and a workbook PDF's view filters below 3.24, a
+    workbook PDF's size below 3.26.
   - **Updates** take `WorkbookUpdate`, `DataSourceUpdate` and `ConnectionUpdate`, records of the reference's members
     for each, and send what is set and no element for what isn't; a connection's authentication type is refused
     before sending below REST API 3.27. A `ConnectionUpdate` prints its password as `***`.
