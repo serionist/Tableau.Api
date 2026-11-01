@@ -9,12 +9,19 @@ using Tableau.Api.Pipeline;
 namespace Tableau.Api;
 
 /// <summary>
-/// A client for Tableau's REST API, on Tableau Server or Tableau Cloud, with one sub-client per area: <see cref="Server"/>
-/// and <see cref="Sessions"/> first, and the others as the 2.0 client takes them over from <see cref="TableauApiClient"/>.
+/// A client for Tableau's REST API, on Tableau Server or Tableau Cloud, with one sub-client per area: <see cref="Server"/>,
+/// <see cref="Sessions"/>, <see cref="Sites"/>, <see cref="Projects"/>, <see cref="Users"/>, <see cref="Groups"/> and
+/// <see cref="Favorites"/> so far, and the others as the 2.0 client takes them over from <see cref="TableauApiClient"/>.
 /// </summary>
 /// <remarks>
 /// <para>Get one from DI, registered with <c>services.AddTableauClient(name, options => ...)</c>, or build one with
 /// <see cref="Create"/>, or over an <see cref="HttpClient"/> of your own.</para>
+/// <para>
+/// A list comes two ways: <c>ListAsync</c> reads every item, a page at a time as you go
+/// (<c>await foreach (var project in client.Projects.ListAsync(options, cancellationToken))</c>); <c>ListPageAsync</c>
+/// returns one <see cref="Page{T}"/>. A list's options filter and sort it over its resource's fields
+/// (<see cref="TableauFilter"/>, <see cref="TableauSort"/>, <see cref="ProjectField"/>), and a list is never null.
+/// </para>
 /// <para>
 /// Given credentials, it signs itself in on the first call that needs a session, one sign-in at a time, and signs in
 /// again shortly before the session is due to end and once when the server refuses it with a 401, sending the refused
@@ -46,6 +53,11 @@ public class TableauClient : IDisposable, IAsyncDisposable
     private readonly TableauPipeline? _pipeline;
     private readonly ServerClient? _server;
     private readonly SessionsClient? _sessions;
+    private readonly SitesClient? _sites;
+    private readonly ProjectsClient? _projects;
+    private readonly UsersClient? _users;
+    private readonly GroupsClient? _groups;
+    private readonly FavoritesClient? _favorites;
     private readonly HttpMessageInvoker? _owned;
     private readonly bool _ownsState;
     private int _disposed;
@@ -124,8 +136,7 @@ public class TableauClient : IDisposable, IAsyncDisposable
             chain?.Dispose();
             state?.Dispose();
         }
-        _server = new ServerClient(_pipeline);
-        _sessions = new SessionsClient(_pipeline);
+        (_server, _sessions, _sites, _projects, _users, _groups, _favorites) = SubClients(_pipeline);
         _ownsState = true;
     }
 
@@ -150,8 +161,7 @@ public class TableauClient : IDisposable, IAsyncDisposable
     private TableauClient(TableauPipeline pipeline)
     {
         _pipeline = pipeline;
-        _server = new ServerClient(_pipeline);
-        _sessions = new SessionsClient(_pipeline);
+        (_server, _sessions, _sites, _projects, _users, _groups, _favorites) = SubClients(_pipeline);
     }
 
     /// <summary>Server Info: the versions of the server and of its REST API.</summary>
@@ -159,6 +169,21 @@ public class TableauClient : IDisposable, IAsyncDisposable
 
     /// <summary>Sessions you hold yourself: sign in, switch site, sign out.</summary>
     public virtual SessionsClient Sessions => _sessions ?? throw ForMocksOnly();
+
+    /// <summary>Sites: get one, list them, create, update and delete one.</summary>
+    public virtual SitesClient Sites => _sites ?? throw ForMocksOnly();
+
+    /// <summary>The site's projects: list them, create, update and delete one.</summary>
+    public virtual ProjectsClient Projects => _projects ?? throw ForMocksOnly();
+
+    /// <summary>The site's users: get one, list them, add, update and remove one, list a user's groups.</summary>
+    public virtual UsersClient Users => _users ?? throw ForMocksOnly();
+
+    /// <summary>The site's groups: list them, create, import, update and delete one, add and remove its users, list them.</summary>
+    public virtual GroupsClient Groups => _groups ?? throw ForMocksOnly();
+
+    /// <summary>A user's favorites: list them, add and remove one.</summary>
+    public virtual FavoritesClient Favorites => _favorites ?? throw ForMocksOnly();
 
     /// <summary>The pipeline every sub-client sends through.</summary>
     internal TableauPipeline Pipeline => _pipeline ?? throw ForMocksOnly();
@@ -276,6 +301,12 @@ public class TableauClient : IDisposable, IAsyncDisposable
 
     internal static InvalidOperationException ForMocksOnly() =>
         new("This instance was made by the protected constructor, for a mock: override the members it uses.");
+
+    // Each sub-client made once per client, over its pipeline.
+    private static (ServerClient, SessionsClient, SitesClient, ProjectsClient, UsersClient, GroupsClient, FavoritesClient) SubClients(
+        TableauPipeline pipeline) =>
+        (new ServerClient(pipeline), new SessionsClient(pipeline), new SitesClient(pipeline), new ProjectsClient(pipeline),
+            new UsersClient(pipeline), new GroupsClient(pipeline), new FavoritesClient(pipeline));
 
     // Once, and only for a client that owns its session and holds one.
     private bool OwnsSessionToSignOut() =>

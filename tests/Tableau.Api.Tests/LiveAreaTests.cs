@@ -1,0 +1,256 @@
+using System;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Tableau.Api.Rest.Models;
+
+namespace Tableau.Api.Tests;
+
+/// <summary>
+/// Projects, groups and users on a Tableau site (<see cref="LiveSite"/> has the settings): a project made in the run's
+/// project, found by a filter whose value Tableau must read as written, updated and deleted; a local group made, found,
+/// renamed, given the suite's own user and then without them, and deleted; and users read, never changed. They run one at
+/// a time, with the session tests: a personal access token allows one session, so another test's sign-in would end this
+/// one's.
+/// </summary>
+[TestClass]
+[DoNotParallelize]
+public sealed class LiveAreaTests
+{
+    /// <summary>A name with an ampersand, pluses, a hash, a percent and a space, which a filter carries as written.</summary>
+    private const string NestedName = "R&D C++ #1 100%";
+
+    [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = true), TestCategory(TableauSite.Live)]
+    public async Task AProjectIsMadeFoundByAFilterUpdatedAndDeletedInTheRunsProject()
+    {
+        await using var client = LiveSite.Client(LiveSite.Credentials());
+        var parent = await LiveSite.ProjectAsync(client);
+
+        var made = await client.Projects.CreateAsync(new Project
+        {
+            Name = NestedName,
+            Description = LiveSite.ProjectDescription,
+            ParentProjectId = parent,
+        });
+        var nested = new ProjectListOptions
+        {
+            Filter = TableauFilter.And(TableauFilter.Eq(ProjectField.ParentProjectId, parent), TableauFilter.Eq(ProjectField.Name, NestedName)),
+            PageSize = 1,
+        };
+        var found = await LiveSite.EventuallyAsync(async () => (await AreaFixtures.AllAsync(client.Projects.ListAsync(nested))).SingleOrDefault(),
+            "The nested project");
+        var updated = await client.Projects.UpdateAsync(made.Id!, new Project { Description = "Updated by Tableau.Api's live suite." });
+        await client.Projects.DeleteAsync(made.Id!);
+
+        Assert.AreEqual(made.Id, found.Id);
+        Assert.AreEqual((NestedName, parent), (found.Name, found.ParentProjectId));
+        Assert.AreEqual(("Updated by Tableau.Api's live suite.", NestedName), (updated.Description, updated.Name));
+        var page = await client.Projects.ListPageAsync(1, new ProjectListOptions
+        {
+            Filter = TableauFilter.Eq(ProjectField.TopLevelProject, true),
+            Sort = TableauSort.Desc(ProjectField.CreatedAt),
+            PageSize = 1,
+        });
+        Assert.HasCount(1, page.Items);
+        Assert.IsGreaterThanOrEqualTo(1, page.TotalAvailable ?? 0);
+    }
+
+    [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = true), TestCategory(TableauSite.Live)]
+    public async Task ALocalGroupIsMadeFoundRenamedGivenTheSuitesUserAndDeleted()
+    {
+        await using var client = LiveSite.Client(LiveSite.Credentials());
+        var group = await LiveSite.NewGroupAsync(client);
+        var self = LiveSite.Saw(client.Pipeline.State.Sessions.Current!).UserId;
+        var renamed = LiveSite.GroupName(DateTimeOffset.UtcNow.AddSeconds(1));
+        bool Named(Group listed, string name) => listed.Id == group.Id && listed.Name == name;
+
+        var listed = await LiveSite.EventuallyAsync(async () => (await AreaFixtures.AllAsync(client.Groups.ListAsync(new GroupListOptions
+        {
+            Filter = TableauFilter.Eq(GroupField.Name, group.Name!),
+        }))).SingleOrDefault(found => Named(found, group.Name!)), "The run's group");
+        var updated = await client.Groups.UpdateAsync(group.Id!, name: renamed);
+        await client.Groups.AddUserAsync(group.Id!, self);
+        var members = await AreaFixtures.AllAsync(client.Groups.ListUsersAsync(group.Id!));
+        var selfsGroups = await AreaFixtures.AllAsync(client.Users.ListGroupsAsync(self));
+        await client.Groups.RemoveUserAsync(group.Id!, self);
+        var left = await AreaFixtures.AllAsync(client.Groups.ListUsersAsync(group.Id!));
+        await client.Groups.DeleteAsync(group.Id!);
+        LiveSite.GroupGone(group.Id!);
+
+        Assert.IsTrue(LiveSite.IsRunGroup(listed), "the sweep knows the run's group");
+        Assert.AreEqual(renamed, updated.Name);
+        CollectionAssert.AreEqual(new[] { self }, members.Select(member => member.Id).ToArray());
+        Assert.IsTrue(selfsGroups.Any(found => Named(found, renamed)), "the user's groups hold the group, by its new name");
+        Assert.IsEmpty(left);
+        await ClientFixtures.FailsAsync(TableauErrorKind.NotFound, () => AreaFixtures.AllAsync(client.Groups.ListUsersAsync(group.Id!)));
+    }
+
+    [SiteTest(TableauSite.Live, [LiveSite.ServerUrl], SignsIn = true), TestCategory(TableauSite.Live)]
+    public async Task UsersAreListedPageByPageAndTheSuitesOwnIsReadByIdAndByFilter()
+    {
+        await using var client = LiveSite.Client(LiveSite.Credentials());
+
+        var all = await AreaFixtures.AllAsync(client.Users.ListAsync(new UserListOptions { PageSize = 2 }));
+        var self = LiveSite.Saw(client.Pipeline.State.Sessions.Current!).UserId;
+        var read = await client.Users.GetAsync(self);
+        var filtered = await AreaFixtures.AllAsync(client.Users.ListAsync(new UserListOptions { Filter = TableauFilter.Eq(UserField.Luid, self) }));
+        var groups = await AreaFixtures.AllAsync(client.Users.ListGroupsAsync(self));
+        var firstPage = await client.Users.ListPageAsync(1, new UserListOptions { PageSize = 2 });
+
+        Assert.IsTrue(all.Any(user => user.Id == self), "the list holds the suite's own user");
+        Assert.HasCount(all.Count, all.Select(user => user.Id).Distinct(), "no user twice across pages");
+        Assert.AreEqual(firstPage.TotalAvailable, all.Count);
+        Assert.AreEqual(self, read.Id);
+        Assert.IsNotNull(read.SiteRole);
+        Assert.AreEqual(self, filtered.Single().Id);
+        Assert.IsTrue(groups.Any(group => group.Name == "All Users"), "every user is in All Users");
+    }
+}
+
+/// <summary>
+/// What only a Tableau Server has, or what changes its users and sites, run by hand with TABLEAU_SERVER_ONLY=1 on a server
+/// you may change, signed in as a server administrator (TABLEAU_SERVER_ONLY_SERVER_URL, TABLEAU_SERVER_ONLY_SITE,
+/// TABLEAU_SERVER_ONLY_USER and TABLEAU_SERVER_ONLY_PASSWORD, as for the session tests): a site made with a revision limit
+/// sent as a JSON number, updated and deleted; a group imported from Active Directory and synchronised, at once and as a
+/// job (TABLEAU_SERVER_ONLY_AD_GROUP, a directory group not on the site, and TABLEAU_SERVER_ONLY_AD_DOMAIN, its domain;
+/// its users join the site and stay); and a user added, updated and removed (TABLEAU_SERVER_ONLY_NEW_USER, a name not on
+/// the site, from the directory where the server uses one). One at a time, as the live ones.
+/// </summary>
+[TestClass]
+[DoNotParallelize]
+public sealed class ServerOnlyAreaTests
+{
+    private const string ServerUrl = "TABLEAU_SERVER_ONLY_SERVER_URL";
+    private const string User = "TABLEAU_SERVER_ONLY_USER";
+    private const string Password = "TABLEAU_SERVER_ONLY_PASSWORD";
+    private const string DirectoryGroup = "TABLEAU_SERVER_ONLY_AD_GROUP";
+    private const string DirectoryDomain = "TABLEAU_SERVER_ONLY_AD_DOMAIN";
+    private const string NewUser = "TABLEAU_SERVER_ONLY_NEW_USER";
+
+    [SiteTest(TableauSite.ServerOnly, [ServerUrl, User, Password]), TestCategory(TableauSite.ServerOnly)]
+    public async Task ASiteIsMadeWithARevisionLimitUpdatedOnItAndDeleted()
+    {
+        await using var client = Client();
+        var first = await SignInAsync(client);
+        var contentUrl = "tableau-api-server-only-" + LiveSite.Run;
+        Site made;
+        Site updated;
+        Site read;
+        try
+        {
+            made = await client.WithSession(first).Sites.CreateAsync(new Site
+            {
+                Name = "Tableau.Api ServerOnly " + LiveSite.Run,
+                ContentUrl = contentUrl,
+                RevisionHistoryEnabled = true,
+                RevisionLimit = 25,
+            });
+        }
+        finally
+        {
+            await client.Sessions.SignOutAsync(first);
+        }
+        // Tableau updates and deletes only the site a session is on.
+        var onIt = LiveSite.Saw(await client.Sessions.SignInAsync(TableauCredentials.Password(TableauSite.Setting(User),
+            LiveSite.Secret(Password)), contentUrl));
+        var there = client.WithSession(onIt);
+        try
+        {
+            updated = await there.Sites.UpdateAsync(made.Id!, new Site { RevisionLimit = 30 });
+            read = await there.Sites.GetByContentUrlAsync(contentUrl);
+        }
+        finally
+        {
+            await there.Sites.DeleteAsync(made.Id!);
+        }
+
+        Assert.AreEqual((contentUrl, 25L), (made.ContentUrl, made.RevisionLimit));
+        Assert.AreEqual(30L, updated.RevisionLimit);
+        Assert.AreEqual((made.Id, 30L), (read.Id, read.RevisionLimit));
+    }
+
+    [SiteTest(TableauSite.ServerOnly, [ServerUrl, User, Password, DirectoryGroup, DirectoryDomain]), TestCategory(TableauSite.ServerOnly)]
+    public async Task AGroupIsImportedFromActiveDirectoryAndSynchronisedAtOnceAndAsAJob()
+    {
+        await using var client = Client();
+        var session = await SignInAsync(client);
+        var bound = client.WithSession(session);
+        var name = TableauSite.Setting(DirectoryGroup);
+        var domain = TableauSite.Setting(DirectoryDomain);
+        try
+        {
+            var imported = await bound.Groups.ImportFromActiveDirectoryAsync(name, domain, SiteRole.Unlicensed);
+            Group synchronised;
+            Job job;
+            try
+            {
+                synchronised = await bound.Groups.UpdateFromActiveDirectoryAsync(imported.Id!, name, domain, SiteRole.Unlicensed,
+                    ImportDirectiveGrantLicenseMode.OnLogin);
+                job = await bound.Groups.UpdateFromActiveDirectoryAsJobAsync(imported.Id!, name, domain, SiteRole.Unlicensed);
+            }
+            finally
+            {
+                await bound.Groups.DeleteAsync(imported.Id!);
+            }
+            var importJob = await bound.Groups.ImportFromActiveDirectoryAsJobAsync(name, domain, SiteRole.Unlicensed);
+            // The job makes the group in its own time; the test deletes it once it is there.
+            var byJob = await LiveSite.EventuallyAsync(async () => (await AreaFixtures.AllAsync(bound.Groups.ListAsync(new GroupListOptions
+            {
+                Filter = TableauFilter.Eq(GroupField.Name, name),
+            }))).SingleOrDefault(), "The group the import job made");
+            await bound.Groups.DeleteAsync(byJob.Id!);
+
+            Assert.AreEqual((name, domain), (imported.Name, imported.Import?.DomainName));
+            Assert.AreEqual(imported.Id, synchronised.Id);
+            Assert.AreEqual(JobType.GroupSync, job.Type);
+            Assert.AreEqual("GroupImport", importJob.Type?.Value);
+        }
+        finally
+        {
+            await client.Sessions.SignOutAsync(session);
+        }
+    }
+
+    [SiteTest(TableauSite.ServerOnly, [ServerUrl, User, Password, NewUser]), TestCategory(TableauSite.ServerOnly)]
+    public async Task AUserIsAddedUpdatedAndRemoved()
+    {
+        await using var client = Client();
+        var session = await SignInAsync(client);
+        var bound = client.WithSession(session);
+        try
+        {
+            var added = await bound.Users.AddAsync(TableauSite.Setting(NewUser), SiteRole.Unlicensed);
+            User updated;
+            User read;
+            try
+            {
+                updated = await bound.Users.UpdateAsync(added.Id!, new User { SiteRole = SiteRole.Viewer });
+                read = await bound.Users.GetAsync(added.Id!);
+            }
+            finally
+            {
+                await bound.Users.RemoveAsync(added.Id!, mapAssetsToUserId: session.UserId);
+            }
+
+            Assert.AreEqual(SiteRole.Unlicensed, added.SiteRole);
+            Assert.AreEqual(SiteRole.Viewer, updated.SiteRole);
+            Assert.AreEqual((added.Id, SiteRole.Viewer), (read.Id, read.SiteRole));
+            await ClientFixtures.FailsAsync(TableauErrorKind.NotFound, () => bound.Users.GetAsync(added.Id!));
+        }
+        finally
+        {
+            await client.Sessions.SignOutAsync(session);
+        }
+    }
+
+    private static async Task<TableauSession> SignInAsync(TableauClient client) =>
+        LiveSite.Saw(await client.Sessions.SignInAsync(TableauCredentials.Password(TableauSite.Setting(User), LiveSite.Secret(Password))));
+
+    // Over the suite's HttpClient, so every token it carries is kept for the log check.
+    private static TableauClient Client() => LiveSite.Client(null, new TableauClientOptions
+    {
+        ServerUrl = new Uri(TableauSite.Setting(ServerUrl)),
+        Site = Environment.GetEnvironmentVariable("TABLEAU_SERVER_ONLY_SITE") ?? "",
+        Deployment = TableauDeployment.Server,
+    });
+}

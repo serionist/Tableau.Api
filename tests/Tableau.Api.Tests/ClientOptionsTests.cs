@@ -184,10 +184,35 @@ public sealed class ClientOptionsTests
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => new BareServerClient().GetInfoAsync());
     }
 
+    [TestMethod]
+    public async Task EachAreaOfAMockThrowsUntilOverridden()
+    {
+        await using var bare = new BareClient();
+
+        foreach (var area in new Func<object>[] { () => bare.Sites, () => bare.Projects, () => bare.Users, () => bare.Groups, () => bare.Favorites })
+            Assert.ThrowsExactly<InvalidOperationException>(area);
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => new BareSites().GetAsync(Fixtures.SiteId));
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => new BareProjects().DeleteAsync(Fixtures.SiteId));
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => new BareUsers().GetAsync(Fixtures.UserId));
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => new BareGroups().DeleteAsync(Fixtures.SiteId));
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(
+            () => new BareFavorites().RemoveAsync(Fixtures.UserId, FavoriteTarget.Project(Fixtures.SiteId)));
+    }
+
     private sealed class MockClient : TableauClient
     {
         public override ServerClient Server { get; } = new MockServerClient();
     }
+
+    private sealed class BareSites : SitesClient;
+
+    private sealed class BareProjects : ProjectsClient;
+
+    private sealed class BareUsers : UsersClient;
+
+    private sealed class BareGroups : GroupsClient;
+
+    private sealed class BareFavorites : FavoritesClient;
 
     private sealed class MockServerClient : ServerClient
     {

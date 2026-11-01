@@ -12,8 +12,9 @@ namespace Tableau.Api.Tests;
 public sealed class RedirectTests
 {
     private const string SignInPath = "/api/" + Fixtures.ApiVersion + "/auth/signin";
-    private const string ProjectsPath = "/api/" + Fixtures.ApiVersion + "/sites/" + Fixtures.SiteId + "/projects";
-    private const string NoProjects = "<pagination pageNumber=\"1\" pageSize=\"100\" totalAvailable=\"0\"/><projects/>";
+    private const string DataSourcesPath = "/api/" + Fixtures.ApiVersion + "/sites/" + Fixtures.SiteId + "/datasources";
+    private const string FileUploadsPath = "/api/" + Fixtures.ApiVersion + "/sites/" + Fixtures.SiteId + "/fileUploads";
+    private const string NoDataSources = "<pagination pageNumber=\"1\" pageSize=\"100\" totalAvailable=\"0\"/><datasources/>";
 
     [TestMethod]
     [DataRow(301)]
@@ -25,11 +26,11 @@ public sealed class RedirectTests
         using var server = FakeTableauServer.Start();
         using var other = FakeTableauServer.Start();
         var client = Fixtures.Client(server);
-        server.Map("POST", ProjectsPath, FakeResponse.Redirect(status, new Uri(other.BaseUrl, ProjectsPath).ToString()));
-        other.Map("POST", ProjectsPath, FakeResponse.Xml(201, "<project id=\"1d0e8a7b-0001-4c2d-9e3f-5a6b7c8d9e0f\" name=\"Sales\"/>"));
+        server.Map("POST", FileUploadsPath, FakeResponse.Redirect(status, new Uri(other.BaseUrl, FileUploadsPath).ToString()));
+        other.Map("POST", FileUploadsPath, FakeResponse.Xml(201, "<fileUpload uploadSessionId=\"invented-upload\" fileSize=\"0\"/>"));
 
         var thrown = await Assert.ThrowsExactlyAsync<TableauRequestException>(
-            () => client.CreateProject(Fixtures.Session(), "Sales", "Invented"));
+            () => client.InitiateFileUpload(Fixtures.Session()));
 
         Assert.AreEqual(status, (int)thrown.StatusCode);
         Assert.Contains($"a redirect to http://127.0.0.1:{other.BaseUrl.Port}, which is not followed", thrown.Message);
@@ -47,10 +48,10 @@ public sealed class RedirectTests
         using var server = FakeTableauServer.Start();
         using var other = FakeTableauServer.Start();
         var client = Fixtures.Client(server);
-        server.Map("GET", ProjectsPath, FakeResponse.Redirect(status, new Uri(other.BaseUrl, ProjectsPath).ToString()));
-        other.Map("GET", ProjectsPath, FakeResponse.Xml(200, NoProjects));
+        server.Map("GET", DataSourcesPath, FakeResponse.Redirect(status, new Uri(other.BaseUrl, DataSourcesPath).ToString()));
+        other.Map("GET", DataSourcesPath, FakeResponse.Xml(200, NoDataSources));
 
-        var thrown = await Assert.ThrowsExactlyAsync<TableauRequestException>(() => client.QueryProjects(Fixtures.Session()));
+        var thrown = await Assert.ThrowsExactlyAsync<TableauRequestException>(() => client.QueryDataSources(Fixtures.Session()));
 
         Assert.AreEqual(status, (int)thrown.StatusCode);
         Assert.AreEqual(Fixtures.SessionToken, server.Requests.Single().Header("X-Tableau-Auth"));
@@ -85,10 +86,10 @@ public sealed class RedirectTests
     {
         using var server = FakeTableauServer.Start();
         var client = Fixtures.Client(server);
-        server.Map("GET", ProjectsPath, FakeResponse.Redirect(302, "/elsewhere"));
-        server.Map("GET", "/elsewhere", FakeResponse.Xml(200, NoProjects));
+        server.Map("GET", DataSourcesPath, FakeResponse.Redirect(302, "/elsewhere"));
+        server.Map("GET", "/elsewhere", FakeResponse.Xml(200, NoDataSources));
 
-        var thrown = await Assert.ThrowsExactlyAsync<TableauRequestException>(() => client.QueryProjects(Fixtures.Session()));
+        var thrown = await Assert.ThrowsExactlyAsync<TableauRequestException>(() => client.QueryDataSources(Fixtures.Session()));
 
         Assert.Contains($"a redirect to http://127.0.0.1:{server.BaseUrl.Port}, which is not followed", thrown.Message);
         Assert.HasCount(1, server.Requests);
@@ -99,9 +100,9 @@ public sealed class RedirectTests
     {
         using var server = FakeTableauServer.Start();
         var client = Fixtures.Client(server);
-        server.Map("GET", ProjectsPath, FakeResponse.Redirect(302, "https://someone:invented-secret@tableau.example.com:8443/next?k=v"));
+        server.Map("GET", DataSourcesPath, FakeResponse.Redirect(302, "https://someone:invented-secret@tableau.example.com:8443/next?k=v"));
 
-        var thrown = await Assert.ThrowsExactlyAsync<TableauRequestException>(() => client.QueryProjects(Fixtures.Session()));
+        var thrown = await Assert.ThrowsExactlyAsync<TableauRequestException>(() => client.QueryDataSources(Fixtures.Session()));
 
         Assert.Contains("a redirect to https://tableau.example.com:8443, which is not followed", thrown.Message);
         foreach (var part in new[] { "someone", "invented-secret", "/next", "k=v" })
@@ -113,13 +114,13 @@ public sealed class RedirectTests
     {
         using var server = FakeTableauServer.Start();
         var client = Fixtures.Client(server);
-        server.Map("GET", ProjectsPath, FakeResponse.Xml(200, NoProjects));
+        server.Map("GET", DataSourcesPath, FakeResponse.Xml(200, NoDataSources));
         var other = Fixtures.Session();
         other.Token = Fixtures.OtherSessionToken;
 
-        await client.QueryProjects(Fixtures.Session());
-        await client.QueryProjects(other);
-        await client.QueryProjects(Fixtures.Session());
+        await client.QueryDataSources(Fixtures.Session());
+        await client.QueryDataSources(other);
+        await client.QueryDataSources(Fixtures.Session());
 
         CollectionAssert.AreEqual(new[] { Fixtures.SessionToken, Fixtures.OtherSessionToken, Fixtures.SessionToken },
             server.Requests.Select(request => request.Header("X-Tableau-Auth")).ToArray());

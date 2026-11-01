@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Tableau.Api.Pipeline;
 using Tableau.Api.Rest.Models;
+using Group = Tableau.Api.Rest.Models.Group;
 
 namespace Tableau.Api.Tests;
 
@@ -35,6 +36,11 @@ namespace Tableau.Api.Tests;
 /// when the suite ends. Before it is made, the suite's projects older than a day, which a run that broke off left behind,
 /// are deleted: a top-level project with the suite's description and a run's name, nothing else.
 /// </para>
+/// <para>
+/// A group the suite makes is local, and named after the run and the second it was made, since Tableau's groups have no
+/// description or date of their own: <see cref="GroupName"/>. The suite deletes it when done with it, or when it ends;
+/// before it makes one, it deletes the local groups older than a day whose names have that exact form, nothing else.
+/// </para>
 /// </remarks>
 internal static partial class LiveSite
 {
@@ -47,29 +53,27 @@ internal static partial class LiveSite
     /// <summary>The description every run's project has, which the sweep also asks of a project before it deletes one.</summary>
     public const string ProjectDescription = "Made by Tableau.Api's live suite; deleted when the run ends.";
 
-    /// <summary>The scopes the suite's connected app asks for: to read content, and to make and delete its projects.</summary>
-    public static readonly string[] Scopes = ["tableau:content:read", "tableau:projects:*"];
-
-    public static readonly Endpoint QueryProjects = new("Query Projects", HttpMethod.Get, "{version}/sites/{siteId}/projects", new Version(2, 0),
-        TableauDeployments.Both, Idempotent: true, TransferKind.None);
-
-    public static readonly Endpoint CreateProject = new("Create Project", HttpMethod.Post, "{version}/sites/{siteId}/projects", new Version(2, 0),
-        TableauDeployments.Both, Idempotent: false, TransferKind.None);
-
-    public static readonly Endpoint DeleteProject = new("Delete Project", HttpMethod.Delete, "{version}/sites/{siteId}/projects/{projectId:luid}",
-        new Version(2, 0), TableauDeployments.Both, Idempotent: true, TransferKind.None);
+    /// <summary>
+    /// The scopes the suite's connected app asks for: to read content and users, and to make, change and delete its
+    /// projects and groups.
+    /// </summary>
+    public static readonly string[] Scopes = ["tableau:content:read", "tableau:projects:*", "tableau:groups:*", "tableau:users:read"];
 
     /// <summary>The settings whose values name the site or the sign-in without being secrets.</summary>
     private static readonly string[] _knownSettings =
     [
         Site, "TABLEAU_LIVE_USER", "TABLEAU_LIVE_PAT_NAME", "TABLEAU_LIVE_CLIENT_ID", "TABLEAU_LIVE_SECRET_ID", "TABLEAU_SERVER_ONLY_SITE",
-        "TABLEAU_SERVER_ONLY_USER", "TABLEAU_SERVER_ONLY_OTHER_SITE",
+        "TABLEAU_SERVER_ONLY_USER", "TABLEAU_SERVER_ONLY_OTHER_SITE", "TABLEAU_SERVER_ONLY_AD_GROUP", "TABLEAU_SERVER_ONLY_AD_DOMAIN",
+        "TABLEAU_SERVER_ONLY_NEW_USER",
     ];
 
     private static readonly ConcurrentDictionary<string, byte> _secrets = new(StringComparer.Ordinal);
     private static readonly SemaphoreSlim _projectLock = new(1, 1);
+    private static readonly SemaphoreSlim _groupLock = new(1, 1);
+    private static readonly ConcurrentDictionary<string, byte> _groups = new(StringComparer.OrdinalIgnoreCase);
     private static readonly Lazy<HttpClient> _http = new(Http);
     private static string? _projectId;
+    private static bool _groupsSwept;
     private static string? _recorded;
 
     /// <summary>The run's name: CI's run and attempt, or the time and a random part here.</summary>
@@ -153,10 +157,8 @@ internal static partial class LiveSite
         {
             if (_projectId is { } id) return id;
             await SweepAsync(client, cancellationToken);
-            var made = await client.Pipeline.SendAsync(CreateProject, new TableauRequest(Body: new TsRequest
-            {
-                Project = new Project { Name = ProjectName, Description = ProjectDescription },
-            }), static body => body.Project, "project", cancellationToken);
+            var made = await client.Projects.CreateAsync(new Project { Name = ProjectName, Description = ProjectDescription },
+                cancellationToken: cancellationToken);
             return _projectId = made.Id ?? throw new InvalidOperationException("Create Project answered no id.");
         }
         finally
@@ -176,7 +178,7 @@ internal static partial class LiveSite
     public static bool IsLeftover(Project project, DateTimeOffset now) =>
         IsRunProject(project) && project.Id is not null && project.CreatedAt is { } created && created < now.AddDays(-1);
 
-    /// <summary>Every project of the suite's (<see cref="IsRunProject"/>), page by page.</summary>
+    /// <summary>Every project of the suite's (<see cref="IsRunProject"/>), from the top-level projects, a page of 1,000 at a time.</summary>
     /// <remarks>
     /// Tableau Server lists a project from its search index: a project just made shows a second or so later, and one just
     /// deleted stays for minutes. <see cref="ListedAsync"/> waits for a new one, and the sweep passes over one that is
@@ -185,36 +187,111 @@ internal static partial class LiveSite
     public static async Task<List<Project>> RunProjectsAsync(TableauClient client, CancellationToken cancellationToken = default)
     {
         var found = new List<Project>();
-        for (var page = 1; ; page++)
+        var options = new ProjectListOptions { Filter = TableauFilter.Eq(ProjectField.TopLevelProject, true), PageSize = 1000 };
+        await foreach (var project in client.Projects.ListAsync(options, cancellationToken))
         {
-            var body = await client.Pipeline.SendAsync(QueryProjects, new TableauRequest(Query: ClientFixtures.Query(
-                ("pageSize", "1000"), ("pageNumber", page.ToString(CultureInfo.InvariantCulture)))),
-                static body => body, "projects", cancellationToken);
-            var projects = body.Projects ?? [];
-            found.AddRange(projects.Where(IsRunProject));
-            if (projects.Count < 1000 || page * 1000 >= (body.Pagination?.TotalAvailable ?? 0)) return found;
+            if (IsRunProject(project)) found.Add(project);
         }
+        return found;
     }
 
     /// <summary>The run's project as the listing shows it, waited for up to 30 seconds while Tableau's index catches up.</summary>
-    public static async Task<Project> ListedAsync(TableauClient client, string projectId)
+    public static Task<Project> ListedAsync(TableauClient client, string projectId) =>
+        EventuallyAsync(async () => (await RunProjectsAsync(client)).Find(project => project.Id == projectId), "The run's project");
+
+    /// <summary>
+    /// What <paramref name="find"/> finds, asked once a second for up to 30 seconds while Tableau's index catches up with
+    /// a change.
+    /// </summary>
+    public static async Task<T> EventuallyAsync<T>(Func<Task<T?>> find, string what)
+        where T : class
     {
         for (var waited = 0; ; waited++)
         {
-            if ((await RunProjectsAsync(client)).Find(project => project.Id == projectId) is { } listed) return listed;
-            if (waited == 30) throw new InvalidOperationException("The run's project wasn't listed within 30 seconds of being made.");
+            if (await find() is { } found) return found;
+            if (waited == 30) throw new InvalidOperationException($"{what} wasn't listed within 30 seconds.");
             await Task.Delay(TimeSpan.FromSeconds(1));
         }
     }
 
-    /// <summary>Deletes the run's project, if a test made it; the suite's cleanup calls it once, at its end.</summary>
+    /// <summary>A group's name for the run, made at <paramref name="made"/>: the run's name and the second, in UTC.</summary>
+    public static string GroupName(DateTimeOffset made) =>
+        string.Create(CultureInfo.InvariantCulture, $"{ProjectName} {made.UtcDateTime:yyyyMMdd'T'HHmmss'Z'}");
+
+    /// <summary>
+    /// Whether a group is one of the suite's: local, and named as <see cref="GroupName"/> names one, a run's name and then
+    /// the second it was made. Any other group is left alone, whatever its name.
+    /// </summary>
+    public static bool IsRunGroup(Group group) =>
+        group.Domain?.Name == "local" && group.Name is { } name && RunGroupName().IsMatch(name);
+
+    /// <summary>
+    /// Whether the sweep deletes a group: one of the suite's, its name saying it was made more than a day before
+    /// <paramref name="now"/>.
+    /// </summary>
+    public static bool IsLeftover(Group group, DateTimeOffset now) =>
+        IsRunGroup(group) && group.Id is not null
+        && DateTimeOffset.TryParseExact(RunGroupName().Match(group.Name!).Groups["made"].Value, "yyyyMMdd'T'HHmmss'Z'",
+            CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var made)
+        && made < now.AddDays(-1);
+
+    /// <summary>
+    /// A local group for the run, made in the session of the client given, which the suite deletes when it ends unless a
+    /// test deleted it and said so (<see cref="GroupGone"/>); first, once a run, the groups earlier runs left are deleted.
+    /// </summary>
+    public static async Task<Group> NewGroupAsync(TableauClient client, CancellationToken cancellationToken = default)
+    {
+        await _groupLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (!_groupsSwept)
+            {
+                await SweepGroupsAsync(client, cancellationToken);
+                _groupsSwept = true;
+            }
+            var made = await client.Groups.CreateAsync(GroupName(DateTimeOffset.UtcNow), cancellationToken: cancellationToken);
+            _groups.TryAdd(made.Id ?? throw new InvalidOperationException("Create Group answered no id."), 0);
+            return made;
+        }
+        finally
+        {
+            _groupLock.Release();
+        }
+    }
+
+    /// <summary>Takes a group a test deleted off the cleanup's list.</summary>
+    public static void GroupGone(string id) => _groups.TryRemove(id, out _);
+
+    /// <summary>
+    /// Deletes the groups the run made and didn't delete, then the run's project, if a test made them; the suite's cleanup
+    /// calls it once, at its end.
+    /// </summary>
     public static async Task CleanupAsync()
     {
-        if (_projectId is not { } id) return;
+        if (_projectId is null && _groups.IsEmpty) return;
         await using var client = Client(Credentials());
-        await client.Pipeline.SendAsync(DeleteProject, new TableauRequest(PathValues: [id]), default);
-        if (client.Pipeline.State.Sessions.Current is { } session) Saw(session);
+        // Each goes whatever happened to the one before; the first failure is thrown once all were tried.
+        var failures = new List<Exception>();
+        foreach (var group in _groups.Keys)
+            await TryAsync(() => client.Groups.DeleteAsync(group), failures);
+        _groups.Clear();
+        if (_projectId is { } id)
+            await TryAsync(() => client.Projects.DeleteAsync(id), failures);
         _projectId = null;
+        if (client.Pipeline.State.Sessions.Current is { } session) Saw(session);
+        if (failures.Count > 0) throw failures[0];
+
+        static async Task TryAsync(Func<Task> delete, List<Exception> failures)
+        {
+            try
+            {
+                await delete();
+            }
+            catch (TableauException e)
+            {
+                failures.Add(e);
+            }
+        }
     }
 
     /// <summary>Disposes the suite's HttpClient, once every live client has signed out through it.</summary>
@@ -239,11 +316,34 @@ internal static partial class LiveSite
         {
             try
             {
-                await client.Pipeline.SendAsync(DeleteProject, new TableauRequest(PathValues: [leftover.Id!]), cancellationToken);
+                await client.Projects.DeleteAsync(leftover.Id!, cancellationToken);
             }
             catch (TableauException e) when (e.Kind == TableauErrorKind.NotFound)
             {
                 // Deleted already: the index still listed it.
+            }
+        }
+    }
+
+    // Groups a run left behind, more than a day old by their names, so one still running elsewhere keeps its own.
+    private static async Task SweepGroupsAsync(TableauClient client, CancellationToken cancellationToken)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var leftovers = new List<Group>();
+        var options = new GroupListOptions { Filter = TableauFilter.Eq(GroupField.IsLocal, true), PageSize = 1000 };
+        await foreach (var group in client.Groups.ListAsync(options, cancellationToken))
+        {
+            if (IsLeftover(group, now)) leftovers.Add(group);
+        }
+        foreach (var leftover in leftovers)
+        {
+            try
+            {
+                await client.Groups.DeleteAsync(leftover.Id!, cancellationToken);
+            }
+            catch (TableauException e) when (e.Kind == TableauErrorKind.NotFound)
+            {
+                // Deleted already, between the list and the delete.
             }
         }
     }
@@ -282,6 +382,10 @@ internal static partial class LiveSite
 
     [GeneratedRegex(@"^Tableau\.Api live run (?:[0-9]+-[0-9]+|local-[0-9]{8}-[0-9]{6}-[0-9a-f]{4})$", RegexOptions.CultureInvariant)]
     private static partial Regex RunName();
+
+    [GeneratedRegex(@"^Tableau\.Api live run (?:[0-9]+-[0-9]+|local-[0-9]{8}-[0-9]{6}-[0-9a-f]{4}) (?<made>[0-9]{8}T[0-9]{6}Z)$",
+        RegexOptions.CultureInvariant)]
+    private static partial Regex RunGroupName();
 
     /// <summary>Keeps each session token a request carries, in <c>X-Tableau-Auth</c>.</summary>
     private sealed class TokenWatcher(Action<string> saw) : DelegatingHandler

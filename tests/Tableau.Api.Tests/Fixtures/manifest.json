@@ -20,10 +20,58 @@
       "source": "synthetic, from the reference's error example; the live server sent the same shape, its code a string"
     },
     {
+      "file": "favorites.json",
+      "body": "response",
+      "call": "GET /api/{version}/sites/{site-id}/favorites/{user-id}, and PUT to the same path, which answers the user's favorites",
+      "source": "synthetic, from the reference's Get Favorites for User response, with a favorite whose content was deleted, which comes with its label alone; the live server sent the same shape for a workbook's, position and addedAt included, and no pagination"
+    },
+    {
+      "file": "group-import-job.json",
+      "body": "response",
+      "call": "POST /api/{version}/sites/{site-id}/groups?asJob=true, importing an Active Directory group",
+      "source": "synthetic, from the reference's Create Group response for an import as a background job; only a Tableau Server with Active Directory gives it"
+    },
+    {
+      "file": "group-imported.json",
+      "body": "response",
+      "call": "POST /api/{version}/sites/{site-id}/groups and PUT /api/{version}/sites/{site-id}/groups/{group-id}, with Active Directory, at once",
+      "source": "synthetic, from the reference's Create Group and Update Group responses for an Active Directory group; only a Tableau Server with Active Directory gives it"
+    },
+    {
+      "file": "group-sync-job.json",
+      "body": "response",
+      "call": "PUT /api/{version}/sites/{site-id}/groups/{group-id}?asJob=true, synchronising an Active Directory group",
+      "source": "synthetic, from the reference's Update Group response for a background update; only a Tableau Server with Active Directory gives it"
+    },
+    {
+      "file": "group.json",
+      "body": "response",
+      "call": "POST /api/{version}/sites/{site-id}/groups, a local group, and PUT /api/{version}/sites/{site-id}/groups/{group-id}",
+      "source": "synthetic, from the reference's Create Group and Update Group responses for a local group that grants a licence on login"
+    },
+    {
+      "file": "groups-page.json",
+      "body": "response",
+      "call": "GET /api/{version}/sites/{site-id}/groups, and GET /api/{version}/sites/{site-id}/users/{user-id}/groups",
+      "source": "synthetic, from the reference's Query Groups response: All Users, a local group that grants a licence on login, and one from Active Directory; the live server sent the same shape for local groups"
+    },
+    {
+      "file": "import-group-request.json",
+      "body": "request",
+      "call": "POST /api/{version}/sites/{site-id}/groups and PUT /api/{version}/sites/{site-id}/groups/{group-id}, with Active Directory",
+      "source": "synthetic, from the reference's Create Group and Update Group requests for an Active Directory group"
+    },
+    {
       "file": "projects-empty.json",
       "body": "response",
       "call": "GET /api/{version}/sites/{site-id}/projects?filter=name:eq:{name}, matching nothing",
       "source": "synthetic, from the reference's Query Projects response; the live server sent an empty wrapper object"
+    },
+    {
+      "file": "projects-last-page.json",
+      "body": "response",
+      "call": "GET /api/{version}/sites/{site-id}/projects?pageSize=3&pageNumber=2",
+      "source": "synthetic, the second and last page of projects-page.json's list, two projects whose names hold characters a filter escapes"
     },
     {
       "file": "projects-page.json",
@@ -56,10 +104,34 @@
       "source": "synthetic, from the reference's Query Site response; the live server sent the same shape, without usage, which it sends only when asked"
     },
     {
+      "file": "sites-page.json",
+      "body": "response",
+      "call": "GET /api/{version}/sites",
+      "source": "synthetic, from the reference's Query Sites response, with the default site, whose content URL is empty, and a suspended one; the live server sent the same shape, revisionLimit as a string"
+    },
+    {
+      "file": "update-user-request.json",
+      "body": "request",
+      "call": "PUT /api/{version}/sites/{site-id}/users/{user-id}",
+      "source": "synthetic, from the reference's Update User request, with every attribute it lists but the password"
+    },
+    {
       "file": "user-unknown-values.json",
       "body": "response",
       "call": "GET /api/{version}/sites/{site-id}/users/{user-id}",
       "source": "synthetic, from the reference's Query User On Site response, with a site role and an auth setting no version of Tableau has, as a later one may add"
+    },
+    {
+      "file": "user.json",
+      "body": "response",
+      "call": "GET /api/{version}/sites/{site-id}/users/{user-id}, and the user Add User to Site, Update User and Add User to Group answer with",
+      "source": "synthetic, from the reference's Query User On Site response; the live server sent the same shape, an empty locale and externalAuthUserId included"
+    },
+    {
+      "file": "users-in-group.json",
+      "body": "response",
+      "call": "GET /api/{version}/sites/{site-id}/groups/{group-id}/users",
+      "source": "synthetic, from the reference's Get Users in Group response, with a user who never signed in and so has no lastLogin, as the live server sent one in Get Users on Site"
     },
     {
       "file": "users-page.json",

@@ -98,6 +98,25 @@ and [the migration guide](docs/migration-2.0.md) lists every change from 1.2.5 a
     across sites. `TableauSession` is a record with the site, the user, when it ends, the deployment and the version;
     its token is never printed. A sign-in's `TableauException` keeps none of Tableau's answer.
   - A session token that an `HttpClient` of yours sent to another host, by following a redirect, is signed out.
+  - **Sites, projects, users, groups and favorites:** `client.Sites` gets a site by its id, content URL or name, lists
+    the sites, and creates, updates and deletes one, creating, deleting and listing on Tableau Server alone;
+    `client.Projects` lists, creates (with Tableau's samples if asked), updates and deletes projects; `client.Users`
+    gets, lists, adds, updates and removes users, giving what they own to another, and lists a user's groups; Update
+    User takes every attribute the reference lists, the email, the identity provider, the language and the locale
+    among them. `client.Groups` lists, creates, updates and deletes local groups, imports and synchronises Active
+    Directory groups on Tableau Server, at once or as a job, to the group's own path, and adds, removes and lists a
+    group's users; `client.Favorites` lists a user's favorites and adds and removes a workbook, a view, a data source,
+    a project or a flow, each a `FavoriteTarget`. A create or an import is sent once; an update, a delete, an add to a
+    group and a favorite may be sent again after a failure, as a read is.
+  - **Lists:** `ListAsync` reads every page lazily, in an `await foreach`, and stops at Tableau's total or on a short
+    page, never asking for a page past the end, which Tableau answers with an error; `ListPageAsync` returns one
+    `Page<T>`. A list is never null. Options records (`ProjectListOptions`, `UserListOptions`, `GroupListOptions`,
+    `SiteListOptions`) hold a page size, 100 by default and 1,000 at most, and a filter and a sort: `TableauFilter`
+    (`Eq`, `In`, `Gt`, `Gte`, `Lt`, `Lte`, `Has`, `CiEq`, joined by `And`, or `FromString` for an expression written by
+    hand) and `TableauSort` (`Asc`, `Desc`, `Then`) over the reference's fields (`ProjectField`, `UserField`,
+    `GroupField`). Values are escaped on the wire, `&`, `+`, `#` and `%` among them; a value with a comma, which Tableau
+    can't take, and a field of another resource are refused before anything is sent. A list you don't sort comes in
+    an order that doesn't change from page to page: projects oldest first, users and groups by name.
 - **The library builds with the trim and native AOT analyzers on** (`IsAotCompatible`), and the models pass them: they
   read and write JSON through System.Text.Json's source generator, with no reflection, and CI runs them in a native
   AOT app. The 1.x client is exempt: its `XmlSerializer` and Newtonsoft.Json code doesn't work trimmed or under native
@@ -110,7 +129,7 @@ and [the migration guide](docs/migration-2.0.md) lists every change from 1.2.5 a
 - **The version is 2.0,** from git tags: a build of `main` is `2.0.0-alpha.0.<n>`, and nothing is published before
   2.0.0's release candidate. Every break of 1.2.5's public API is in the migration guide; so far, five methods whose
   parameters or return type `main` had changed, the `capabilityTypeName` members renumbered by the capabilities added
-  among them, and the old client's Server Info and sign-in methods.
+  among them, and the old client's Server Info, sign-in, sites, projects, users, groups and favorites methods.
 - **Values in paths and queries are escaped,** so a value the caller had already URL-encoded is encoded twice.
 - **The base URL's path is used,** by the REST and the Vizportal clients alike, so a server behind a path prefix,
   such as `https://example.com/tableau/`, is reachable. A base URL must be the server's address, not a site's or a
@@ -121,6 +140,9 @@ and [the migration guide](docs/migration-2.0.md) lists every change from 1.2.5 a
 - **`TableauApiClient`'s `SignIn`, `SignInWithPAT`, `SignOut` and `SwitchSite` are gone:** give `TableauClient`
   credentials, or use `client.Sessions` (the migration guide). Until an area moves to `TableauClient`, its old methods,
   and Vizportal's, can't get a session from the library on `main`; 2.0.0 ships with every area moved.
+- **`TableauApiClient`'s sites, projects, users, groups and favorites methods are gone,** `DeleteProject2` with them:
+  use `client.Sites`, `client.Projects`, `client.Users`, `client.Groups` and `client.Favorites` (the migration guide
+  maps each). `QueryViewsForSite` stays until views move.
 - **The package depends on Microsoft.Extensions' abstractions,** 10.0.14: Logging.Abstractions, Options,
   DependencyInjection.Abstractions and Http, in place of Microsoft.Extensions.Logging 2.2.0; and on Polly.Core 8.9.0,
   for the retries, which brings no other package.

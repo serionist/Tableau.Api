@@ -1,0 +1,46 @@
+{
+  "pagination": {
+    "pageNumber": "1",
+    "pageSize": "100",
+    "totalAvailable": "2"
+  },
+  "sites": {
+    "site": [
+      {
+        "id": "9e8d7c6b-5a49-4382-9170-6f5e4d3c2b1a",
+        "name": "Default",
+        "contentUrl": "",
+        "adminMode": "ContentAndUsers",
+        "disableSubscriptions": false,
+        "state": "Active",
+        "revisionHistoryEnabled": true,
+        "revisionLimit": "25",
+        "subscribeOthersEnabled": true,
+        "guestAccessEnabled": false,
+        "commentingEnabled": true,
+        "catalogingEnabled": true,
+        "runNowEnabled": true,
+        "askDataMode": "DisabledByDefault",
+        "useDefaultTimeZone": true
+      },
+      {
+        "id": "0f4b9e1c-3a52-4d6e-9c8b-1a2b3c4d5e6f",
+        "name": "Finance",
+        "contentUrl": "finance",
+        "adminMode": "ContentOnly",
+        "disableSubscriptions": true,
+        "state": "Suspended",
+        "revisionHistoryEnabled": false,
+        "revisionLimit": "-1",
+        "subscribeOthersEnabled": false,
+        "guestAccessEnabled": false,
+        "commentingEnabled": false,
+        "catalogingEnabled": false,
+        "runNowEnabled": false,
+        "askDataMode": "EnabledByDefault",
+        "useDefaultTimeZone": false,
+        "timeZone": "Europe/Budapest"
+      }
+    ]
+  }
+}

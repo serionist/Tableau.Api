@@ -22,8 +22,15 @@ public sealed class ConventionsTests
     private static readonly string[] _verbs =
         ["ListPage", "List", "Get", "Create", "Update", "Delete", "Download", "Publish", "Run", "Cancel", "Add", "Remove"];
 
-    /// <summary>The explicit session API's own verbs, on <see cref="SessionsClient"/> alone.</summary>
-    private static readonly string[] _sessionVerbs = ["SignIn", "SwitchSite", "SignOut"];
+    /// <summary>
+    /// The verbs of the sub-clients that have their own: the explicit session API's, on <see cref="SessionsClient"/>
+    /// alone, and a group's import from Active Directory beside the common verbs.
+    /// </summary>
+    private static readonly Dictionary<Type, string[]> _ownVerbs = new()
+    {
+        [typeof(SessionsClient)] = ["SignIn", "SwitchSite", "SignOut"],
+        [typeof(GroupsClient)] = [.. _verbs, "Import"],
+    };
 
     private static readonly HashSet<string> _objectMembers = new(StringComparer.Ordinal)
     {
@@ -75,7 +82,7 @@ public sealed class ConventionsTests
         foreach (var method in PublicMethods().Where(method => IsSubClient(method.DeclaringType!)))
         {
             var name = $"{method.DeclaringType!.Name}.{method.Name}";
-            var verbs = method.DeclaringType == typeof(SessionsClient) ? _sessionVerbs : _verbs;
+            var verbs = _ownVerbs.GetValueOrDefault(method.DeclaringType!, _verbs);
             var verb = verbs.FirstOrDefault(verb => method.Name.StartsWith(verb, StringComparison.Ordinal));
             if (verb is null)
             {

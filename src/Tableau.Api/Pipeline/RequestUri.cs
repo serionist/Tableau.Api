@@ -101,6 +101,23 @@ internal static class RequestUri
     /// <summary>The scheme, host and port of a URI, without its user info, path or query.</summary>
     public static string Origin(Uri uri) => uri.GetComponents(UriComponents.SchemeAndServer, UriFormat.UriEscaped);
 
+    /// <summary>
+    /// A LUID a call sends outside its path, in its query or its body, checked as a path's is:
+    /// <see cref="ArgumentNullException"/> or <see cref="ArgumentException"/> naming <paramref name="name"/>.
+    /// </summary>
+    public static string Luid(string? value, string name)
+    {
+        ArgumentNullException.ThrowIfNull(value, name);
+        return IsLuid(value) ? value : throw new ArgumentException($"{name} is '{value}', which is no LUID.", name);
+    }
+
+    /// <summary>
+    /// A value a call puts in its path, checked before the call starts as <see cref="Build"/> checks it, so a refused one
+    /// is refused before even the version is asked: <see cref="ArgumentNullException"/> or <see cref="ArgumentException"/>
+    /// naming <paramref name="name"/>.
+    /// </summary>
+    public static string Segment(string? value, string name) => Checked(new PathSegment(name, PathSegmentKind.Value), value);
+
     private static string Checked(PathSegment segment, string? value)
     {
         ArgumentNullException.ThrowIfNull(value, segment.Text);
@@ -110,13 +127,15 @@ internal static class RequestUri
                 $"{segment.Text} is '{value}', but a value in a request path can't be empty or only dots: it would name "
                 + "no resource.", segment.Text);
         }
-        // TryParseExact forgives whitespace around the value, which would then be sent, so the value must be the LUID
-        // itself, in either case.
-        if (segment.Kind == PathSegmentKind.Luid
-            && !(Guid.TryParseExact(value, "D", out var luid) && string.Equals(luid.ToString("D"), value, StringComparison.OrdinalIgnoreCase)))
+        if (segment.Kind == PathSegmentKind.Luid && !IsLuid(value))
             throw new ArgumentException($"{segment.Text} is '{value}', which is no LUID.", segment.Text);
         return value;
     }
+
+    // TryParseExact forgives whitespace around the value, which would then be sent, so the value must be the LUID itself,
+    // in either case.
+    private static bool IsLuid(string value) =>
+        Guid.TryParseExact(value, "D", out var luid) && string.Equals(luid.ToString("D"), value, StringComparison.OrdinalIgnoreCase);
 
     private static void AppendQuery(StringBuilder url, IReadOnlyList<KeyValuePair<string, string?>>? query)
     {

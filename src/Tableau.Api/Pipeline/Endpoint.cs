@@ -194,11 +194,163 @@ internal static class Endpoints
         TableauDeployments.Server, Idempotent: false, TransferKind.None)
     { NeedsSession = false, KeepsBody = false };
 
+    // Sites. Query Site answers only for the site the session is on; Create, Delete and Query Sites are Tableau Server's.
+
+    /// <summary>Query Site, by the site's LUID (REST API 1.0).</summary>
+    public static readonly Endpoint QuerySite = Read("Query Site", "{version}/sites/{id:luid}", 1, 0);
+
+    /// <summary>Query Site, by its content URL, with <c>key=contentUrl</c> (REST API 1.0).</summary>
+    public static readonly Endpoint QuerySiteByContentUrl = Read("Query Site by content URL", "{version}/sites/{contentUrl}", 1, 0);
+
+    /// <summary>Query Site, by its name, with <c>key=name</c> (REST API 1.0).</summary>
+    public static readonly Endpoint QuerySiteByName = Read("Query Site by name", "{version}/sites/{name}", 1, 0);
+
+    /// <summary>Query Sites: the sites the user can reach (REST API 1.0), Tableau Server only.</summary>
+    public static readonly Endpoint QuerySites = Read("Query Sites", "{version}/sites", 1, 0, TableauDeployments.Server);
+
+    /// <summary>Create Site (REST API 1.0), Tableau Server only; a second would fail on the content URL, so it is sent once.</summary>
+    public static readonly Endpoint CreateSite = Write("Create Site", HttpMethod.Post, "{version}/sites", 1, 0, idempotent: false,
+        TableauDeployments.Server);
+
+    /// <summary>Update Site (REST API 1.0): the same settings set twice are set once.</summary>
+    public static readonly Endpoint UpdateSite = Write("Update Site", HttpMethod.Put, "{version}/sites/{id:luid}", 1, 0, idempotent: true);
+
+    /// <summary>Delete Site (REST API 1.0), Tableau Server only; a second answers 404 once the first went through.</summary>
+    public static readonly Endpoint DeleteSite = Write("Delete Site", HttpMethod.Delete, "{version}/sites/{id:luid}", 1, 0, idempotent: true,
+        TableauDeployments.Server);
+
+    // Projects.
+
+    /// <summary>Query Projects (REST API 2.0).</summary>
+    public static readonly Endpoint QueryProjects = Read("Query Projects", "{version}/sites/{siteId}/projects", 2, 0);
+
+    /// <summary>Create Project (REST API 1.0): a create, sent once.</summary>
+    public static readonly Endpoint CreateProject = Write("Create Project", HttpMethod.Post, "{version}/sites/{siteId}/projects", 1, 0,
+        idempotent: false);
+
+    /// <summary>Update Project (REST API 1.0).</summary>
+    public static readonly Endpoint UpdateProject = Write("Update Project", HttpMethod.Put, "{version}/sites/{siteId}/projects/{id:luid}", 1, 0,
+        idempotent: true);
+
+    /// <summary>Delete Project (REST API 1.0).</summary>
+    public static readonly Endpoint DeleteProject = Write("Delete Project", HttpMethod.Delete, "{version}/sites/{siteId}/projects/{id:luid}", 1, 0,
+        idempotent: true);
+
+    // Users.
+
+    /// <summary>Query User On Site (REST API 2.0).</summary>
+    public static readonly Endpoint QueryUserOnSite = Read("Query User On Site", "{version}/sites/{siteId}/users/{id:luid}", 2, 0);
+
+    /// <summary>Get Users on Site (REST API 1.0).</summary>
+    public static readonly Endpoint GetUsersOnSite = Read("Get Users on Site", "{version}/sites/{siteId}/users", 1, 0);
+
+    /// <summary>Add User to Site (REST API 1.0): it creates the user, or imports one from Active Directory, so it is sent once.</summary>
+    public static readonly Endpoint AddUserToSite = Write("Add User to Site", HttpMethod.Post, "{version}/sites/{siteId}/users", 1, 0,
+        idempotent: false);
+
+    /// <summary>Update User (REST API 1.0).</summary>
+    public static readonly Endpoint UpdateUser = Write("Update User", HttpMethod.Put, "{version}/sites/{siteId}/users/{id:luid}", 1, 0,
+        idempotent: true);
+
+    /// <summary>Remove User from Site (REST API 1.0).</summary>
+    public static readonly Endpoint RemoveUserFromSite = Write("Remove User from Site", HttpMethod.Delete, "{version}/sites/{siteId}/users/{id:luid}",
+        1, 0, idempotent: true);
+
+    /// <summary>Get Groups for a User (REST API 3.7).</summary>
+    public static readonly Endpoint GetGroupsForUser = Read("Get Groups for a User", "{version}/sites/{siteId}/users/{userId:luid}/groups", 3, 7);
+
+    // Groups. Create Group and Update Group take an Active Directory group on Tableau Server alone, and the reference
+    // gives both from REST API 3.9, when their bodies took the minimum site role. Importing or synchronising a group
+    // can take minutes, so it is never sent again after a timeout: a second would run beside the first.
+
+    /// <summary>Query Groups (REST API 2.0).</summary>
+    public static readonly Endpoint QueryGroups = Read("Query Groups", "{version}/sites/{siteId}/groups", 2, 0);
+
+    /// <summary>Create Group, a local group (REST API 3.9): a create, sent once.</summary>
+    public static readonly Endpoint CreateGroup = Write("Create Group", HttpMethod.Post, "{version}/sites/{siteId}/groups", 3, 9, idempotent: false);
+
+    /// <summary>Create Group, importing an Active Directory group (REST API 3.9), Tableau Server only.</summary>
+    public static readonly Endpoint ImportGroup = Write("Create Group from Active Directory", HttpMethod.Post, "{version}/sites/{siteId}/groups",
+        3, 9, idempotent: false, TableauDeployments.Server);
+
+    /// <summary>Update Group, a local group (REST API 3.9).</summary>
+    public static readonly Endpoint UpdateGroup = Write("Update Group", HttpMethod.Put, "{version}/sites/{siteId}/groups/{id:luid}", 3, 9,
+        idempotent: true);
+
+    /// <summary>Update Group, synchronising it with Active Directory (REST API 3.9), Tableau Server only.</summary>
+    public static readonly Endpoint SynchronizeGroup = Write("Update Group from Active Directory", HttpMethod.Put,
+        "{version}/sites/{siteId}/groups/{id:luid}", 3, 9, idempotent: false, TableauDeployments.Server);
+
+    /// <summary>Delete Group (REST API 2.1).</summary>
+    public static readonly Endpoint DeleteGroup = Write("Delete Group", HttpMethod.Delete, "{version}/sites/{siteId}/groups/{id:luid}", 2, 1,
+        idempotent: true);
+
+    /// <summary>
+    /// Add User to Group (REST API 2.0): a second leaves one membership, answering 409 when the first went through, so it
+    /// is sent again like an update.
+    /// </summary>
+    public static readonly Endpoint AddUserToGroup = Write("Add User to Group", HttpMethod.Post, "{version}/sites/{siteId}/groups/{groupId:luid}/users",
+        2, 0, idempotent: true);
+
+    /// <summary>Remove User from Group (REST API 2.0).</summary>
+    public static readonly Endpoint RemoveUserFromGroup = Write("Remove User from Group", HttpMethod.Delete,
+        "{version}/sites/{siteId}/groups/{groupId:luid}/users/{userId:luid}", 2, 0, idempotent: true);
+
+    /// <summary>Get Users in Group (REST API 2.0).</summary>
+    public static readonly Endpoint GetUsersInGroup = Read("Get Users in Group", "{version}/sites/{siteId}/groups/{groupId:luid}/users", 2, 0);
+
+    // Favorites. Adding one is a PUT that sets the favorite's label, so sending it twice sets it once; each kind of
+    // content has its own call, from its own version.
+
+    /// <summary>Get Favorites for User (REST API 2.5).</summary>
+    public static readonly Endpoint GetFavoritesForUser = Read("Get Favorites for User", "{version}/sites/{siteId}/favorites/{userId:luid}", 2, 5);
+
+    /// <summary>Add Workbook to Favorites (REST API 1.0).</summary>
+    public static readonly Endpoint AddWorkbookToFavorites = AddFavorite("Add Workbook to Favorites", 1, 0);
+
+    /// <summary>Add View to Favorites (REST API 1.0).</summary>
+    public static readonly Endpoint AddViewToFavorites = AddFavorite("Add View to Favorites", 1, 0);
+
+    /// <summary>Add Data Source to Favorites (REST API 2.3).</summary>
+    public static readonly Endpoint AddDataSourceToFavorites = AddFavorite("Add Data Source to Favorites", 2, 3);
+
+    /// <summary>Add Project to Favorites (REST API 3.1).</summary>
+    public static readonly Endpoint AddProjectToFavorites = AddFavorite("Add Project to Favorites", 3, 1);
+
+    /// <summary>Add Flow to Favorites (REST API 3.3).</summary>
+    public static readonly Endpoint AddFlowToFavorites = AddFavorite("Add Flow to Favorites", 3, 3);
+
+    /// <summary>Delete Workbook from Favorites (REST API 2.0).</summary>
+    public static readonly Endpoint DeleteWorkbookFromFavorites = DeleteFavorite("Delete Workbook from Favorites", "workbooks", 2, 0);
+
+    /// <summary>Delete View from Favorites (REST API 2.0).</summary>
+    public static readonly Endpoint DeleteViewFromFavorites = DeleteFavorite("Delete View from Favorites", "views", 2, 0);
+
+    /// <summary>Delete Data Source from Favorites (REST API 2.3).</summary>
+    public static readonly Endpoint DeleteDataSourceFromFavorites = DeleteFavorite("Delete Data Source from Favorites", "datasources", 2, 3);
+
+    /// <summary>Delete Project from Favorites (REST API 3.1).</summary>
+    public static readonly Endpoint DeleteProjectFromFavorites = DeleteFavorite("Delete Project from Favorites", "projects", 3, 1);
+
+    /// <summary>
+    /// Delete Flow from Favorites (REST API 3.3), under <c>flows/</c>: the reference's URI repeats Delete Data Source's
+    /// <c>datasources/</c>, where its text and Tableau's own Python client name the flow.
+    /// </summary>
+    public static readonly Endpoint DeleteFlowFromFavorites = DeleteFavorite("Delete Flow from Favorites", "flows", 3, 3);
+
     /// <summary>Every descriptor, for the tests that hold each to the rules.</summary>
     public static IReadOnlyList<Endpoint> All { get; } =
     [
         ServerInfo, SignIn, SignInImpersonating, SignInWithPersonalAccessToken, SignInWithPersonalAccessTokenImpersonating,
         SignInWithJwt, SignInWithUnifiedAccessToken, SignOut, SwitchSite,
+        QuerySite, QuerySiteByContentUrl, QuerySiteByName, QuerySites, CreateSite, UpdateSite, DeleteSite,
+        QueryProjects, CreateProject, UpdateProject, DeleteProject,
+        QueryUserOnSite, GetUsersOnSite, AddUserToSite, UpdateUser, RemoveUserFromSite, GetGroupsForUser,
+        QueryGroups, CreateGroup, ImportGroup, UpdateGroup, SynchronizeGroup, DeleteGroup, AddUserToGroup, RemoveUserFromGroup,
+        GetUsersInGroup,
+        GetFavoritesForUser, AddWorkbookToFavorites, AddViewToFavorites, AddDataSourceToFavorites, AddProjectToFavorites,
+        AddFlowToFavorites, DeleteWorkbookFromFavorites, DeleteViewFromFavorites, DeleteDataSourceFromFavorites,
+        DeleteProjectFromFavorites, DeleteFlowFromFavorites,
     ];
 
     /// <summary>Whether a descriptor is a Sign In's, whose body holds credentials.</summary>
@@ -207,4 +359,20 @@ internal static class Endpoints
     private static Endpoint SignInAs(string name, Version minVersion, TableauDeployments deployments, bool idempotent) =>
         new(name, HttpMethod.Post, SignInTemplate, minVersion, deployments, idempotent, TransferKind.None)
         { NeedsSession = false, KeepsBody = false };
+
+    // A GET in a session, safe to send again.
+    private static Endpoint Read(string name, string template, int major, int minor,
+        TableauDeployments deployments = TableauDeployments.Both) =>
+        new(name, HttpMethod.Get, template, new Version(major, minor), deployments, Idempotent: true, TransferKind.None);
+
+    // A call in a session that changes something, safe to send again or not by what it does.
+    private static Endpoint Write(string name, HttpMethod method, string template, int major, int minor, bool idempotent,
+        TableauDeployments deployments = TableauDeployments.Both) =>
+        new(name, method, template, new Version(major, minor), deployments, idempotent, TransferKind.None);
+
+    private static Endpoint AddFavorite(string name, int major, int minor) =>
+        Write(name, HttpMethod.Put, "{version}/sites/{siteId}/favorites/{userId:luid}", major, minor, idempotent: true);
+
+    private static Endpoint DeleteFavorite(string name, string kind, int major, int minor) =>
+        Write(name, HttpMethod.Delete, $"{{version}}/sites/{{siteId}}/favorites/{{userId:luid}}/{kind}/{{id:luid}}", major, minor, idempotent: true);
 }

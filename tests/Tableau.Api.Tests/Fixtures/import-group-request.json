@@ -1,0 +1,11 @@
+{
+  "group": {
+    "import": {
+      "source": "ActiveDirectory",
+      "domainName": "example.org",
+      "siteRole": "Viewer",
+      "grantLicenseMode": "onSync"
+    },
+    "name": "Finance"
+  }
+}

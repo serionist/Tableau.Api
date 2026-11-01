@@ -1,0 +1,12 @@
+{
+  "user": {
+    "email": "ada@example.org",
+    "fullName": "Ada Lovelace",
+    "identityPoolName": "Invented pool",
+    "idpConfigurationId": "9f8e7d6c-5b4a-4392-8170-6e5d4c3b2a19",
+    "language": "en_GB",
+    "locale": "en_GB",
+    "siteRole": "Explorer",
+    "authSetting": "SAML"
+  }
+}

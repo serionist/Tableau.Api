@@ -16,24 +16,47 @@ namespace Tableau.Api;
 public partial class TableauApiClient
 {
     /// <summary>
-    /// Deletes a project. Available in all versions
+    /// Queries views for specified site. Versions 2.2+
     /// </summary>
     /// <param name="session"></param>
-    /// <param name="projectId">The id of the project to delete</param>
+    /// <param name="pageSize">(Optional) The number of items to return in one response. The minimum is 1. The maximum is 1000. The default is 100.</param>
+    /// <param name="pageNumber">(Optional) The offset for paging. The default is 1.</param>
+    /// <param name="includeUsageStatistics">(Optional) true to return usage statistics. The default is false.</param>
+    /// <param name="fieldsExpression">(Optional) An expression that lets you specify the set of available fields to return. You can qualify the return values based upon predefined keywords such as _all_ or _default_, and you can specify individual fields for the workbooks or other supported resources. You can include multiple field expressions in a request.</param>
+    /// <param name="filterExpression"></param>
+    /// <param name="sortExpresion"></param>
     /// <param name="cancelToken"></param>
     /// <returns></returns>
     /// <exception cref="TableauRequestException"></exception>
     /// <exception cref="TableauApiVersionException"></exception>
     /// <exception cref="TableauOnlineNotSupportedException"></exception>
-    [ApiVersion(1, 0)]
-    public async Task DeleteProject2(Models.TableauSession session, string projectId, CancellationToken? cancelToken = null)
+    [ApiVersion(2, 2)]
+    public async Task<(paginationType pagination, viewType[] views)> QueryViewsForSite(Models.TableauSession session,
+        int pageSize = 100, int pageNumber = 1, bool? includeUsageStatistics = null, string fieldsExpression = null,
+        string filterExpression = null, string sortExpresion = null, CancellationToken? cancelToken = null)
     {
         checkEndpointAvailability();
-        checkNullParameters((nameof(session), session), (nameof(projectId), projectId));
-        await apiRequest(buildUri($"sites/{session.SiteId}/projects/{projectId}"), HttpMethod.Delete, 204,
-            cancelToken, session);
+        checkNullParameters((nameof(session), session));
+        checkParametersBetween((nameof(pageSize), pageSize, 1, 1000), (nameof(pageNumber), pageNumber, 1, int.MaxValue));
+        var args = new List<(string, string)>()
+        {
+            ("pageSize", pageSize.ToString(CultureInfo.InvariantCulture)),
+            ("pageNumber", pageNumber.ToString(CultureInfo.InvariantCulture))
+        };
+        if (includeUsageStatistics.HasValue)
+            args.Add(("includeUsageStatistics", includeUsageStatistics.Value.ToString()));
+        if (!string.IsNullOrEmpty(fieldsExpression))
+            args.Add(("fields", fieldsExpression));
+        if (!string.IsNullOrEmpty(filterExpression))
+            args.Add(("filter", filterExpression));
+        if (!string.IsNullOrEmpty(sortExpresion))
+            args.Add(("sort", sortExpresion));
+        var obj = await getResponseAsObject<paginationType, viewListType>(await apiRequest(buildUri($"sites/{session.SiteId}/views", args.ToArray()), HttpMethod.Get, 200,
+            cancelToken, session));
+        return (obj.Item1, obj.Item2.view);
 
     }
+
     /// <summary>
     /// Adds one or more tags to the specified view. Available in all versions
     /// </summary>
