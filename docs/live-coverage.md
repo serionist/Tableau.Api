@@ -12,8 +12,8 @@ run: it stays checked by hand.
 - **Test, or why not** names, for `yes` and `refused`, the `Live` tests that make the call, `LiveSite` for the suite's
   own setup and `SuiteCleanup` for its cleanup; for `no`, the reason.
 - **Checked from both sides:** `LiveCoverageTests`, on every PR, fails when a method or a call of `Endpoints.All` has no
-  row, a row names a method, a call or a test that doesn't exist, a `no` row has no reason, or a method and a call have
-  two rows. With `TABLEAU_LIVE_MATRIX=1`, which `live.yml` sets, the suite's cleanup fails the run, naming the row, when
+  row, a row names a method, a call or a test that doesn't exist, a `no` row has no reason or says it isn't live yet,
+  or a method and a call have two rows. With `TABLEAU_LIVE_MATRIX=1`, which `live.yml` sets, the suite's cleanup fails the run, naming the row, when
   a `yes` row's call wasn't answered with a 2xx in one of its tests, a `refused` row's wasn't refused with its code there
   or was answered with a 2xx, or a `no` row's call was answered, unless another row holds that call live. A row whose
   test failed is left out, since that failure fails the run already.
@@ -30,13 +30,13 @@ run: it stays checked by hand.
 | `SessionsClient.SignInAsync` | Sign In | no | a password: an automated run is given none, and `ServerOnlySessionTests` signs in with one by hand |
 | `SessionsClient.SignInAsync` | Sign In, impersonating a user | no | a password: an automated run is given none, and `ServerOnlySessionTests` signs in with one by hand |
 | `SessionsClient.SignInAsync` | Sign In with a personal access token | yes | `LiveSessionTests.ASessionSignedInByHandServesABoundClientAcrossItsSubClients` |
-| `SessionsClient.SignInAsync` | Sign In with a personal access token, impersonating a user | yes | `LiveDirectoryTests.ADirectoryUserIsAddedMadeAViewerImpersonatedByTheTokenAndRemoved` |
+| `SessionsClient.SignInAsync` | Sign In with a personal access token, impersonating a user | no | waits on a directory user the server finds: Add User to Site answers 404002 for the suite's directory user, and its test sends nothing after (#57) |
 | `SessionsClient.SignInAsync` | Sign In with a JWT | yes | `LiveConnectedAppTests.ASessionSignedInWithAMintedJwtServesABoundClientAndIsSignedOut` |
 | `SessionsClient.SignInAsync` | Sign In with a unified access token | no | Tableau Cloud only |
 | `SessionsClient.SwitchSiteAsync` | Switch Site | yes | `LiveSessionTests.SwitchSiteGivesASessionOnTheRunsSiteAndEndsTheFirst` |
 | `SessionsClient.SignOutAsync` | Sign Out | yes | `LiveSessionTests.ASessionSignedInByHandServesABoundClientAcrossItsSubClients`, `LiveConnectedAppTests.ASessionSignedInWithAMintedJwtServesABoundClientAndIsSignedOut` |
 | `TableauCredentials.PersonalAccessToken` | Sign In with a personal access token | yes | `LiveSessionTests.AClientSignsItselfInForACallAndSignsOutWhenDisposed`, `LiveAreaTests.AProjectIsMadeFoundByAFilterUpdatedAndDeletedInTheRunsProject` |
-| `TableauCredentials.PersonalAccessToken` | Sign In with a personal access token, impersonating a user | yes | `LiveDirectoryTests.ADirectoryUserIsAddedMadeAViewerImpersonatedByTheTokenAndRemoved` |
+| `TableauCredentials.PersonalAccessToken` | Sign In with a personal access token, impersonating a user | no | waits on a directory user the server finds: Add User to Site answers 404002 for the suite's directory user, and its test sends nothing after (#57) |
 | `TableauCredentials.ConnectedAppDirectTrust` | Sign In with a JWT | yes | `LiveConnectedAppTests.AClientWithTheConnectedAppSignsItselfInForAPageOfProjectsAndSignsOutWhenDisposed` |
 | `TableauCredentials.Jwt` | Sign In with a JWT | yes | `LiveConnectedAppTests.ASessionSignedInWithAMintedJwtServesABoundClientAndIsSignedOut` |
 | `TableauCredentials.UnifiedAccessToken` | Sign In with a unified access token | no | Tableau Cloud only |
@@ -50,7 +50,7 @@ run: it stays checked by hand.
 | `SitesClient.CreateAsync` | Create Site | yes | `LiveSite` |
 | `SitesClient.UpdateAsync` | Update Site | yes | `LiveSiteAdminTests.TheRunsSiteIsReadByItsIdContentUrlAndNameListedAndUpdatedWithAnotherRevisionLimit` |
 | `SitesClient.DeleteAsync` | Delete Site | yes | `SuiteCleanup` |
-| `ProjectsClient.ListAsync` | Query Projects | yes | `LiveAreaTests.AProjectIsMadeFoundByAFilterUpdatedAndDeletedInTheRunsProject`, `LiveSessionTests.AClientSignsItselfInForACallAndSignsOutWhenDisposed` |
+| `ProjectsClient.ListAsync` | Query Projects | yes | `LiveAreaTests.AProjectIsMadeFoundByAFilterUpdatedAndDeletedInTheRunsProject`, `LiveSessionTests.ASessionSignedInByHandServesABoundClientAcrossItsSubClients` |
 | `ProjectsClient.ListPageAsync` | Query Projects | yes | `LiveAreaTests.AProjectIsMadeFoundByAFilterUpdatedAndDeletedInTheRunsProject`, `LiveConnectedAppTests.AClientWithTheConnectedAppSignsItselfInForAPageOfProjectsAndSignsOutWhenDisposed` |
 | `ProjectsClient.CreateAsync` | Create Project | yes | `LiveAreaTests.AProjectIsMadeFoundByAFilterUpdatedAndDeletedInTheRunsProject`, `LiveSite` |
 | `ProjectsClient.UpdateAsync` | Update Project | yes | `LiveAreaTests.AProjectIsMadeFoundByAFilterUpdatedAndDeletedInTheRunsProject` |
@@ -58,12 +58,12 @@ run: it stays checked by hand.
 | `UsersClient.GetAsync` | Query User On Site | yes | `LiveAreaTests.UsersAreListedPageByPageAndTheSuitesOwnIsReadByIdAndByFilter` |
 | `UsersClient.ListAsync` | Get Users on Site | yes | `LiveAreaTests.UsersAreListedPageByPageAndTheSuitesOwnIsReadByIdAndByFilter` |
 | `UsersClient.ListPageAsync` | Get Users on Site | yes | `LiveAreaTests.UsersAreListedPageByPageAndTheSuitesOwnIsReadByIdAndByFilter` |
-| `UsersClient.AddAsync` | Add User to Site | yes | `LiveDirectoryTests.ADirectoryUserIsAddedMadeAViewerImpersonatedByTheTokenAndRemoved` |
-| `UsersClient.UpdateAsync` | Update User | yes | `LiveDirectoryTests.ADirectoryUserIsAddedMadeAViewerImpersonatedByTheTokenAndRemoved` |
-| `UsersClient.RemoveAsync` | Remove User from Site | yes | `LiveDirectoryTests.ADirectoryUserIsAddedMadeAViewerImpersonatedByTheTokenAndRemoved` |
+| `UsersClient.AddAsync` | Add User to Site | refused 404002 | `LiveDirectoryTests.ADirectoryUserIsAddedMadeAViewerImpersonatedByTheTokenAndRemoved` |
+| `UsersClient.UpdateAsync` | Update User | no | waits on a directory user the server finds: Add User to Site answers 404002 for the suite's directory user, and its test sends nothing after (#57) |
+| `UsersClient.RemoveAsync` | Remove User from Site | no | waits on a directory user the server finds: Add User to Site answers 404002 for the suite's directory user, and its test sends nothing after (#57) |
 | `UsersClient.ListGroupsAsync` | Get Groups for a User | yes | `LiveAreaTests.ALocalGroupIsMadeFoundRenamedGivenTheSuitesUserAndDeleted`, `LiveAreaTests.UsersAreListedPageByPageAndTheSuitesOwnIsReadByIdAndByFilter` |
 | `GroupsClient.ListAsync` | Query Groups | yes | `LiveAreaTests.ALocalGroupIsMadeFoundRenamedGivenTheSuitesUserAndDeleted` |
-| `GroupsClient.ListPageAsync` | Query Groups | yes | `LiveDirectoryTests.ADirectoryGroupIsImportedWithItsMemberSynchronisedAndDeletedThenImportedAsAJobFoundAndDeleted` |
+| `GroupsClient.ListPageAsync` | Query Groups | yes | `LiveAreaTests.ALocalGroupIsMadeFoundRenamedGivenTheSuitesUserAndDeleted`, `LiveDirectoryTests.ADirectoryGroupIsImportedWithItsMemberSynchronisedAndDeletedThenImportedAsAJobFoundAndDeleted` |
 | `GroupsClient.CreateAsync` | Create Group | yes | `LiveAreaTests.ALocalGroupIsMadeFoundRenamedGivenTheSuitesUserAndDeleted`, `LiveAreaTests.ACapabilityIsGrantedToARunsGroupOnTheRunsProjectReadBackAndDeleted` |
 | `GroupsClient.ImportFromActiveDirectoryAsync` | Create Group from Active Directory | yes | `LiveDirectoryTests.ADirectoryGroupIsImportedWithItsMemberSynchronisedAndDeletedThenImportedAsAJobFoundAndDeleted` |
 | `GroupsClient.ImportFromActiveDirectoryAsJobAsync` | Create Group from Active Directory | yes | `LiveDirectoryTests.ADirectoryGroupIsImportedWithItsMemberSynchronisedAndDeletedThenImportedAsAJobFoundAndDeleted` |

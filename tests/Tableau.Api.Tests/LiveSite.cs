@@ -29,7 +29,10 @@ namespace Tableau.Api.Tests;
 /// token, and a local run takes another token than CI's. A connected app's direct trust (TABLEAU_LIVE_CLIENT_ID,
 /// TABLEAU_LIVE_SECRET_ID, TABLEAU_LIVE_SECRET_VALUE and TABLEAU_LIVE_USER, the user the JWT names;
 /// <see cref="ConnectedApp"/> and <see cref="Jwt"/>) signs in for its own tests alone, on TABLEAU_LIVE_SITE, which read
-/// and change nothing but a page of projects.
+/// and change nothing but a page of projects. The directory tests take the server's Active Directory accounts by name:
+/// TABLEAU_LIVE_AD_DOMAIN, TABLEAU_LIVE_AD_GROUP, TABLEAU_LIVE_AD_GROUP_MEMBER and TABLEAU_LIVE_AD_USER, which are never
+/// in the repo and which every output scrubs. TABLEAU_LIVE_MATRIX=1 holds the run to <c>docs/live-coverage.md</c> at the
+/// suite's end (<see cref="SuiteCleanup"/>).
 /// </para>
 /// <para>
 /// Every live client sends through one HttpClient, which follows no redirect and keeps no cookies, and which keeps each

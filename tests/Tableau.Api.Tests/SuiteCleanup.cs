@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -19,7 +20,7 @@ public sealed class SuiteCleanup
     /// (<see cref="LiveCoverage.NightlyProblems"/>), each row it fails named. Then the fixtures a recording wrote scanned
     /// for every live secret and setting, a file holding one deleted and named, never the value. Then every log line the
     /// suite took checked, the cleanup's own among them; in a run that reached a site, a failure counts the lines and
-    /// shows none. Each runs whatever the one before did.
+    /// shows none. Each runs whatever the one before did, and the failures fail the run as one, scrubbed (<see cref="Failure"/>).
     /// </summary>
     [AssemblyCleanup]
     public static async Task AfterEveryTestAsync()
@@ -61,9 +62,20 @@ public sealed class SuiteCleanup
         {
             failures.Add(e);
         }
-        if (failures.Count == 1) throw failures[0];
-        if (failures.Count > 1) throw new AggregateException("The suite's cleanup failed more than once.", failures);
+        if (Failure(failures, LiveSite.Scrubbed) is { } failure) throw failure;
     }
+
+    /// <summary>
+    /// The cleanup's failures as one exception, each failure's whole text, its inner exceptions' among it, through
+    /// <paramref name="scrub"/>, and no inner exception: MSTest prints a cleanup's exception and every inner one, and a
+    /// connection's failure names the server's host, which the public log mustn't show. Null for none.
+    /// </summary>
+    internal static InvalidOperationException? Failure(IReadOnlyList<Exception> failures, Func<string, string> scrub) => failures.Count switch
+    {
+        0 => null,
+        1 => new InvalidOperationException(scrub(failures[0].ToString())),
+        _ => new InvalidOperationException(scrub($"The suite's cleanup failed {failures.Count} times:\n\n" + string.Join("\n\n", failures.Select(failure => failure.ToString())))),
+    };
 
     // The table's rows against the run's record; a table that can't be read is a problem of its own.
     private static List<string> MatrixProblems()

@@ -71,6 +71,7 @@ public sealed class LiveAreaTests
         {
             Filter = TableauFilter.Eq(GroupField.Name, group.Name!),
         }))).SingleOrDefault(found => Named(found, group.Name!)), "The run's group");
+        var page = await client.Groups.ListPageAsync(1, new GroupListOptions { Filter = TableauFilter.Eq(GroupField.Name, group.Name!), PageSize = 1 });
         var updated = await client.Groups.UpdateAsync(group.Id!, name: renamed);
         await client.Groups.AddUserAsync(group.Id!, self);
         var members = await AreaFixtures.AllAsync(client.Groups.ListUsersAsync(group.Id!));
@@ -80,6 +81,7 @@ public sealed class LiveAreaTests
         await client.Groups.DeleteAsync(group.Id!);
 
         Assert.AreEqual("local", listed.Domain?.Name, "a group the suite makes is local");
+        Assert.AreEqual((group.Id, (int?)1), (page.Items.Single().Id, page.TotalAvailable), "a page of one holds the group its filter names");
         Assert.AreEqual(renamed, updated.Name);
         CollectionAssert.AreEqual(new[] { self }, members.Select(member => member.Id).ToArray());
         Assert.IsTrue(selfsGroups.Any(found => Named(found, renamed)), "the user's groups hold the group, by its new name");

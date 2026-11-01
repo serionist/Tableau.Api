@@ -248,6 +248,28 @@ public sealed class TableauSiteTests
     }
 
     [TestMethod]
+    public void TheSuitesCleanupFailsWithItsFailuresScrubbedInnerOnesAmongThemAndNoInnerException()
+    {
+        string[] known = ["tableau.invented.example", "Finance-Site"];
+        string Scrub(string text) => LiveSite.Scrubbed(text, known);
+        var connection = new System.Net.Http.HttpRequestException("No such host is known. (TABLEAU.INVENTED.EXAMPLE:443)");
+        var deleted = new InvalidOperationException("The run's site 'Finance-Site' is left on the server.",
+            new TableauException(TableauErrorKind.Http, $"Delete Site got no answer: {connection.Message}", connection));
+
+        var one = SuiteCleanup.Failure([deleted], Scrub)!;
+        var two = SuiteCleanup.Failure([deleted, new InvalidOperationException("2 recorded file(s) held a live secret")], Scrub)!;
+
+        Assert.IsNull(SuiteCleanup.Failure([], Scrub), "no failure, nothing thrown");
+        Assert.IsNull(one.InnerException, "MSTest would print an inner one");
+        Assert.Contains("The run's site '***' is left on the server.", one.Message);
+        Assert.Contains("Delete Site got no answer: No such host is known. (***:443)", one.Message, "the inner exception's text, scrubbed");
+        Assert.IsFalse(known.Any(value => one.Message.Contains(value, StringComparison.OrdinalIgnoreCase)));
+        Assert.StartsWith("The suite's cleanup failed 2 times:", two.Message);
+        Assert.Contains("2 recorded file(s) held a live secret", two.Message);
+        Assert.IsFalse(known.Any(value => two.Message.Contains(value, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    [TestMethod]
     public void AClassWithASiteTestRunsItsTestsOneAtATime()
     {
         Assert.AreEqual("T has a SiteTest and no [DoNotParallelize]: a site test runs one at a time", TableauSite.OrderProblem("T", true, false));
