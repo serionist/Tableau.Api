@@ -72,6 +72,9 @@ before it, and CI passed on `b49f5ac`.
 Tableau Server 2025.1.5 (REST API 3.25), locally, after the fixes, every `Live` test with `TABLEAU_LIVE_MATRIX=1`:
 20 of 24 passed in 342 s. The two `LiveConnectedAppTests` failed for their four settings, which the local settings don't hold, and the two `LiveDirectoryTests` for the directory accounts (the import brings no member; Add User to Site answers 404002), as on every run since step 6; neither is the change's. The matrix check passed with F1's pins, and the output held none of the hidden values. After it, read only: Query Sites lists no run site, and the token's last session is signed out.
 
+After the round, on 2026-11-03, in `f8d1d5b`: the two directory users had been disabled, so the server found neither; a maintainer enabled them. The user test then failed at Update User's answer, which carries no `id`, as the reference's doesn't: the test pins the user's name and role and a null id, #65 takes the client's side, and the five rows F1 pinned are `yes`. Every `Live` test with `TABLEAU_LIVE_MATRIX=1`: 22 of 24 passed in 340 s, the two `LiveConnectedAppTests` failing for their settings alone. The matrix check passed, and the output held none of the hidden values.
+
 ## Checks
 
 - `dotnet run eng/gate.cs -- full` on `8757b1f`: passed, 1012 tests, lines 97.61%, branches 95.08%, the floors unchanged.
+- `dotnet run eng/gate.cs -- full` on `f8d1d5b`: passed, 1012 tests, lines 97.61%, branches 95.08%.
