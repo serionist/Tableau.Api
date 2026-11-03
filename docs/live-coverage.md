@@ -30,13 +30,13 @@ run: it stays checked by hand.
 | `SessionsClient.SignInAsync` | Sign In | no | a password: an automated run is given none, and `ServerOnlySessionTests` signs in with one by hand |
 | `SessionsClient.SignInAsync` | Sign In, impersonating a user | no | a password: an automated run is given none, and `ServerOnlySessionTests` signs in with one by hand |
 | `SessionsClient.SignInAsync` | Sign In with a personal access token | yes | `LiveSessionTests.ASessionSignedInByHandServesABoundClientAcrossItsSubClients` |
-| `SessionsClient.SignInAsync` | Sign In with a personal access token, impersonating a user | no | waits on a directory user the server finds: Add User to Site answers 404002 for the suite's directory user, and its test sends nothing after (#57) |
+| `SessionsClient.SignInAsync` | Sign In with a personal access token, impersonating a user | yes | `LiveDirectoryTests.ADirectoryUserIsAddedMadeAViewerImpersonatedByTheTokenAndRemoved` |
 | `SessionsClient.SignInAsync` | Sign In with a JWT | yes | `LiveConnectedAppTests.ASessionSignedInWithAMintedJwtServesABoundClientAndIsSignedOut` |
 | `SessionsClient.SignInAsync` | Sign In with a unified access token | no | Tableau Cloud only |
 | `SessionsClient.SwitchSiteAsync` | Switch Site | yes | `LiveSessionTests.SwitchSiteGivesASessionOnTheRunsSiteAndEndsTheFirst` |
 | `SessionsClient.SignOutAsync` | Sign Out | yes | `LiveSessionTests.ASessionSignedInByHandServesABoundClientAcrossItsSubClients`, `LiveConnectedAppTests.ASessionSignedInWithAMintedJwtServesABoundClientAndIsSignedOut` |
 | `TableauCredentials.PersonalAccessToken` | Sign In with a personal access token | yes | `LiveSessionTests.AClientSignsItselfInForACallAndSignsOutWhenDisposed`, `LiveAreaTests.AProjectIsMadeFoundByAFilterUpdatedAndDeletedInTheRunsProject` |
-| `TableauCredentials.PersonalAccessToken` | Sign In with a personal access token, impersonating a user | no | waits on a directory user the server finds: Add User to Site answers 404002 for the suite's directory user, and its test sends nothing after (#57) |
+| `TableauCredentials.PersonalAccessToken` | Sign In with a personal access token, impersonating a user | yes | `LiveDirectoryTests.ADirectoryUserIsAddedMadeAViewerImpersonatedByTheTokenAndRemoved` |
 | `TableauCredentials.ConnectedAppDirectTrust` | Sign In with a JWT | yes | `LiveConnectedAppTests.AClientWithTheConnectedAppSignsItselfInForAPageOfProjectsAndSignsOutWhenDisposed` |
 | `TableauCredentials.Jwt` | Sign In with a JWT | yes | `LiveConnectedAppTests.ASessionSignedInWithAMintedJwtServesABoundClientAndIsSignedOut` |
 | `TableauCredentials.UnifiedAccessToken` | Sign In with a unified access token | no | Tableau Cloud only |
@@ -55,12 +55,12 @@ run: it stays checked by hand.
 | `ProjectsClient.CreateAsync` | Create Project | yes | `LiveAreaTests.AProjectIsMadeFoundByAFilterUpdatedAndDeletedInTheRunsProject`, `LiveSite` |
 | `ProjectsClient.UpdateAsync` | Update Project | yes | `LiveAreaTests.AProjectIsMadeFoundByAFilterUpdatedAndDeletedInTheRunsProject` |
 | `ProjectsClient.DeleteAsync` | Delete Project | yes | `LiveAreaTests.AProjectIsMadeFoundByAFilterUpdatedAndDeletedInTheRunsProject` |
-| `UsersClient.GetAsync` | Query User On Site | yes | `LiveAreaTests.UsersAreListedPageByPageAndTheSuitesOwnIsReadByIdAndByFilter` |
+| `UsersClient.GetAsync` | Query User On Site | yes | `LiveAreaTests.UsersAreListedPageByPageAndTheSuitesOwnIsReadByIdAndByFilter`, `LiveDirectoryTests.ADirectoryUserIsAddedMadeAViewerImpersonatedByTheTokenAndRemoved` |
 | `UsersClient.ListAsync` | Get Users on Site | yes | `LiveAreaTests.UsersAreListedPageByPageAndTheSuitesOwnIsReadByIdAndByFilter` |
 | `UsersClient.ListPageAsync` | Get Users on Site | yes | `LiveAreaTests.UsersAreListedPageByPageAndTheSuitesOwnIsReadByIdAndByFilter` |
-| `UsersClient.AddAsync` | Add User to Site | refused 404002 | `LiveDirectoryTests.ADirectoryUserIsAddedMadeAViewerImpersonatedByTheTokenAndRemoved` |
-| `UsersClient.UpdateAsync` | Update User | no | waits on a directory user the server finds: Add User to Site answers 404002 for the suite's directory user, and its test sends nothing after (#57) |
-| `UsersClient.RemoveAsync` | Remove User from Site | no | waits on a directory user the server finds: Add User to Site answers 404002 for the suite's directory user, and its test sends nothing after (#57) |
+| `UsersClient.AddAsync` | Add User to Site | yes | `LiveDirectoryTests.ADirectoryUserIsAddedMadeAViewerImpersonatedByTheTokenAndRemoved` |
+| `UsersClient.UpdateAsync` | Update User | yes | `LiveDirectoryTests.ADirectoryUserIsAddedMadeAViewerImpersonatedByTheTokenAndRemoved` |
+| `UsersClient.RemoveAsync` | Remove User from Site | yes | `LiveDirectoryTests.ADirectoryUserIsAddedMadeAViewerImpersonatedByTheTokenAndRemoved` |
 | `UsersClient.ListGroupsAsync` | Get Groups for a User | yes | `LiveAreaTests.ALocalGroupIsMadeFoundRenamedGivenTheSuitesUserAndDeleted`, `LiveAreaTests.UsersAreListedPageByPageAndTheSuitesOwnIsReadByIdAndByFilter` |
 | `GroupsClient.ListAsync` | Query Groups | yes | `LiveAreaTests.ALocalGroupIsMadeFoundRenamedGivenTheSuitesUserAndDeleted` |
 | `GroupsClient.ListPageAsync` | Query Groups | yes | `LiveAreaTests.ALocalGroupIsMadeFoundRenamedGivenTheSuitesUserAndDeleted`, `LiveDirectoryTests.ADirectoryGroupIsImportedWithItsMemberSynchronisedAndDeletedThenImportedAsAJobFoundAndDeleted` |

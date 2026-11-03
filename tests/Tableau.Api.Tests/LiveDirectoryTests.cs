@@ -105,7 +105,9 @@ public sealed class LiveDirectoryTests
 
         Assert.AreEqual(SiteRole.Unlicensed, added.SiteRole);
         Assert.IsTrue(string.Equals(added.Name, name, StringComparison.OrdinalIgnoreCase), "the user answers TABLEAU_LIVE_AD_USER");
-        Assert.AreEqual((added.Id, SiteRole.Viewer), (updated.Id, updated.SiteRole), "Update User makes the user a Viewer");
+        // Tableau's answer to Update User names the user and their role but carries no id; Query User On Site has it.
+        Assert.IsTrue(string.Equals(updated.Name, name, StringComparison.OrdinalIgnoreCase), "Update User answers the user");
+        Assert.AreEqual((SiteRole.Viewer, (string?)null), (updated.SiteRole, updated.Id), "Update User makes the user a Viewer and answers without an id");
         Assert.AreEqual((added.Id, SiteRole.Viewer), (read.Id, read.SiteRole), "the user reads back a Viewer");
         Assert.IsNull(refused, $"Tableau refused the token's sign-in impersonating the user: {refused}");
         Assert.IsTrue(string.Equals(added.Id, impersonating?.UserId, StringComparison.OrdinalIgnoreCase), "the session acts as the user impersonated");
