@@ -17,8 +17,8 @@
 ## Server only
 
 <!-- Does the change reach what only Tableau Server has, such as schedules, site management or Active Directory groups?
-If so: what ran by hand on a Tableau Server, and its version (the ServerOnly tests, or calls from a scratch program),
-and what Tableau Cloud couldn't show. If not: "None". -->
+If so: what ran on a Tableau Server, and its version (the Live tests that reach it, the ServerOnly tests for a password's
+sign-in, or calls from a scratch program), and what Tableau Cloud couldn't show. If not: "None". -->
 
 ## Review
 

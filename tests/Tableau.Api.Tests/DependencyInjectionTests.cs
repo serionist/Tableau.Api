@@ -293,7 +293,7 @@ public sealed class DependencyInjectionTests
 
         await scope.ServiceProvider.GetRequiredKeyedService<TableauClient>("prod").Server.GetInfoAsync();
 
-        Assert.IsTrue(log.At(LogLevel.Debug).Any(line => line.Contains($"Tableau client prod: GET {ClientFixtures.ServerInfoPath} answered 200", StringComparison.Ordinal)),
+        Assert.IsTrue(log.At(LogLevel.Debug).Any(line => line.Contains($"Tableau client prod: Server Info: GET {ClientFixtures.ServerInfoPath} answered 200", StringComparison.Ordinal)),
             string.Join("\n", log.Lines));
         Assert.IsFalse(log.Lines.Any(line => line.Contains("Start processing HTTP request", StringComparison.Ordinal)),
             "the HttpClient factory's own request lines are off");

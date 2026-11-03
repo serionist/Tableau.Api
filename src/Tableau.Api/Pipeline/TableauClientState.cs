@@ -174,7 +174,7 @@ internal sealed class TableauClientState : IDisposable
     // An exception this state makes, rather than the pipeline, logged as the pipeline logs its own.
     private TableauException Failed(Endpoint endpoint, TableauException exception)
     {
-        TableauLog.Failed(Logger, DisplayName, endpoint.Method, endpoint.Template, exception.Kind, exception);
+        TableauLog.Failed(Logger, DisplayName, endpoint.Name, endpoint.Method, endpoint.Template, exception.Kind, exception);
         return exception;
     }
 

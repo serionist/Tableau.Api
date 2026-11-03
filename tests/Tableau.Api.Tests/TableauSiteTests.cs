@@ -198,6 +198,102 @@ public sealed class TableauSiteTests
         Assert.IsEmpty(problems, string.Join("\n", problems));
     }
 
+    [TestMethod]
+    public void AFailedResultComesBackWithEveryKnownValueInAnyCaseAsStars()
+    {
+        string[] known = ["Finance-Site", "invented-directory-group", "invented-live-secret"];
+        string Scrub(string text) => LiveSite.Scrubbed(text, known);
+        var result = new TestResult
+        {
+            Outcome = UnitTestOutcome.Failed,
+            TestFailureException = new ScrubbedFailure("Query Site (GET /api/3.25/sites/FINANCE-SITE) answered 404: Site 'finance-site' wasn't found.",
+                "   at Invented() in INVENTED-DIRECTORY-GROUP.cs:line 1"),
+            LogOutput = "imported Invented-Directory-Group",
+            LogError = "token invented-live-secret",
+            DebugTrace = "Finance-Site",
+            TestContextMessages = "a line holding FINANCE-site",
+        };
+
+        var scrubbed = SiteTestAttribute.Scrubbed(result, Scrub);
+
+        Assert.AreEqual(UnitTestOutcome.Failed, scrubbed.Outcome);
+        Assert.AreEqual("Query Site (GET /api/3.25/sites/***) answered 404: Site '***' wasn't found.", scrubbed.TestFailureException!.Message);
+        Assert.AreEqual("   at Invented() in ***.cs:line 1", scrubbed.TestFailureException.StackTrace);
+        Assert.AreEqual(("imported ***", "token ***", "***", "a line holding ***"),
+            (scrubbed.LogOutput, scrubbed.LogError, scrubbed.DebugTrace, scrubbed.TestContextMessages));
+        Assert.IsFalse(known.Any(value => scrubbed.TestFailureException.ToString().Contains(value, StringComparison.OrdinalIgnoreCase)));
+        var empty = SiteTestAttribute.Scrubbed(new TestResult { Outcome = UnitTestOutcome.Failed }, Scrub);
+        Assert.IsNull(empty.TestFailureException, "a result without a failure stays without one");
+        Assert.IsNull(empty.LogOutput);
+    }
+
+    [TestMethod]
+    public void AThrownFailuresOwnStackTraceIsScrubbed()
+    {
+        Exception thrown;
+        try
+        {
+            throw new InvalidOperationException("Site 'Finance-Site' wasn't found.");
+        }
+        catch (InvalidOperationException e)
+        {
+            thrown = e;
+        }
+
+        var scrubbed = SiteTestAttribute.Scrubbed(new TestResult { Outcome = UnitTestOutcome.Failed, TestFailureException = thrown },
+            text => LiveSite.Scrubbed(text, ["finance-site", nameof(AThrownFailuresOwnStackTraceIsScrubbed)]));
+
+        Assert.AreEqual("Site '***' wasn't found.", scrubbed.TestFailureException!.Message);
+        Assert.Contains("TableauSiteTests.***()", scrubbed.TestFailureException.StackTrace!, "the stack trace it was thrown with, scrubbed");
+    }
+
+    [TestMethod]
+    public void TheSuitesCleanupFailsWithItsFailuresScrubbedInnerOnesAmongThemAndNoInnerException()
+    {
+        string[] known = ["tableau.invented.example", "Finance-Site"];
+        string Scrub(string text) => LiveSite.Scrubbed(text, known);
+        var connection = new System.Net.Http.HttpRequestException("No such host is known. (TABLEAU.INVENTED.EXAMPLE:443)");
+        var deleted = new InvalidOperationException("The run's site 'Finance-Site' is left on the server.",
+            new TableauException(TableauErrorKind.Http, $"Delete Site got no answer: {connection.Message}", connection));
+
+        var one = SuiteCleanup.Failure([deleted], Scrub)!;
+        var two = SuiteCleanup.Failure([deleted, new InvalidOperationException("2 recorded file(s) held a live secret")], Scrub)!;
+
+        Assert.IsNull(SuiteCleanup.Failure([], Scrub), "no failure, nothing thrown");
+        Assert.IsNull(one.InnerException, "MSTest would print an inner one");
+        Assert.Contains("The run's site '***' is left on the server.", one.Message);
+        Assert.Contains("Delete Site got no answer: No such host is known. (***:443)", one.Message, "the inner exception's text, scrubbed");
+        Assert.IsFalse(known.Any(value => one.Message.Contains(value, StringComparison.OrdinalIgnoreCase)));
+        Assert.StartsWith("The suite's cleanup failed 2 times:", two.Message);
+        Assert.Contains("2 recorded file(s) held a live secret", two.Message);
+        Assert.IsFalse(known.Any(value => two.Message.Contains(value, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    [TestMethod]
+    public void AClassWithASiteTestRunsItsTestsOneAtATime()
+    {
+        Assert.AreEqual("T has a SiteTest and no [DoNotParallelize]: a site test runs one at a time", TableauSite.OrderProblem("T", true, false));
+        Assert.IsNull(TableauSite.OrderProblem("T", true, true));
+        Assert.IsNull(TableauSite.OrderProblem("T", false, false), "an offline class runs in parallel");
+    }
+
+    [TestMethod]
+    public void EveryClassWithASiteTestInTheSuiteRunsItsTestsOneAtATime()
+    {
+        var classes = typeof(TableauSiteTests).Assembly.GetTypes()
+            .Where(type => type.GetCustomAttribute<TestClassAttribute>() is not null)
+            .ToList();
+        var problems = classes
+            .Select(type => TableauSite.OrderProblem(type.Name,
+                type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly).Any(method => method.GetCustomAttribute<SiteTestAttribute>() is not null),
+                type.GetCustomAttribute<DoNotParallelizeAttribute>() is not null))
+            .OfType<string>()
+            .ToList();
+
+        Assert.IsEmpty(problems, string.Join("\n", problems));
+        Assert.IsTrue(classes.Contains(typeof(ServerInfoSiteTests)) && classes.Contains(typeof(LiveContentTests)), "the scan finds the site test classes");
+    }
+
     private static Func<string, string?> Variables(Dictionary<string, string?> variables) =>
         name => variables.GetValueOrDefault(name);
 

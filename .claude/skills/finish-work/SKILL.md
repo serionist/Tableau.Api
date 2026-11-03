@@ -23,14 +23,16 @@ work feels complete. `main` takes PRs only, and a maintainer squash-merges them 
    or the Vizportal client has a test there that fails without it. Fix every failure; never weaken a test, a check, a warning setting or a coverage floor to pass. When the gate
    says a floor can rise, raise it in `eng/coverage.json`.
 3. **The tests on a site,** for a change to a request, a model or the Vizportal client, when the developer has a
-   Tableau site they may change (`AGENTS.md`, Build and test): the `Live` tests that reach the change, which the
-   developer runs with `TABLEAU_LIVE=1` and the settings `tests/Tableau.Api.Tests/LiveSite.cs` names, set outside the
-   clone (a personal access token's for the content tests, a connected app's for its own tests), or where none does
-   yet, the changed endpoints called from a scratch program outside the clone. A live test makes its objects in the
-   run's project, or names a local group after the run, and the suite deletes both; with
+   Tableau site they may change (`AGENTS.md`, Build and test): on a Tableau Server, the `Live` tests that reach the
+   change, which the developer runs with `TABLEAU_LIVE=1` and the settings `tests/Tableau.Api.Tests/LiveSite.cs`
+   names, set outside the clone (a server administrator's personal access token for the content tests, a connected
+   app's for its own tests); on Tableau Cloud, where the `Live` tests can't run, or where no `Live` test reaches the
+   change yet, the changed endpoints called from a scratch program outside the clone. A live test works in
+   the run's own site, which the suite makes and deletes, everything in it with it; with `TABLEAU_LIVE_MATRIX=1` the
+   run is held to `docs/live-coverage.md`, whose rows a new public method adds; with
    `TABLEAU_RECORD=1` it writes each JSON body, scrubbed, for a fixture. `live.yml` runs the `Live` tests on the
    maintainers' Tableau Server from `main`, by hand and nightly, never on a PR: after a merge, check its next run. A
-   change to what only Tableau Server has also runs its `ServerOnly` tests by hand on a Tableau Server, with
+   change to a password's sign-in also runs the `ServerOnly` tests by hand on a Tableau Server, with
    `TABLEAU_SERVER_ONLY=1`. Note Tableau Server and its version,
    or Tableau Cloud, what passed, which failures `main` has too on the same site, and what Tableau Cloud couldn't
    show. Never read, print or log those settings, and never run against a site the developer did not name. No site:

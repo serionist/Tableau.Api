@@ -7,6 +7,11 @@
 #   in for its own tests alone (LiveConnectedAppTests), since on Tableau Server 2025.1 a connected app's session can't
 #   call a method whose scope came in REST API 3.27. A token allows one session at a time: a maintainer's local run
 #   signs in with another token, so it and this run never sign each other out.
+# - The directory tests (LiveDirectoryTests) import a group and add a user from the server's Active Directory: the
+#   maintainers' technical accounts, enabled, with passwords nobody holds, named by TABLEAU_LIVE_AD_DOMAIN,
+#   TABLEAU_LIVE_AD_GROUP, TABLEAU_LIVE_AD_GROUP_MEMBER and TABLEAU_LIVE_AD_USER. Their names are never in the repo:
+#   secrets here, so GitHub masks their exact values, and the suite scrubs them, in any case, from every output and
+#   failed result. The token impersonates the user, with tsm authentication pat-impersonation enable on the server.
 # - Its job runs in the tableau-live environment, which holds the site's settings as secrets and deploys from main
 #   alone, and the workflow has no pull_request trigger: no pull request, and no fork, reaches them.
 # - The nightly run waits for the repository variable TABLEAU_LIVE_NIGHTLY to be true, so it stays off until the
@@ -15,13 +20,17 @@
 #   job as skipped.
 # - TABLEAU_LIVE_SITE is optional: GitHub keeps no empty secret, and an unset one reaches the tests as the empty string,
 #   which is the default site.
-# - One run at a time: the suite makes a project, with Tableau's samples published into it, and local groups named
-#   after the run and deletes them at the end, and deletes what an earlier run left behind more than a day ago. The
-#   connected app's JWT asks for the scope tableau:content:read alone, for the page of projects its tests read
-#   (LiveSite.cs).
+# - One run at a time: the suite makes a site named after the run, works in it, with Tableau's samples published into
+#   a project there, and deletes it at the end, everything in it with it; before it makes one, it deletes the run sites
+#   an earlier run left behind more than a day ago, and names any it can't. So it needs a Tableau Server, and a server
+#   administrator's token. The connected app's JWT asks for the scope tableau:content:read alone, for the page of
+#   projects its tests read on TABLEAU_LIVE_SITE (LiveSite.cs).
 # - The suite's log check fails on any log line holding a setting's secret or a token any of its clients carried, and
 #   on one holding an invented secret or a query value; in a run that reached a site it counts such lines and shows
 #   none, since a line may hold a live value no list names, such as a JWT the client minted, and this log is public.
+# - TABLEAU_LIVE_MATRIX=1 holds docs/live-coverage.md to the run: the suite's cleanup fails the run, naming the row, when
+#   a call a row says is live wasn't answered so by its tests, or one it says isn't was answered. A local run of one
+#   class leaves it unset.
 name: Live
 
 on:
@@ -47,7 +56,8 @@ jobs:
     if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || vars.TABLEAU_LIVE_NIGHTLY == 'true')
     runs-on: ubuntu-latest
     environment: tableau-live
-    timeout-minutes: 20
+    # A site made and deleted, and the waits for a new site's index.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -64,6 +74,7 @@ jobs:
       - name: The Live tests
         env:
           TABLEAU_LIVE: "1"
+          TABLEAU_LIVE_MATRIX: "1"
           TABLEAU_LIVE_SERVER_URL: ${{ secrets.TABLEAU_LIVE_SERVER_URL }}
           TABLEAU_LIVE_SITE: ${{ secrets.TABLEAU_LIVE_SITE }}
           TABLEAU_LIVE_PAT_NAME: ${{ secrets.TABLEAU_LIVE_PAT_NAME }}
@@ -72,6 +83,10 @@ jobs:
           TABLEAU_LIVE_SECRET_ID: ${{ secrets.TABLEAU_LIVE_SECRET_ID }}
           TABLEAU_LIVE_SECRET_VALUE: ${{ secrets.TABLEAU_LIVE_SECRET_VALUE }}
           TABLEAU_LIVE_USER: ${{ secrets.TABLEAU_LIVE_USER }}
+          TABLEAU_LIVE_AD_DOMAIN: ${{ secrets.TABLEAU_LIVE_AD_DOMAIN }}
+          TABLEAU_LIVE_AD_GROUP: ${{ secrets.TABLEAU_LIVE_AD_GROUP }}
+          TABLEAU_LIVE_AD_GROUP_MEMBER: ${{ secrets.TABLEAU_LIVE_AD_GROUP_MEMBER }}
+          TABLEAU_LIVE_AD_USER: ${{ secrets.TABLEAU_LIVE_AD_USER }}
         run: >-
           dotnet test --project tests/Tableau.Api.Tests/Tableau.Api.Tests.csproj --no-build -c Release
           --filter "TestCategory=Live"
